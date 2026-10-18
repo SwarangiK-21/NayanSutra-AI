@@ -1,0 +1,12 @@
+# secrets
+.env
+# environments / caches
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+# local data (regenerable or private)
+.chroma/
+data/nyaysutra.db*
+data/uploads/
+models/

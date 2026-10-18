@@ -1,0 +1,91 @@
+[
+  {
+    "case_id": "CASE-REV-0a31e0",
+    "title": "Abhijeet bhosale",
+    "case_type": "Revenue",
+    "case_number": "Unregistered",
+    "court": "High Court of Judicature at Bombay",
+    "client_name": "Abhijeet bhosale",
+    "client_role": "Applicant / Revisionist",
+    "opposite_party": "police",
+    "filing_date": "2026-10-14",
+    "next_hearing_date": "2026-11-04",
+    "status": "Draft / Pre-filing",
+    "acts_sections": "Land Revenue Code Sec. 44, 247, 257; Tenancy Act Sec. 84",
+    "description": "case filing",
+    "created_at": "2026-10-14T21:38:39.128374",
+    "notes": []
+  },
+  {
+    "case_id": "case-crim-002",
+    "title": "State of NCT of Delhi vs. Vikram Malhotra",
+    "case_type": "Criminal",
+    "case_number": "BAIL APPLN. 1290/2024",
+    "court": "High Court of Delhi at New Delhi",
+    "client_name": "Vikram Malhotra",
+    "client_role": "Applicant / Accused",
+    "opposite_party": "State (Govt. of NCT of Delhi) & Complainant",
+    "filing_date": "2024-04-10",
+    "next_hearing_date": "2024-11-15",
+    "status": "Active / In Court",
+    "acts_sections": "BNSS Sec. 483 (CrPC Sec. 439), BNS Sec. 316, 318 (IPC Sec. 409, 420)",
+    "description": "Regular bail application in FIR No. 204/2024 registered at PS EOW. Allegations of corporate breach of trust. Applicant has cooperated with investigation; charge-sheet filed without arrest.",
+    "created_at": "2026-10-14T20:33:44.835258",
+    "notes": [
+      {
+        "note_id": "n2",
+        "timestamp": "2024-04-12 16:00",
+        "author": "Advocate",
+        "content": "Status report called from Investigating Officer. IO admitted no custodial interrogation requested."
+      }
+    ]
+  },
+  {
+    "case_id": "case-fam-003",
+    "title": "Rohini Deshmukh vs. Sameer Deshmukh",
+    "case_type": "Family",
+    "case_number": "HMA PET. 58/2024",
+    "court": "Principal Family Court, Pune",
+    "client_name": "Rohini Deshmukh",
+    "client_role": "Petitioner / Wife",
+    "opposite_party": "Sameer Deshmukh",
+    "filing_date": "2024-01-20",
+    "next_hearing_date": "2024-12-05",
+    "status": "Evidence Stage",
+    "acts_sections": "Hindu Marriage Act 1955 Sec. 13(1)(ia), Sec. 24, Sec. 25; DV Act Sec. 12",
+    "description": "Petition for dissolution of marriage on ground of cruelty and desertion, accompanied by interim maintenance application u/s 24 HMA and child custody application for minor daughter.",
+    "created_at": "2026-10-14T20:33:44.835258",
+    "notes": [
+      {
+        "note_id": "n3",
+        "timestamp": "2024-02-18 14:15",
+        "author": "Advocate",
+        "content": "Counselling mediation failed. Matter referred back to court for framing of issues."
+      }
+    ]
+  },
+  {
+    "case_id": "case-rev-004",
+    "title": "Kisan Agro Developers vs. Sub-Divisional Officer & Tahsildar",
+    "case_type": "Revenue",
+    "case_number": "REV.REV.APPL. 89/2024",
+    "court": "Maharashtra Revenue Tribunal (MRT), Pune Bench",
+    "client_name": "Kisan Agro Developers LLP",
+    "client_role": "Revision Applicant",
+    "opposite_party": "SDO Haveli, Tahsildar & Village Gram Panchayat",
+    "filing_date": "2024-03-05",
+    "next_hearing_date": "2024-11-22",
+    "status": "Final Arguments",
+    "acts_sections": "Maharashtra Land Revenue Code 1966 Sec. 44, Sec. 247, Sec. 257 (NA Conversion)",
+    "description": "Revision appeal against order of SDO rejecting Non-Agricultural (NA) commercial conversion permission for Survey No. 42/1A on erroneous interpretation of regional master plan zone boundaries.",
+    "created_at": "2026-10-14T20:33:44.835258",
+    "notes": [
+      {
+        "note_id": "n4",
+        "timestamp": "2024-03-25 10:00",
+        "author": "Advocate",
+        "content": "Town Planning Department NOC filed on record. SDO report contradicted by official DP sheet."
+      }
+    ]
+  }
+]
