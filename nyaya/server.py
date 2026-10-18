@@ -333,7 +333,7 @@ def document_file(doc_id: str):
     row = db.conn().execute("SELECT path, filename FROM documents WHERE id=?", (doc_id,)).fetchone()
     if not row:
         raise HTTPException(404, "Document not found")
-    path = Path(row["path"]).resolve()
+    path = config.from_stored(row["path"]).resolve()
     if config.DATA_DIR.resolve() not in path.parents or not path.is_file():
         raise HTTPException(404, "File missing")
     ext = path.suffix.lower()
@@ -351,7 +351,7 @@ def document_text(doc_id: str):
     if not row:
         raise HTTPException(404, "Document not found")
     if row["collection"] == "draft":
-        return {"title": row["title"], "text": Path(row["path"]).read_text("utf-8")}
+        return {"title": row["title"], "text": config.from_stored(row["path"]).read_text("utf-8")}
     chunks, _ = ingest.document_text(doc_id)
     return {"title": row["title"], "text": "\n\n".join(t for *_, t in chunks)[:200000]}
 

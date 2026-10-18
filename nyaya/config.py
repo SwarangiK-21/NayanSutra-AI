@@ -80,6 +80,20 @@ DISCLAIMER = (
 )
 
 
+def to_stored(path: Path) -> str:
+    """Paths inside the project are stored relative to it, so the folder can be moved or cloned."""
+    p = Path(path).resolve()
+    try:
+        return p.relative_to(ROOT.resolve()).as_posix()
+    except ValueError:
+        return str(p)
+
+
+def from_stored(stored: str) -> Path:
+    p = Path(stored)
+    return p if p.is_absolute() else ROOT / p
+
+
 def ensure_dirs() -> None:
     for d in (DATA_DIR, LIBRARY_DIR, BARE_ACTS_DIR, DRAFTS_DIR, JUDGMENTS_DIR, UPLOAD_DIR, MODEL_CACHE):
         d.mkdir(parents=True, exist_ok=True)

@@ -83,7 +83,7 @@ def _insert_document(*, doc_id: str, case_id: str | None, collection: str, doc_t
         c.execute(
             "INSERT INTO documents(id, case_id, collection, doc_type, title, filename, path, sha256, status, meta, created_at)"
             " VALUES(?,?,?,?,?,?,?,?, 'processing', ?, ?)",
-            (doc_id, case_id, collection, doc_type, title, filename, str(path), sha, json.dumps(meta), db.now()),
+            (doc_id, case_id, collection, doc_type, title, filename, config.to_stored(path), sha, json.dumps(meta), db.now()),
         )
 
 
@@ -114,7 +114,7 @@ def process(doc_id: str) -> dict:
         return {}
     t0 = time.time()
     try:
-        parsed = parsing.extract(Path(row["path"]))
+        parsed = parsing.extract(config.from_stored(row["path"]))
         doc_type = row["doc_type"]
         if doc_type in ("other", "auto", ""):
             doc_type = classify(row["filename"], parsed.pages[0] if parsed.pages else "")
@@ -159,7 +159,7 @@ def delete_document(doc_id: str) -> bool:
     with db.tx() as c:
         c.execute("DELETE FROM documents WHERE id=?", (doc_id,))  # chunks + FTS rows cascade via triggers
     index.remove_doc(doc_id)
-    p = Path(row["path"]).resolve()
+    p = config.from_stored(row["path"]).resolve()
     if row["collection"] == "case" and config.UPLOAD_DIR.resolve() in p.parents and p.exists():
         p.unlink()
     return True
@@ -201,7 +201,7 @@ def build_library(rebuild: bool = False, progress=print) -> dict:
         with db.tx() as c:
             c.execute("DELETE FROM documents WHERE collection IN ('bare_act','draft','judgment')")
     on_disk = _library_files()
-    known_paths = {str(p) for p, *_ in on_disk}
+    known_paths = {config.to_stored(p) for p, *_ in on_disk}
     # Library documents whose file was removed from disk are dropped.
     for r in db.conn().execute("SELECT id, path FROM documents WHERE collection IN ('bare_act','draft','judgment')"):
         if r["path"] not in known_paths:
@@ -213,9 +213,9 @@ def build_library(rebuild: bool = False, progress=print) -> dict:
         if not created and doc["status"] == "ready":
             skipped += 1
             continue
-        if not created and doc["path"] != str(p):
+        if not created and doc["path"] != config.to_stored(p):
             with db.tx() as c:
-                c.execute("UPDATE documents SET path=? WHERE id=?", (str(p), doc["id"]))
+                c.execute("UPDATE documents SET path=? WHERE id=?", (config.to_stored(p), doc["id"]))
         t = time.time()
         res = process(doc["id"])
         ok = res.get("status") == "ready"
