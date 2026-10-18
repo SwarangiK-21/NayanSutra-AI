@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NyaySutra AI — Legal Research Assistant</title>
+  <meta name="description" content="Agentic legal research assistant for Indian advocates: case files, bare acts, drafts and cited answers.">
+  <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to main content</a>
+
+  <div class="tricolour" aria-hidden="true"><span></span><span></span><span></span></div>
+
+  <div class="utility">
+    <div class="wrap utility-row">
+      <span class="utility-left">न्याय अनुसंधान सहायक &nbsp;|&nbsp; Legal Research Assistant for Advocates</span>
+      <div class="utility-right" role="group" aria-label="Accessibility">
+        <a href="#main" class="u-link">Skip to main content</a>
+        <span class="sep" aria-hidden="true"></span>
+        <button type="button" class="u-btn" data-font="-1" aria-label="Decrease text size">A<sup>−</sup></button>
+        <button type="button" class="u-btn" data-font="0" aria-label="Reset text size">A</button>
+        <button type="button" class="u-btn" data-font="1" aria-label="Increase text size">A<sup>+</sup></button>
+        <span class="sep" aria-hidden="true"></span>
+        <button type="button" class="u-btn" id="contrastBtn" aria-pressed="false" aria-label="Toggle high contrast">◐ Contrast</button>
+        <button type="button" class="u-btn hidden" id="logoutBtn">Sign out</button>
+      </div>
+    </div>
+  </div>
+
+  <header class="masthead">
+    <div class="wrap mast-row">
+      <a class="brand" href="#/dashboard" aria-label="NyaySutra AI home">
+        <img src="/static/logo.svg" alt="" width="64" height="64">
+        <span class="brand-text">
+          <span class="brand-hi" lang="hi">न्यायसूत्र एआई</span>
+          <span class="brand-en">NYAYSUTRA AI</span>
+          <span class="brand-sub">Agentic RAG legal assistant · Case files · Bare Acts · Drafts</span>
+        </span>
+      </a>
+      <div class="mast-status" id="mastStatus" aria-live="polite">
+        <span class="chip chip-wait">Connecting…</span>
+      </div>
+    </div>
+  </header>
+
+  <nav class="mainnav" aria-label="Main">
+    <div class="wrap">
+      <button type="button" class="nav-toggle" id="navToggle" aria-expanded="false" aria-controls="navList">☰ Menu</button>
+      <ul id="navList">
+        <li><a href="#/dashboard" data-nav="dashboard">Dashboard</a></li>
+        <li><a href="#/cases" data-nav="cases">Case Files</a></li>
+        <li><a href="#/research" data-nav="research">Legal Research</a></li>
+        <li><a href="#/acts" data-nav="acts">Bare Acts</a></li>
+        <li><a href="#/drafts" data-nav="drafts">Draft Templates</a></li>
+        <li><a href="#/limitation" data-nav="limitation">Limitation</a></li>
+        <li><a href="#/about" data-nav="about">About</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="crumbs wrap" id="crumbs" aria-label="Breadcrumb"></div>
+
+  <main id="main" class="wrap" tabindex="-1">
+    <div class="loading-page">Loading…</div>
+  </main>
+
+  <div class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle" hidden>
+    <div class="drawer-panel">
+      <div class="drawer-head">
+        <h2 id="drawerTitle">Source</h2>
+        <button type="button" class="btn btn-ghost" id="drawerClose" aria-label="Close">✕</button>
+      </div>
+      <div class="drawer-body" id="drawerBody"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <footer class="footer">
+    <div class="wrap footer-grid">
+      <div>
+        <h3>NyaySutra AI</h3>
+        <p>An agentic retrieval-augmented research assistant for advocates. Answers are grounded in your case
+          files and official bare acts, with numbered citations and an automatic citation audit.</p>
+      </div>
+      <div>
+        <h3>Data sources</h3>
+        <ul>
+          <li>Bare Acts: India Code — Legislative Department, Ministry of Law &amp; Justice (indiacode.gov.in)</li>
+          <li>IPC text: eCourts district court portal (Govt. of India)</li>
+          <li>Judgments: Indian Kanoon</li>
+          <li>Case files: uploaded by you, stored only on this computer</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Disclaimer</h3>
+        <p>AI-generated research aid, not legal advice. Verify every citation against the primary source before
+          relying on it.</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <div class="wrap">Prototype for demonstration · Not an official Government of India website · All data stays on this device except questions sent to the configured LLM</div>
+    </div>
+  </footer>
+</body>
+</html>

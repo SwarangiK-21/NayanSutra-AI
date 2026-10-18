@@ -1,0 +1,346 @@
+"""The agentic RAG loop.
+
+    plan ─┬─ research ─────► retrieve → rerank ─┬─ strong ─► generate (stream) → verify
+          │                                     └─ weak ──► rewrite → retrieve ─┬─ strong ─► …
+          │                                                                     └─ weak ──► abstain
+          ├─ drafting ─────► template lookup + law retrieval → generate draft (stream)
+          ├─ analyze_document ► whole document (or map-reduce if huge) → stream analysis
+          ├─ calculation ──► deterministic limitation tool (no LLM arithmetic)
+          └─ chitchat ─────► short reply
+
+Each step yields events that the server streams to the browser (Server-Sent Events),
+so the advocate sees progress immediately and tokens as they are generated.
+"""
+from __future__ import annotations
+
+import json
+import logging
+import re
+import time
+from concurrent.futures import ThreadPoolExecutor
+from datetime import date
+from typing import Iterator
+
+from . import cases, config, db, ingest, llm, prompts, retrieval, tools
+
+log = logging.getLogger(__name__)
+
+KIND = {"case": "CASE FILE", "bare_act": "BARE ACT", "judgment": "JUDGMENT", "draft": "TEMPLATE"}
+
+
+# ── Chat persistence ─────────────────────────────────────────────────────────
+def ensure_chat(chat_id: str | None, case_id: str | None, first_message: str) -> str:
+    if chat_id:
+        row = db.conn().execute("SELECT id FROM chats WHERE id=?", (chat_id,)).fetchone()
+        if row:
+            return chat_id
+    cid = db.new_id("chat_")
+    title = re.sub(r"\s+", " ", first_message).strip()[:70] or "New research"
+    with db.tx() as c:
+        c.execute("INSERT INTO chats(id, case_id, title, created_at, updated_at) VALUES(?,?,?,?,?)",
+                  (cid, case_id, title, db.now(), db.now()))
+    return cid
+
+
+def save_message(chat_id: str, role: str, content: str, sources: list | None = None, meta: dict | None = None) -> int:
+    with db.tx() as c:
+        cur = c.execute("INSERT INTO messages(chat_id, role, content, sources, meta, created_at) VALUES(?,?,?,?,?,?)",
+                        (chat_id, role, content, json.dumps(sources or []), json.dumps(meta or {}), db.now()))
+        c.execute("UPDATE chats SET updated_at=? WHERE id=?", (db.now(), chat_id))
+        return cur.lastrowid
+
+
+def history(chat_id: str, limit: int = 8) -> list[dict]:
+    rows = db.conn().execute("SELECT role, content FROM messages WHERE chat_id=? ORDER BY id DESC LIMIT ?",
+                             (chat_id, limit)).fetchall()
+    return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
+
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+def _case_docs(case_id: str | None) -> list[dict]:
+    if not case_id:
+        return []
+    return [dict(r) for r in db.conn().execute(
+        "SELECT id, title, doc_type, filename, pages, n_chunks FROM documents "
+        "WHERE case_id=? AND status='ready' ORDER BY created_at", (case_id,))]
+
+
+def _source_items(hits: list[retrieval.Hit]) -> list[dict]:
+    return [{"n": i, "chunk_id": h.chunk_id, "doc_id": h.doc_id, "title": h.title, "collection": h.collection,
+             "kind": KIND.get(h.collection, h.collection), "label": h.label, "page": h.page_start,
+             "citation": h.citation(), "snippet": h.text[:320], "exact": h.exact}
+            for i, h in enumerate(hits, 1)]
+
+
+def _context(hits: list[retrieval.Hit]) -> str:
+    return "\n\n".join(f"[{i}] ({KIND.get(h.collection, h.collection)}) {h.header}"
+                       f"{f' | p. {h.page_start}' if h.page_start else ''}\n{h.text}"
+                       for i, h in enumerate(hits, 1))
+
+
+def _hist_text(hist: list[dict], n: int = 6) -> str:
+    return "\n".join(f"{m['role']}: {m['content'][:600]}" for m in hist[-n:]) or "(none)"
+
+
+def _prior_turns(hist: list[dict], n: int = 4) -> list[dict]:
+    return [{"role": m["role"], "content": m["content"][:1500]} for m in hist[-n:]]
+
+
+def plan(message: str, hist: list[dict], docs: list[dict]) -> dict:
+    doc_list = "; ".join(f"[D{i}] {d['title']} ({d['doc_type']})" for i, d in enumerate(docs, 1)) or "(none uploaded)"
+    p = llm.chat_json(
+        [{"role": "user", "content": prompts.PLANNER.format(
+            docs=doc_list, keys=", ".join(tools.LIMITATION), today=date.today().isoformat(),
+            history=_hist_text(hist), message=message)}],
+        model=config.FAST_LLM_MODEL,
+        default={"intent": "research", "query": message},
+    )
+    if p.get("intent") not in {"research", "analyze_document", "drafting", "calculation", "chitchat"}:
+        p["intent"] = "research"
+    p["query"] = (p.get("query") or message).strip()[:500]
+    p["alt_queries"] = [q for q in (p.get("alt_queries") or []) if isinstance(q, str) and q.strip()][:2]
+    return p
+
+
+_ALT_CITE = re.compile(r"【\s*(\d{1,2})(?:†[^】]*)?】")
+
+
+def normalise_citations(text: str) -> str:
+    """Some models emit 【5†L1-L4】 instead of [5]."""
+    return _ALT_CITE.sub(lambda m: f"[{m.group(1)}]", text)
+
+
+def _stream_llm(messages: list[dict], parts: list[str], model: str | None = None) -> Iterator[dict]:
+    for tok in llm.stream(messages, model=model):
+        parts.append(tok)
+        yield {"type": "token", "text": tok}
+
+
+# ── Main entry ───────────────────────────────────────────────────────────────
+def run(*, message: str, chat_id: str | None = None, case_id: str | None = None, scope: str = "all",
+        doc_id: str | None = None, task: str | None = None) -> Iterator[dict]:
+    t0 = time.time()
+    message = message.strip()[:6000]
+    case = cases.get_case(case_id) if case_id else None
+    if not case:
+        case_id = None
+        if scope == "case":
+            scope = "library"
+    chat_id = ensure_chat(chat_id, case_id, message)
+    hist = history(chat_id)
+    save_message(chat_id, "user", message, meta={"scope": scope, "doc_id": doc_id, "task": task})
+    yield {"type": "chat", "chat_id": chat_id}
+
+    docs = _case_docs(case_id)
+    answer: list[str] = []
+    sources: list[dict] = []
+    meta: dict = {"scope": scope}
+    try:
+        if task and doc_id:
+            p = {"intent": "analyze_document", "analysis": task, "query": message}
+        else:
+            yield {"type": "status", "step": "plan", "text": "Understanding the question…"}
+            p = plan(message, hist, docs)
+        meta["intent"] = p["intent"]
+        yield {"type": "meta", "intent": p["intent"], "query": p.get("query")}
+
+        if p["intent"] == "chitchat":
+            msgs = [{"role": "system", "content": prompts.CHAT_SYSTEM}, *_prior_turns(hist, 2),
+                    {"role": "user", "content": message}]
+            yield from _stream_llm(msgs, answer, model=config.FAST_LLM_MODEL)
+
+        elif p["intent"] == "calculation":
+            text = _calculation(p.get("calc") or {})
+            answer.append(text)
+            yield {"type": "token", "text": text}
+
+        elif p["intent"] == "analyze_document":
+            yield from _analyze(message, p, docs, doc_id, case_id, answer, sources, meta)
+
+        else:
+            yield from _research(message, p, case, docs, scope, hist, answer, sources, meta)
+
+    except llm.LLMError as exc:
+        err = str(exc)
+        meta["error"] = err
+        yield {"type": "error", "text": err}
+        if not answer:
+            answer.append(f"⚠️ {err}")
+    except Exception:  # never leak internals to the browser
+        log.exception("Agent failure")
+        meta["error"] = "internal"
+        yield {"type": "error", "text": "Something went wrong while answering. Please try again."}
+        if not answer:
+            answer.append("⚠️ Something went wrong while answering. Please try again.")
+
+    meta["elapsed"] = round(time.time() - t0, 2)
+    mid = save_message(chat_id, "assistant", normalise_citations("".join(answer)), sources, meta)
+    yield {"type": "done", "message_id": mid, "elapsed": meta["elapsed"], "meta": meta}
+
+
+# ── Branches ─────────────────────────────────────────────────────────────────
+def _calculation(calc: dict) -> str:
+    cause, start = calc.get("cause"), calc.get("start_date")
+    if not cause or cause not in tools.LIMITATION or not start:
+        rows = "\n".join(f"- `{c['key']}` — {c['label']} ({c['period']}; {c['basis']})" for c in tools.categories())
+        return ("To compute a limitation deadline I need **the type of proceeding** and **the date the period starts** "
+                "(e.g. *“limitation for breach of contract, broken on 2024-03-15”*).\n\nSupported categories:\n" + rows)
+    try:
+        r = tools.limitation(cause, start)
+    except ValueError:
+        return "Please give the start date as YYYY-MM-DD."
+    return (f"**{r['label']}**\n\n"
+            f"| | |\n|---|---|\n| Period | {r['period']} |\n| Basis | {r['basis']} |\n"
+            f"| Period starts | {r['starts']} |\n| Start date used | {r['start_date']} |\n"
+            f"| **Last date** | **{r['deadline']}** ({r['status']}) |\n\n"
+            f"> {r['caveat']}\n\n*Computed by a deterministic Python tool — not by the language model.*")
+
+
+def _pick_doc(message: str, p: dict, docs: list[dict], doc_id: str | None, case_id: str | None) -> dict | None:
+    if doc_id:
+        row = db.conn().execute("SELECT id, title, doc_type, filename, pages, n_chunks FROM documents "
+                                "WHERE id=? AND status='ready'", (doc_id,)).fetchone()
+        return dict(row) if row else None
+    ref = p.get("doc_ref")
+    try:
+        if ref is not None and 1 <= int(str(ref).lstrip("Dd")) <= len(docs):
+            return docs[int(str(ref).lstrip("Dd")) - 1]
+    except ValueError:
+        pass
+    if len(docs) == 1:
+        return docs[0]
+    if docs:  # let retrieval decide which document the question is about
+        hits, _ = retrieval.search(p.get("query") or message, scope="case",
+                                   case_id=case_id, doc_ids={d["id"] for d in docs}, k=3)
+        if hits:
+            return next((d for d in docs if d["id"] == hits[0].doc_id), docs[0])
+        return docs[-1]
+    return None
+
+
+def _analyze(message: str, p: dict, docs: list[dict], doc_id: str | None, case_id: str | None,
+             answer: list[str], sources: list[dict], meta: dict) -> Iterator[dict]:
+    doc = _pick_doc(message, p, docs, doc_id, case_id)
+    if not doc:
+        text = ("There is no uploaded document to analyse yet. Open a case, upload the judgment, petition or "
+                "agreement in **Case documents**, and ask again.")
+        answer.append(text)
+        yield {"type": "token", "text": text}
+        return
+    task = p.get("analysis") or "summary"
+    chunks, _ = ingest.document_text(doc["id"])
+    body = "\n".join(f"[p. {ps}] {t}" for ps, _, t in chunks)
+    meta.update({"doc_id": doc["id"], "task": task})
+    item = {"n": 1, "chunk_id": None, "doc_id": doc["id"], "title": doc["title"], "collection": "case",
+            "kind": "CASE FILE", "label": f"{doc.get('pages') or '?'} pages", "page": 1,
+            "citation": doc["title"], "snippet": chunks[0][2][:320] if chunks else "", "exact": False}
+    sources.append(item)
+    yield {"type": "sources", "items": sources}
+
+    if len(body) > config.DOC_ANALYSIS_MAX_CHARS:
+        parts = [body[i:i + 40000] for i in range(0, len(body), 40000)][:8]
+        yield {"type": "status", "step": "read", "text": f"Reading “{doc['title']}” in {len(parts)} parts…"}
+
+        def note(i_part):
+            i, part = i_part
+            return llm.chat([{"role": "user", "content": prompts.MAP_NOTES.format(
+                task=task, request=message[:300], i=i, n=len(parts), text=part)}], model=config.FAST_LLM_MODEL)
+
+        with ThreadPoolExecutor(max_workers=3) as ex:
+            notes = list(ex.map(note, enumerate(parts, 1)))
+        body = "\n\n".join(f"NOTES ON PART {i}:\n{n}" for i, n in enumerate(notes, 1))
+    yield {"type": "status", "step": "generate", "text": f"Analysing “{doc['title']}”…"}
+    msgs = [{"role": "system", "content": prompts.ANALYZE_SYSTEM},
+            {"role": "user", "content": f"TASK: {task}\nUSER REQUEST: {message}\n\nDOCUMENT: {doc['title']}\n"
+                                        f"<<<DOCUMENT\n{body}\nDOCUMENT>>>"}]
+    yield from _stream_llm(msgs, answer)
+
+
+def _research(message: str, p: dict, case: dict | None, docs: list[dict], scope: str, hist: list[dict],
+              answer: list[str], sources: list[dict], meta: dict) -> Iterator[dict]:
+    case_id = case["id"] if case else None
+    drafting = p["intent"] == "drafting"
+    where = {"case": "this case's documents", "library": "the law library"}.get(scope, "case documents and the law library")
+    yield {"type": "status", "step": "retrieve", "text": f"Searching {where}…"}
+
+    query = p["query"]
+    ctx = (case or {}).get("acts_sections") or ""
+    hits, diag = retrieval.search(query, scope=scope, case_id=case_id, extra_queries=p["alt_queries"], hint=message,
+                                  context=ctx)
+    weak = diag.get("confidence") is not None and diag["confidence"] < config.RELEVANCE_FLOOR and not diag["exact_hits"]
+    if (not hits or weak) and not drafting:
+        yield {"type": "status", "step": "rewrite", "text": "Weak matches — refining the search…"}
+        q2 = llm.chat([{"role": "user", "content": prompts.REWRITE.format(q=query)}],
+                      model=config.FAST_LLM_MODEL, max_tokens=120).strip().strip('"')[:300]
+        if q2:
+            hits2, diag2 = retrieval.search(q2, scope=scope, case_id=case_id, extra_queries=[query], hint=message,
+                                            context=ctx)
+            if hits2 and (diag2.get("confidence") or -99) > (diag.get("confidence") or -99):
+                hits, diag, query = hits2, diag2, q2
+        weak = diag.get("confidence") is not None and diag["confidence"] < config.RELEVANCE_FLOOR and not diag["exact_hits"]
+    meta["retrieval"] = {k: diag.get(k) for k in ("confidence", "refs", "acts", "candidates", "exact_hits")}
+    meta["query"] = query
+
+    template = None
+    if drafting:
+        yield {"type": "status", "step": "template", "text": "Finding the closest draft template…"}
+        drafts = {r["id"]: json.loads(r["meta"] or "{}").get("area", "") for r in db.conn().execute(
+            "SELECT id, meta FROM documents WHERE collection='draft' AND status='ready'")}
+        if drafts:
+            # Match on what is being drafted *and* what the matter is about, then prefer
+            # templates from the case's practice area (e.g. a Civil notice, not a s.80 Govt notice).
+            facts = (case or {}).get("description", "")[:300]
+            t_query = f"{p.get('draft_kind') or ''} {message} {facts}".strip()
+            t_hits, _ = retrieval.search(t_query, scope="library", doc_ids=set(drafts), k=6, exclude=frozenset())
+            if t_hits:
+                area = (case or {}).get("case_type")
+                best = max(t_hits, key=lambda h: h.score + (1.5 if drafts.get(h.doc_id) == area else 0.0))
+                chunks, tdoc = ingest.document_text(best.doc_id)
+                template = retrieval.Hit(chunk_id=best.chunk_id, doc_id=tdoc["id"], title=tdoc["title"],
+                                         collection="draft", doc_type="template",
+                                         header=f"Draft template: {tdoc['title']}",
+                                         text="\n".join(t for *_, t in chunks)[:9000], label="template",
+                                         section=None, page_start=None, page_end=None)
+        hits = [h for h in hits if h.collection != "draft"][: config.CONTEXT_PASSAGES - 1]
+        if template:
+            hits = [template] + hits
+
+    if not hits or (weak and not drafting):
+        text = (f"I searched {where} for **“{query}”** but found no passage that answers this reliably, "
+                "so I won't guess.\n\n**What helps:**\n"
+                "- Upload the relevant judgment, petition or agreement to the case (Case documents).\n"
+                "- Name the provision precisely, e.g. *Section 138 NI Act* or *Order XXXIX Rule 1 CPC*.\n"
+                "- Switch the search scope to **Case + Library** if it is set narrower.")
+        answer.append(text)
+        meta["abstained"] = True
+        yield {"type": "token", "text": text}
+        return
+
+    sources.extend(_source_items(hits))
+    yield {"type": "sources", "items": sources}
+    yield {"type": "status", "step": "generate", "text": "Drafting…" if drafting else "Writing a cited answer…"}
+
+    dossier = cases.dossier(case, docs) if case else "(no case selected — general research)"
+    user = (f"CASE DOSSIER:\n{dossier}\n\nSOURCES:\n{_context(hits)}\n\n"
+            f"{'DRAFTING REQUEST' if drafting else 'QUESTION'}: {message}")
+    msgs = [{"role": "system", "content": prompts.DRAFT_SYSTEM if drafting else prompts.ANSWER_SYSTEM},
+            *_prior_turns(hist), {"role": "user", "content": user}]
+    yield from _stream_llm(msgs, answer)
+
+    if drafting:
+        return
+    # Citation audit: deterministic check for out-of-range numbers + LLM check of support.
+    text = normalise_citations("".join(answer))
+    cited = {int(n) for n in re.findall(r"\[(\d{1,2})\]", text)}
+    invalid = sorted(n for n in cited if n < 1 or n > len(hits))
+    yield {"type": "status", "step": "verify", "text": "Checking citations against sources…"}
+    v = llm.chat_json([{"role": "user", "content": prompts.VERIFY.format(sources=_context(hits)[:24000], answer=text)}],
+                      model=config.FAST_LLM_MODEL, default={"grounded": None, "unsupported": []})
+    unsupported = [str(u)[:300] for u in (v.get("unsupported") or [])][:6]
+    if invalid:
+        unsupported.append(f"Cites source numbers that do not exist: {invalid}")
+    grounded = (v.get("grounded") is not False) and not invalid and not unsupported
+    if not cited:
+        grounded, unsupported = False, unsupported or ["The answer contains no citations."]
+    meta["verify"] = {"grounded": grounded, "unsupported": unsupported, "checked": v.get("grounded") is not None}
+    yield {"type": "verify", **meta["verify"]}

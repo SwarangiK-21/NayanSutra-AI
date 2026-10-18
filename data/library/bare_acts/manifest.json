@@ -1,0 +1,507 @@
+{
+  "the_indian_contract_act_1872.pdf": {
+    "title": "The Indian Contract Act, 1872",
+    "short": "Contract Act",
+    "areas": [
+      "Civil"
+    ],
+    "act_number": "9",
+    "year": "1872",
+    "enforcement_date": "1872-09-01",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/0e782442-f035-4d53-aace-81b1552a8cf2",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/e7571d39-11a7-4a2c-86e3-c515ae43e617/content",
+    "pdf_name": "a1872-9.pdf",
+    "sha256": "85a7a066098255c93001d678aeaf483f91d3080918363c03b78d40c3eeb8b386",
+    "fetched_at": "2026-10-18T06:59:36+00:00"
+  },
+  "the_bharatiya_nyaya_sanhita_2023.pdf": {
+    "title": "The Bharatiya Nyaya Sanhita, 2023",
+    "short": "BNS",
+    "areas": [
+      "Criminal"
+    ],
+    "act_number": "45",
+    "year": "2023",
+    "enforcement_date": "1-7-2024",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/4bb3e636-ed67-4731-8fb1-7ebfd83e1584",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/8007a80e-259b-429d-9ca4-1a2f474b5000/content",
+    "pdf_name": "a2023-45.pdf",
+    "sha256": "d4449e9995b21fd52627811d08f9d21feda6a3678b7e5355b651242d152167f5",
+    "fetched_at": "2026-10-18T06:59:47+00:00"
+  },
+  "the_bharatiya_sakshya_adhiniyam_2023.pdf": {
+    "title": "The Bharatiya Sakshya Adhiniyam, 2023",
+    "short": "BSA",
+    "areas": [
+      "Criminal",
+      "Civil"
+    ],
+    "act_number": "47",
+    "year": "2023",
+    "enforcement_date": "1-7-2024",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/9e461245-2c13-4171-9d9d-267425c01e1d",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/fa0f7526-d871-41f2-a644-2a42952211f5/content",
+    "pdf_name": "a2023-47.pdf",
+    "sha256": "554b2b4ae3d9f09bf31e6e1ba2b2cb8a4e7f4f5ffd6f3156736752cbbce116d5",
+    "fetched_at": "2026-10-18T07:00:03+00:00"
+  },
+  "the_code_of_civil_procedure_1908.pdf": {
+    "title": "The Code of Civil Procedure, 1908",
+    "short": "CPC",
+    "areas": [
+      "Civil"
+    ],
+    "act_number": "5",
+    "year": "1908",
+    "enforcement_date": "1909-01-01",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/3d38ec80-965e-4df0-a2d2-3d97cb1dc702",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/fc9dad3f-97a9-4216-843b-934665693468/content",
+    "pdf_name": "a1908-05.pdf",
+    "sha256": "393b8848fdfc476a21cc3abf4f0d3f510557e2dff6fc6914b1f379bea1730614",
+    "fetched_at": "2026-10-18T07:00:09+00:00"
+  },
+  "the_specific_relief_act_1963.pdf": {
+    "title": "The Specific Relief Act, 1963",
+    "short": "Specific Relief Act",
+    "areas": [
+      "Civil"
+    ],
+    "act_number": "47",
+    "year": "1963",
+    "enforcement_date": "01-03-1964",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/e0a1c7bb-8bed-47d7-a0b6-9fd3c8a3944c",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/d47b330c-8fdb-4a6b-9fcf-72201b62e1ba/content",
+    "pdf_name": "a1963-47.pdf",
+    "sha256": "6785305b261cbbde103f8e68b6ace98dabc7a180b1eb621c94fa20186420939a",
+    "fetched_at": "2026-10-18T07:00:10+00:00"
+  },
+  "the_limitation_act_1963.pdf": {
+    "title": "The Limitation Act, 1963",
+    "short": "Limitation Act",
+    "areas": [
+      "Civil",
+      "Criminal",
+      "Family",
+      "Revenue"
+    ],
+    "act_number": "36",
+    "year": "1963",
+    "enforcement_date": "01-01-1964",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/5e69d11a-63e7-4a63-b86f-e063bcdeaee2",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/3900a3de-8131-435a-9af0-ebad58242273/content",
+    "pdf_name": "a1963-36.pdf",
+    "sha256": "f04b51220f8f7ec97a1d7e8c73f14f37a91e8b300361db4b006b7d8226e31ed6",
+    "fetched_at": "2026-10-18T07:00:11+00:00"
+  },
+  "the_negotiable_instruments_act_1881.pdf": {
+    "title": "The Negotiable Instruments Act, 1881",
+    "short": "NI Act",
+    "areas": [
+      "Criminal",
+      "Civil"
+    ],
+    "act_number": "26",
+    "year": "1881",
+    "enforcement_date": "1882-03-01",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/38b01c2d-f1b8-4b1f-a8bf-86b4da3b72a0",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/82bf1927-5e52-4aab-a876-50552c5952cd/content",
+    "pdf_name": "a1881-26.pdf",
+    "sha256": "ed3e9db7f37052a1bc1cd665500910c5e123de888bce0375585e9a766bf38501",
+    "fetched_at": "2026-10-18T07:00:13+00:00"
+  },
+  "the_arbitration_and_conciliation_act_1996.pdf": {
+    "title": "The Arbitration and Conciliation Act, 1996",
+    "short": "Arbitration Act",
+    "areas": [
+      "Civil"
+    ],
+    "act_number": "26",
+    "year": "1996",
+    "enforcement_date": "22-08-1996",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/51601006-0e76-4a81-83ce-739f3a021112",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/c368a901-3738-47f6-acb8-9885147945ec/content",
+    "pdf_name": "a1996-26.pdf",
+    "sha256": "6fb32e5ffe2581740345d948c1e362bfbb5018ca7958932cde8ca92436485b6c",
+    "fetched_at": "2026-10-18T07:00:14+00:00"
+  },
+  "the_transfer_of_property_act_1882.pdf": {
+    "title": "The Transfer of Property Act, 1882",
+    "short": "TPA",
+    "areas": [
+      "Civil",
+      "Revenue"
+    ],
+    "act_number": "4",
+    "year": "1882",
+    "enforcement_date": "1882-07-01",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/2b436b95-ae89-4c5f-ab70-3d5ef5ffd8e8",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/df9f8770-4efe-4cf9-85ba-1ea884649679/content",
+    "pdf_name": "a1882-04.pdf",
+    "sha256": "28f73f2e4ab32913b7bd2c1d46fba41f4dd86ba845502823cc47d77cace3b623",
+    "fetched_at": "2026-10-18T07:00:16+00:00"
+  },
+  "the_registration_act_1908.pdf": {
+    "title": "The Registration Act, 1908",
+    "short": "Registration Act",
+    "areas": [
+      "Civil",
+      "Revenue"
+    ],
+    "act_number": "16",
+    "year": "1908",
+    "enforcement_date": "1909-01-01",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/1930ffdb-10f3-4d71-bc42-f91303dae14e",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/0b9471f4-9b18-47dd-bb76-cccf556db838/content",
+    "pdf_name": "a1908-16.pdf",
+    "sha256": "736a9560fb7c323874e79d3a4a884f36ca979a30dab73110cdabe2662ae35a22",
+    "fetched_at": "2026-10-18T07:00:17+00:00"
+  },
+  "the_indian_stamp_act_1899.pdf": {
+    "title": "The Indian Stamp Act, 1899",
+    "short": "Stamp Act",
+    "areas": [
+      "Revenue",
+      "Civil"
+    ],
+    "act_number": "2",
+    "year": "1899",
+    "enforcement_date": "1899-07-01",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/445b5e9e-e4c5-4973-8bef-c9e057d57d5f",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/dc504bf4-89fc-4298-8ce6-edc6da5731d0/content",
+    "pdf_name": "a1899-2_.pdf",
+    "sha256": "e81b1037c7fbd89d8b5f7b62a9c3c973931e428da97e8a5e93c4931c82bad94e",
+    "fetched_at": "2026-10-18T07:00:20+00:00"
+  },
+  "the_commercial_courts_act_2015.pdf": {
+    "title": "The Commercial Courts Act, 2015",
+    "short": "Commercial Courts Act",
+    "areas": [
+      "Civil"
+    ],
+    "act_number": "4",
+    "year": "2016",
+    "enforcement_date": "23-10-2015",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/14782d77-dfa1-494f-a277-ac0006c05b7f",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/acd3c277-430e-4cad-bd08-03e7aff64e20/content",
+    "pdf_name": "a2016-04.pdf",
+    "sha256": "cdba269e1766246a9ff67d2af8563d6ed3ced01b49758a4f85317d9a2ea6008d",
+    "fetched_at": "2026-10-18T07:00:21+00:00"
+  },
+  "the_consumer_protection_act_2019.pdf": {
+    "title": "The Consumer Protection Act, 2019",
+    "short": "Consumer Protection Act",
+    "areas": [
+      "Civil"
+    ],
+    "act_number": "35",
+    "year": "2019",
+    "enforcement_date": "24th July, 2020.-- S. 2 clauses (4), (13), (14), (16), (40), s. 10 to 27 (both inclusive), sub-clause (iv) of clause (a) of sub-section (1) of section 58, s. 88, 89, 92 and 93, 94, 96, 97 and 99, clause (f) to (m) of sub-section 2 and clauses (zg), (zh) and (zi) of sub-section 2 of s. 101, 104, vide notification No. S.O. 2421(E), dated 23rd July 2020, see Gazette of India, Extraordinary, Part II, sec. 3(ii).",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/1b6c1754-47b1-411e-9607-1712a9caf368",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/d546dfb5-3044-4661-981d-3e1771c290b9/content",
+    "pdf_name": "A2019-35.pdf",
+    "sha256": "4bbed366bc2206bb1c3b1817c5ccdd652d1e66d9476c6779cf5239e71e3ba2a7",
+    "fetched_at": "2026-10-18T07:00:23+00:00"
+  },
+  "the_information_technology_act_2000.pdf": {
+    "title": "The Information Technology Act, 2000",
+    "short": "IT Act",
+    "areas": [
+      "Criminal",
+      "Civil"
+    ],
+    "act_number": "21",
+    "year": "2000",
+    "enforcement_date": "17-10-2000",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/d41fe391-b9c0-40b1-afdc-ad034c7ac62f",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/770a7d02-48f2-4274-bab9-10d0f48ee264/content",
+    "pdf_name": "A2000-21.pdf",
+    "sha256": "003b3218fe399b293c73f6aef9ca52e5c1d080388c43fb0523572c1dc5f3d529",
+    "fetched_at": "2026-10-18T07:00:24+00:00"
+  },
+  "the_hindu_marriage_act_1955.pdf": {
+    "title": "The Hindu Marriage Act, 1955",
+    "short": "HMA",
+    "areas": [
+      "Family"
+    ],
+    "act_number": "25",
+    "year": "1955",
+    "enforcement_date": "18-05-1955",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/33e4083a-e967-4091-b91f-915b4d3f95a8",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/526166d6-239d-4b6c-8999-c776179dea69/content",
+    "pdf_name": "a1955-25.pdf",
+    "sha256": "f219e8e6c6e6cf4b2f73b3b7dcbfabcddc3ccd2cc11d98cdf6b2757cb74d9e9e",
+    "fetched_at": "2026-10-18T07:00:26+00:00"
+  },
+  "the_special_marriage_act_1954.pdf": {
+    "title": "The Special Marriage Act, 1954",
+    "short": "Special Marriage Act",
+    "areas": [
+      "Family"
+    ],
+    "act_number": "43",
+    "year": "1954",
+    "enforcement_date": "01-01-1955",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/6b55de27-1d75-4e3d-9613-7d189ab6091e",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/ec3f21c1-cdda-4c2f-a290-f877dab8b380/content",
+    "pdf_name": "a1954-43.pdf",
+    "sha256": "2c8b872a83e150d8bf56a830d0a8bb3529c6d7e07e69945dd3921566b19108c5",
+    "fetched_at": "2026-10-18T07:00:27+00:00"
+  },
+  "the_hindu_succession_act_1956.pdf": {
+    "title": "The Hindu Succession Act, 1956",
+    "short": "Hindu Succession Act",
+    "areas": [
+      "Family",
+      "Revenue"
+    ],
+    "act_number": "30",
+    "year": "1956",
+    "enforcement_date": "17-06-1956",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/3371dabc-b1ab-4bb1-874d-0411dd1c44bd",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/08b1e3ba-8e9d-4022-8cb7-b0b2ac577f3e/content",
+    "pdf_name": "A1956-30.pdf",
+    "sha256": "d2c8389d14b02be68dbf4d1ff039cc3c0a64378a0748683292583be35b748b34",
+    "fetched_at": "2026-10-18T07:00:29+00:00"
+  },
+  "the_hindu_adoptions_and_maintenance_act_1956.pdf": {
+    "title": "The Hindu Adoptions and Maintenance Act, 1956",
+    "short": "HAMA",
+    "areas": [
+      "Family"
+    ],
+    "act_number": "78",
+    "year": "1956",
+    "enforcement_date": "21-12-1956",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/20c8e8eb-824f-4b64-8ee7-c1204b4cdbb3",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/70770786-6c27-41aa-b816-f27315d051cc/content",
+    "pdf_name": "A1956-78.pdf",
+    "sha256": "f826e635a4e338e3e0ff66c88bdf13f522574393a40f25347bac751fc9f9a904",
+    "fetched_at": "2026-10-18T07:00:31+00:00"
+  },
+  "the_guardians_and_wards_act_1890.pdf": {
+    "title": "The Guardians and Wards Act, 1890",
+    "short": "Guardians and Wards Act",
+    "areas": [
+      "Family"
+    ],
+    "act_number": "8",
+    "year": "1890",
+    "enforcement_date": "1890-03-21",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/b11b9515-16ca-4e69-8999-d0032a3913fa",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/fb254c35-b277-48dd-a39c-fb66c2a9fb25/content",
+    "pdf_name": "a1890-8.pdf",
+    "sha256": "bdd4abc84270bd815b7d35d1f7630b12f6b2ea01de06ae188a41b4003d157c80",
+    "fetched_at": "2026-10-18T07:00:32+00:00"
+  },
+  "the_family_courts_act_1984.pdf": {
+    "title": "The Family Courts Act, 1984",
+    "short": "Family Courts Act",
+    "areas": [
+      "Family"
+    ],
+    "act_number": "66",
+    "year": "1984",
+    "enforcement_date": "19-11-1986, 19-11-1986, 02-10-1986, 19-11-1986, 01-12-1986, 25-05-1987, 01-05-1989, 21-10-1989, 16-04-1990, 01-05-1987, 01-11-1991, 02-10-1991, 10-12-1991, 03-02-1992, 02-11-1992, 15-02-1995, 01-01-2000, 10-10-2003",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/8f5c7a57-7f5a-4e35-b2f2-fa0cf56947fe",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/d53f8e79-8580-4083-b455-6492a13643ee/content",
+    "pdf_name": "a1984-66.pdf",
+    "sha256": "dbcb1b75b82edfbcd9b2422d9ec5f5915080e13598c88ee2efea300445083814",
+    "fetched_at": "2026-10-18T07:00:34+00:00"
+  },
+  "the_protection_of_women_from_domestic_violence_act_2005.pdf": {
+    "title": "The Protection of Women from Domestic Violence Act, 2005",
+    "short": "DV Act",
+    "areas": [
+      "Family",
+      "Criminal"
+    ],
+    "act_number": "43",
+    "year": "2005",
+    "enforcement_date": "26-10-2006",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/4311e86f-7d98-40b6-8a80-2195278207cb",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/8aa8ec49-c98c-4e76-91ac-bab44815e835/content",
+    "pdf_name": "a2005-43.pdf",
+    "sha256": "bcf17f3ebe2b1e35ff601851578c460a050534d7530193d927298729655dfa5b",
+    "fetched_at": "2026-10-18T07:00:35+00:00"
+  },
+  "the_dowry_prohibition_act_1961.pdf": {
+    "title": "The Dowry Prohibition Act, 1961",
+    "short": "Dowry Prohibition Act",
+    "areas": [
+      "Family",
+      "Criminal"
+    ],
+    "act_number": "28",
+    "year": "1961",
+    "enforcement_date": "01-07-1961",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/8dc8e1b4-7147-45ea-9e82-5911aa3816d4",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/9114da6a-2be2-42fc-a2c2-c1deff81aee4/content",
+    "pdf_name": "a1961-28.pdf",
+    "sha256": "d29bf14c8e7cffe5914086e1ce832b34467150caa2c66aee0fd107deba764dea",
+    "fetched_at": "2026-10-18T07:00:37+00:00"
+  },
+  "the_indian_succession_act_1925.pdf": {
+    "title": "The Indian Succession Act, 1925",
+    "short": "Succession Act",
+    "areas": [
+      "Family",
+      "Civil"
+    ],
+    "act_number": "39",
+    "year": "1925",
+    "enforcement_date": "1925-09-30",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/3eeb6aec-1e1f-42d4-9673-c04d21829663",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/22fcebb0-a39e-4e28-8ce7-a0d6d3ea7fcc/content",
+    "pdf_name": "A1925-39.pdf",
+    "sha256": "7555f529206e8a573aeb306a07de86970efa67eb46e3789b956690938298764a",
+    "fetched_at": "2026-10-18T07:00:39+00:00"
+  },
+  "the_protection_of_children_from_sexual_offences_act_2012.pdf": {
+    "title": "The Protection of Children from Sexual Offences Act, 2012",
+    "short": "POCSO",
+    "areas": [
+      "Criminal"
+    ],
+    "act_number": "32",
+    "year": "2012",
+    "enforcement_date": "14-11-2012",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/60dad1b9-bbf1-4310-8fa1-62643beab7a6",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/520a6c63-50ce-499d-860a-c2ed2797300a/content",
+    "pdf_name": "A2012-32.pdf",
+    "sha256": "5a173cc87d51624663dceb588d20a468ef49505be4fa131609d5867ac7dab021",
+    "fetched_at": "2026-10-18T07:00:40+00:00"
+  },
+  "the_right_to_fair_compensation_and_transparency_in_land_acquisition_rehabilitation_and_res.pdf": {
+    "title": "The Right to Fair Compensation and Transparency in Land Acquisition, Rehabilitation and Resettlement Act, 2013",
+    "short": "Land Acquisition Act 2013",
+    "areas": [
+      "Revenue"
+    ],
+    "act_number": "30",
+    "year": "2013",
+    "enforcement_date": "01-01-2014",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/3de78b3e-dce3-447e-8ef4-eb09d4897a22",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/ae735011-ee30-4e36-bc1c-aef0da4b23a1/content",
+    "pdf_name": "A2013-30.pdf",
+    "sha256": "4ed77432b6ad614f338d25cfcfa9f63e7b321adb65029ec4cc24c0b60568b052",
+    "fetched_at": "2026-10-18T07:00:42+00:00"
+  },
+  "the_maharashtra_land_revenue_code_1966.pdf": {
+    "title": "The Maharashtra Land Revenue Code, 1966",
+    "short": "MLRC",
+    "areas": [
+      "Revenue"
+    ],
+    "act_number": "41",
+    "year": "1966",
+    "enforcement_date": "",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/87701500-60b1-49be-99d4-4d9f0807302d",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/de00ee10-97db-48e2-ba13-f25e652accad/content",
+    "pdf_name": "the_maharashtra_land_revenue_code,_1966.pdf",
+    "sha256": "00ec56451d0d5ae47c6d6b234d8efe58d05614f09410d7dac43fb8e467ddf692",
+    "fetched_at": "2026-10-18T07:00:43+00:00"
+  },
+  "the_bharatiya_nagarik_suraksha_sanhita_2023.pdf": {
+    "title": "The Bharatiya Nagarik Suraksha Sanhita, 2023",
+    "short": "BNSS",
+    "areas": [
+      "Criminal"
+    ],
+    "act_number": "46",
+    "year": "2023",
+    "enforcement_date": "01-07-2024",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/72592ac7-d084-4545-95d3-0c98dc49fac3",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/73f93470-5f6a-4f0f-bc23-1309e32b9554/content",
+    "pdf_name": "A2023-46.pdf",
+    "sha256": "572c79880b9f8effc8fa6e39b864101835a0fb5d85b194b90a99d170121a0562",
+    "fetched_at": "2026-10-18T07:06:24+00:00"
+  },
+  "the_indian_penal_code_1860.pdf": {
+    "title": "The Indian Penal Code, 1860",
+    "short": "IPC",
+    "areas": [
+      "Criminal"
+    ],
+    "act_number": "45",
+    "year": "1860",
+    "repealed": true,
+    "source": "District Court Chamarajanagara (eCourts, Govt. of India) — copy of India Code text",
+    "pdf_url": "https://cdnbbsr.s3waas.gov.in/s3ec03a36b598abb934e4528412e5a2127/uploads/2023/09/2023091276.pdf",
+    "sha256": "2bbc5b1a7b9567a1811fc376b0cec037f8fe7b90a680d8177abc6b06364fc76a",
+    "note": "Repealed w.e.f. 1 July 2024 (replaced by BNS / BSA); kept for pending matters.",
+    "fetched_at": "2026-10-18T07:06:25+00:00"
+  },
+  "the_constitution_of_india.pdf": {
+    "title": "The Constitution of India",
+    "short": "Constitution",
+    "areas": [
+      "Civil",
+      "Criminal",
+      "Family",
+      "Revenue"
+    ],
+    "act_number": "",
+    "year": "1950",
+    "repealed": false,
+    "source": "India Code (Legislative Department) — English text",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/5266be94-8cd4-45e5-b0ab-bd36b8c01f4f/content",
+    "sha256": "f7e4908b0e5e7dc166ade9d447a89c4261b895db12c94e128ca5bccb015fcd3b",
+    "note": "",
+    "fetched_at": "2026-10-18T08:06:08+00:00"
+  }
+}

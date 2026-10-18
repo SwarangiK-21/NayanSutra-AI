@@ -1,0 +1,41 @@
+"""Start NyaySutra AI:  python run.py   then open http://127.0.0.1:8000"""
+from __future__ import annotations
+
+import logging
+import sys
+import webbrowser
+from threading import Timer
+
+import uvicorn
+
+from nyaya import config
+
+
+def main() -> int:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
+                        datefmt="%H:%M:%S")
+    for noisy in ("httpx", "huggingface_hub", "urllib3", "fastembed"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
+    local = config.APP_HOST in ("127.0.0.1", "localhost", "::1")
+    if not local and not config.APP_PASSWORD:
+        print("Refusing to listen on a network interface without APP_PASSWORD set in .env "
+              "(client documents would be exposed). Set APP_PASSWORD or use APP_HOST=127.0.0.1.")
+        return 2
+    if not config.OLLAMA_API_KEY and "ollama.com" in config.OLLAMA_HOST:
+        print("OLLAMA_API_KEY is missing in .env")
+        return 2
+
+    url = f"http://{'127.0.0.1' if local else config.APP_HOST}:{config.APP_PORT}"
+    print(f"\n  NyaySutra AI  ->  {url}\n  LLM: {config.LLM_MODEL} (fast: {config.FAST_LLM_MODEL}) via "
+          f"{'Ollama Cloud' if 'ollama.com' in config.OLLAMA_HOST else config.OLLAMA_HOST}\n"
+          f"  Press Ctrl+C to stop.\n")
+    if "--no-browser" not in sys.argv:
+        Timer(2.0, lambda: webbrowser.open(url)).start()
+    uvicorn.run("nyaya.server:app", host=config.APP_HOST, port=config.APP_PORT, log_level="warning",
+                proxy_headers=False, server_header=False, date_header=False)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
