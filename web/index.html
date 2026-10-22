@@ -7,25 +7,25 @@
   <meta name="description" content="Agentic legal research assistant for Indian advocates: case files, bare acts, drafts and cited answers.">
   <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/app.css">
-  <script src="/static/app.js" defer></script>
+  <script type="module" src="/static/app.js"></script>
 </head>
 <body>
-  <a class="skip" href="#main">Skip to main content</a>
+  <a class="skip" href="#main" data-i18n="a11y.skip">Skip to main content</a>
 
   <div class="tricolour" aria-hidden="true"><span></span><span></span><span></span></div>
 
   <div class="utility">
     <div class="wrap utility-row">
-      <span class="utility-left">न्याय अनुसंधान सहायक &nbsp;|&nbsp; Legal Research Assistant for Advocates</span>
-      <div class="utility-right" role="group" aria-label="Accessibility">
-        <a href="#main" class="u-link">Skip to main content</a>
+      <span class="utility-left">न्याय अनुसंधान सहायक &nbsp;|&nbsp; <span data-i18n="brand.tagline">Legal Research Assistant for Advocates</span></span>
+      <div class="utility-right" role="group" aria-label="Accessibility" data-i18n-attr="aria-label:a11y.group">
+        <a href="#main" class="u-link" data-i18n="a11y.skip">Skip to main content</a>
         <span class="sep" aria-hidden="true"></span>
-        <button type="button" class="u-btn" data-font="-1" aria-label="Decrease text size">A<sup>−</sup></button>
-        <button type="button" class="u-btn" data-font="0" aria-label="Reset text size">A</button>
-        <button type="button" class="u-btn" data-font="1" aria-label="Increase text size">A<sup>+</sup></button>
+        <button type="button" class="u-btn" data-font="-1" aria-label="Decrease text size" data-i18n-attr="aria-label:a11y.smaller">A<sup>−</sup></button>
+        <button type="button" class="u-btn" data-font="0" aria-label="Reset text size" data-i18n-attr="aria-label:a11y.reset">A</button>
+        <button type="button" class="u-btn" data-font="1" aria-label="Increase text size" data-i18n-attr="aria-label:a11y.larger">A<sup>+</sup></button>
         <span class="sep" aria-hidden="true"></span>
-        <button type="button" class="u-btn" id="contrastBtn" aria-pressed="false" aria-label="Toggle high contrast">◐ Contrast</button>
-        <button type="button" class="u-btn hidden" id="logoutBtn">Sign out</button>
+        <button type="button" class="u-btn" id="contrastBtn" aria-pressed="false" aria-label="Toggle high contrast" data-i18n-attr="aria-label:a11y.contrast">◐ <span data-i18n="a11y.contrast_short">Contrast</span></button>
+        <button type="button" class="u-btn hidden" id="logoutBtn" data-i18n="login.signout">Sign out</button>
       </div>
     </div>
   </div>
@@ -37,41 +37,51 @@
         <span class="brand-text">
           <span class="brand-hi" lang="hi">न्यायसूत्र एआई</span>
           <span class="brand-en">NYAYSUTRA AI</span>
-          <span class="brand-sub">Agentic RAG legal assistant · Case files · Bare Acts · Drafts</span>
+          <span class="brand-sub" data-i18n="brand.sub">Agentic RAG legal assistant · Case files · Bare Acts · Drafts</span>
         </span>
       </a>
-      <div class="mast-status" id="mastStatus" aria-live="polite">
-        <span class="chip chip-wait">Connecting…</span>
+      <form class="mast-search" id="globalSearch" role="search">
+        <input type="search" id="gq" placeholder="Search cases, documents, acts, judgments…" aria-label="Search everything" data-i18n-attr="placeholder:search.global_ph;aria-label:search.global_ph">
+        <button class="btn btn-sm" type="submit" data-i18n="common.search">Search</button>
+      </form>
+      <div class="mast-right">
+        <a href="#/updates" class="bell" id="bellLink" aria-label="Notifications">🔔<span class="bell-count" id="bellCount" hidden></span></a>
+        <div class="mast-status" id="mastStatus" aria-live="polite">
+          <span class="chip chip-wait" data-i18n="status.connecting">Connecting…</span>
+        </div>
       </div>
     </div>
   </header>
 
-  <nav class="mainnav" aria-label="Main">
-    <div class="wrap">
-      <button type="button" class="nav-toggle" id="navToggle" aria-expanded="false" aria-controls="navList">☰ Menu</button>
+  <nav class="mainnav" aria-label="Main" data-i18n-attr="aria-label:nav.main">
+    <div class="wrap nav-row">
+      <button type="button" class="nav-toggle" id="navToggle" aria-expanded="false" aria-controls="navList">☰ <span data-i18n="nav.menu">Menu</span></button>
       <ul id="navList">
-        <li><a href="#/dashboard" data-nav="dashboard">Dashboard</a></li>
-        <li><a href="#/cases" data-nav="cases">Case Files</a></li>
-        <li><a href="#/research" data-nav="research">Legal Research</a></li>
-        <li><a href="#/acts" data-nav="acts">Bare Acts</a></li>
-        <li><a href="#/drafts" data-nav="drafts">Draft Templates</a></li>
-        <li><a href="#/limitation" data-nav="limitation">Limitation</a></li>
-        <li><a href="#/about" data-nav="about">About</a></li>
+        <li><a href="#/dashboard" data-nav="dashboard" data-i18n="nav.dashboard">Dashboard</a></li>
+        <li><a href="#/cases" data-nav="cases" data-i18n="nav.cases">Case Files</a></li>
+        <li><a href="#/lookup" data-nav="lookup" data-i18n="nav.lookup">Case Search</a></li>
+        <li><a href="#/research" data-nav="research" data-i18n="nav.research">Legal Research</a></li>
+        <li><a href="#/drafting" data-nav="drafting" data-i18n="nav.drafting">Drafting</a></li>
+        <li><a href="#/acts" data-nav="acts" data-i18n="nav.acts">Bare Acts</a></li>
+        <li><a href="#/awareness" data-nav="awareness" data-i18n="nav.awareness">Awareness</a></li>
+        <li><a href="#/updates" data-nav="updates" data-i18n="nav.updates">Updates</a></li>
+        <li><a href="#/tools" data-nav="tools" data-i18n="nav.tools">Tools</a></li>
       </ul>
+      <div class="lang-toggle" id="langToggle" role="group" aria-label="Language / भाषा"></div>
     </div>
   </nav>
 
   <div class="crumbs wrap" id="crumbs" aria-label="Breadcrumb"></div>
 
   <main id="main" class="wrap" tabindex="-1">
-    <div class="loading-page">Loading…</div>
+    <div class="loading-page" data-i18n="common.loading">Loading…</div>
   </main>
 
   <div class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle" hidden>
     <div class="drawer-panel">
       <div class="drawer-head">
         <h2 id="drawerTitle">Source</h2>
-        <button type="button" class="btn btn-ghost" id="drawerClose" aria-label="Close">✕</button>
+        <button type="button" class="btn btn-ghost" id="drawerClose" aria-label="Close" data-i18n-attr="aria-label:common.close">✕</button>
       </div>
       <div class="drawer-body" id="drawerBody"></div>
     </div>
@@ -83,26 +93,27 @@
     <div class="wrap footer-grid">
       <div>
         <h3>NyaySutra AI</h3>
-        <p>An agentic retrieval-augmented research assistant for advocates. Answers are grounded in your case
+        <p data-i18n="footer.about">An agentic retrieval-augmented research assistant for advocates. Answers are grounded in your case
           files and official bare acts, with numbered citations and an automatic citation audit.</p>
       </div>
       <div>
-        <h3>Data sources</h3>
+        <h3 data-i18n="footer.sources">Data sources</h3>
         <ul>
-          <li>Bare Acts: India Code — Legislative Department, Ministry of Law &amp; Justice (indiacode.gov.in)</li>
-          <li>IPC text: eCourts district court portal (Govt. of India)</li>
-          <li>Judgments: Indian Kanoon</li>
-          <li>Case files: uploaded by you, stored only on this computer</li>
+          <li data-i18n="footer.src_acts">Bare Acts: India Code — Legislative Department, Ministry of Law &amp; Justice (indiacode.gov.in)</li>
+          <li data-i18n="footer.src_ipc">IPC text: eCourts district court portal (Govt. of India)</li>
+          <li data-i18n="footer.src_judgments">Judgments: Indian Kanoon</li>
+          <li data-i18n="footer.src_news">Legal news headlines: LiveLaw RSS feed (links open on livelaw.in)</li>
+          <li data-i18n="footer.src_cases">Case files: uploaded by you, stored only on this computer</li>
         </ul>
       </div>
       <div>
-        <h3>Disclaimer</h3>
-        <p>AI-generated research aid, not legal advice. Verify every citation against the primary source before
+        <h3 data-i18n="footer.disclaimer_title">Disclaimer</h3>
+        <p data-i18n="footer.disclaimer">AI-generated research aid, not legal advice. Verify every citation against the primary source before
           relying on it.</p>
       </div>
     </div>
     <div class="footer-bottom">
-      <div class="wrap">Prototype for demonstration · Not an official Government of India website · All data stays on this device except questions sent to the configured LLM</div>
+      <div class="wrap" data-i18n="footer.bottom">Prototype for demonstration · Not an official Government of India website · All data stays on this device except text sent to the configured LLM</div>
     </div>
   </footer>
 </body>

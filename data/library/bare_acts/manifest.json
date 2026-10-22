@@ -503,5 +503,23 @@
     "sha256": "f7e4908b0e5e7dc166ade9d447a89c4261b895db12c94e128ca5bccb015fcd3b",
     "note": "",
     "fetched_at": "2026-10-18T08:06:08+00:00"
+  },
+  "the_motor_vehicles_act_1988.pdf": {
+    "title": "The Motor Vehicles Act, 1988",
+    "short": "MV Act",
+    "areas": [
+      "Civil",
+      "Criminal"
+    ],
+    "act_number": "59",
+    "year": "1988",
+    "enforcement_date": "01-07-1989",
+    "repealed": false,
+    "source": "India Code (Legislative Department, Ministry of Law and Justice)",
+    "item_url": "https://indiacode.gov.in/items/2bbbcc40-38f1-4b15-ae94-646b85db4ee7",
+    "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/031fe0a8-b3a6-4da2-b130-ec2e870fe4f2/content",
+    "pdf_name": "A1988-59.pdf",
+    "sha256": "c619755eabb2085ec5ef8068777724223f3ec7e1cc1170aee0dd1608216dc482",
+    "fetched_at": "2026-10-22T07:00:41+00:00"
   }
 }

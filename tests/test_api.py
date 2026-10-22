@@ -29,7 +29,7 @@ def _wait_ready(client, doc_id, timeout=20):
 
 
 def _case(client, title):
-    r = client.post("/api/cases", json={"title": title, "case_type": "Civil", "client_name": "A"})
+    r = client.post("/api/cases", json={"title": title, "case_type": "Civil", "client_name": "Asha Rao"})
     assert r.status_code == 200, r.text
     return r.json()["id"]
 

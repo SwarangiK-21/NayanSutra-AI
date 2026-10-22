@@ -1,0 +1,7 @@
+{
+  "_status": "Partial Marathi dictionary — missing keys fall back to English. Enable in web/js/i18n.js (LANGS toggle:true) after review.",
+  "nav.home": "मुखपृष्ठ", "nav.dashboard": "डॅशबोर्ड", "nav.cases": "केस फायली", "nav.lookup": "केस शोधा", "nav.research": "कायदेशीर संशोधन",
+  "nav.drafting": "मसुदा लेखन", "nav.acts": "मूळ अधिनियम", "nav.awareness": "कायदेविषयक जागरूकता", "nav.updates": "अपडेट", "nav.tools": "साधने",
+  "common.search": "शोधा", "common.save": "जतन करा", "common.cancel": "रद्द करा", "common.delete": "हटवा", "common.loading": "लोड होत आहे…",
+  "lang.switched": "भाषा मराठीत बदलली", "research.send": "पाठवा", "research.namaste": "नमस्कार."
+}

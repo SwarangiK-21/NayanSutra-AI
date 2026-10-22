@@ -33,12 +33,15 @@ COOKIE = "nyaya_session"
 CSRF_HEADER = "x-nyaya-csrf"
 SESSION_TTL = 12 * 3600
 
-ALLOWED_EXT = {".pdf", ".docx", ".txt", ".md"}
+ALLOWED_EXT = {".pdf", ".docx", ".doc", ".txt", ".md", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp"}
 MIME = {
     ".pdf": "application/pdf",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".doc": "application/msword",
     ".txt": "text/plain; charset=utf-8",
     ".md": "text/plain; charset=utf-8",
+    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+    ".tif": "image/tiff", ".tiff": "image/tiff", ".webp": "image/webp",
 }
 
 # Inline style *attributes* are allowed (layout tweaks in templates); inline <style>/<script> are not.
@@ -153,6 +156,16 @@ def sniff_ok(path: Path, ext: str) -> bool:
         return head.lstrip()[:5] == b"%PDF-"
     if ext == ".docx":
         return head[:4] == b"PK\x03\x04"
+    if ext == ".doc":
+        return head[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"  # OLE compound file
+    if ext == ".png":
+        return head[:8] == b"\x89PNG\r\n\x1a\n"
+    if ext in (".jpg", ".jpeg"):
+        return head[:3] == b"\xff\xd8\xff"
+    if ext in (".tif", ".tiff"):
+        return head[:4] in (b"II*\x00", b"MM\x00*")
+    if ext == ".webp":
+        return head[:4] == b"RIFF" and head[8:12] == b"WEBP"
     if ext in (".txt", ".md"):
         # Plain text: UTF-16 (has a BOM) or text without NUL bytes (rules out binaries renamed .txt).
         return head[:2] in (b"\xff\xfe", b"\xfe\xff") or b"\x00" not in head

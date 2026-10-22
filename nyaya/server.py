@@ -16,13 +16,15 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import agent, cases, citations, config, db, embeddings, ingest, llm, retrieval, security, tools
+from . import (agent, awareness, cases, casesearch, citations, config, db, docintel, drafting, embeddings, export,
+               ingest, integrations, jobs, llm, ocr, provisions, reference, retrieval, search, security, tools)
 from .vectorindex import index
 
 log = logging.getLogger("nyaya")
 
 _ingest_pool: ThreadPoolExecutor | None = None  # created per app lifespan
 _state = {"models_ready": False, "llm": None, "llm_checked": 0.0}
+_scheduler: integrations.Scheduler | None = None
 
 
 def _warm():
@@ -31,12 +33,24 @@ def _warm():
     _state["models_ready"] = True
 
 
+def _apply_retention() -> None:
+    """Data minimisation: delete conversations older than the configured retention period (if one is set)."""
+    days = db.get_pref("chat_retention_days")
+    if days and days.isdigit():
+        cutoff = (date.today() - timedelta(days=int(days))).isoformat()
+        with db.tx() as c:
+            n = c.execute("DELETE FROM chats WHERE updated_at < ?", (cutoff,)).rowcount
+        if n:
+            db.audit("retention.purge_chats", "chat", None, deleted=n, older_than_days=int(days))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _ingest_pool
     _ingest_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ingest")
     db.init()
     cases.seed_if_empty()
+    _apply_retention()
     stored = db.get_meta("embed_model")
     if stored and stored != embeddings.model_name():
         log.warning("Index was built with %s but EMBED_MODEL is %s — run: python -m nyaya.ingest reembed",
@@ -45,7 +59,13 @@ async def lifespan(app: FastAPI):
     for r in db.conn().execute("SELECT id FROM documents WHERE status='processing'").fetchall():
         _ingest_pool.submit(ingest.process, r["id"])
     threading.Thread(target=_warm, daemon=True).start()
+    global _scheduler
+    if config.SYNC_ENABLED:
+        _scheduler = integrations.Scheduler()
+        _scheduler.start()
     yield
+    if _scheduler:
+        _scheduler.stop.set()
     _ingest_pool.shutdown(wait=False, cancel_futures=True)
 
 
@@ -69,14 +89,19 @@ async def guard(request: Request, call_next):
             if request.headers.get(security.CSRF_HEADER) != security.csrf_for(token):
                 return JSONResponse({"detail": "Missing or invalid CSRF token"}, status_code=403)
     response: Response = await call_next(request)
-    response.headers["Content-Security-Policy"] = security.CSP
+    if "content-security-policy" not in response.headers:  # endpoints may set a stricter / specific policy
+        response.headers["Content-Security-Policy"] = security.CSP
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
-    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    # Microphone only for this origin (voice input in Legal Research); the browser still asks the user.
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(self), geolocation=()"
     if path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store"
+    elif path.startswith("/static/"):
+        # Revalidate (cheap 304 via ETag) so an updated app.js / app.css is picked up on reload.
+        response.headers["Cache-Control"] = "no-cache"
     return response
 
 
@@ -163,6 +188,7 @@ def status():
         "llm_host": "Ollama Cloud" if "ollama.com" in config.OLLAMA_HOST else "Local Ollama",
         "models_ready": _state["models_ready"], "indexed_chunks": len(index), "documents": counts,
         "processing": db.conn().execute("SELECT COUNT(*) FROM documents WHERE status='processing'").fetchone()[0],
+        "ocr": ocr.status(), "sync_enabled": config.SYNC_ENABLED,
     }
 
 
@@ -183,25 +209,97 @@ def dashboard():
             "total_cases": sum(by_type.values())}
 
 
+# ── Preferences, notifications, activity ────────────────────────────────────
+LANGS = ("en", "hi", "mr")
+PREF_KEYS = {"lang": LANGS, "voice_lang": ("en-IN", "hi-IN", "mr-IN"), "tts": ("on", "off"),
+             "voice_consent": ("granted", "denied", ""), "draft_style": None, "chat_retention_days": None}
+
+
+class PrefsIn(BaseModel):
+    values: dict[str, str] = Field(default_factory=dict)
+
+
+@app.get("/api/prefs")
+def get_prefs():
+    rows = db.conn().execute("SELECT key, value FROM prefs").fetchall()
+    out = {"lang": "en"}
+    out.update({r["key"]: r["value"] for r in rows if r["key"] in PREF_KEYS})
+    return out
+
+
+@app.put("/api/prefs")
+def put_prefs(body: PrefsIn):
+    for k, v in body.values.items():
+        allowed = PREF_KEYS.get(k, ())
+        v = str(v)[:200]
+        if k not in PREF_KEYS or (allowed is not None and v not in allowed):
+            raise HTTPException(400, f"Invalid preference: {k}")
+        if k == "chat_retention_days" and v and not (v.isdigit() and 1 <= int(v) <= 3650):
+            raise HTTPException(400, "Retention must be 1–3650 days, or empty to keep forever.")
+        db.set_pref(k, v)
+    return get_prefs()
+
+
+@app.get("/api/notifications")
+def notifications(unread: bool = False, limit: int = 50):
+    sql = "SELECT * FROM notifications" + (" WHERE read_at IS NULL" if unread else "") + \
+          " ORDER BY created_at DESC, id DESC LIMIT ?"
+    items = [dict(r) for r in db.conn().execute(sql, (max(1, min(limit, 200)),))]
+    n_unread = db.conn().execute("SELECT COUNT(*) FROM notifications WHERE read_at IS NULL").fetchone()[0]
+    return {"items": items, "unread": n_unread}
+
+
+@app.post("/api/notifications/read")
+def notifications_read():
+    with db.tx() as c:
+        c.execute("UPDATE notifications SET read_at=? WHERE read_at IS NULL", (db.now(),))
+    return {"ok": True}
+
+
+@app.get("/api/audit")
+def audit_log(limit: int = 100):
+    rows = db.conn().execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (max(1, min(limit, 500)),))
+    return {"items": [db.row_to_dict(r, ("detail",)) for r in rows]}
+
+
 # ── Cases ────────────────────────────────────────────────────────────────────
 class CaseIn(BaseModel):
     title: str | None = Field(None, max_length=200)
     case_type: str | None = Field(None, max_length=20)
+    case_subtype: str | None = Field(None, max_length=120)
     case_number: str | None = Field(None, max_length=100)
+    filing_number: str | None = Field(None, max_length=100)
+    fir_number: str | None = Field(None, max_length=60)
+    cnr_number: str | None = Field(None, max_length=30)
     court: str | None = Field(None, max_length=200)
+    state: str | None = Field(None, max_length=80)
+    district: str | None = Field(None, max_length=80)
+    police_station: str | None = Field(None, max_length=120)
+    filing_year: str | int | None = None
     client_name: str | None = Field(None, max_length=200)
     client_role: str | None = Field(None, max_length=100)
     opposite_party: str | None = Field(None, max_length=200)
+    opposite_role: str | None = Field(None, max_length=100)
     filing_date: str | None = Field(None, max_length=10)
     next_hearing_date: str | None = Field(None, max_length=10)
     status: str | None = Field(None, max_length=40)
     acts_sections: str | None = Field(None, max_length=600)
     description: str | None = Field(None, max_length=6000)
+    is_draft: bool | None = None
 
 
 class NoteIn(BaseModel):
     content: str = Field(min_length=1, max_length=4000)
     author: str = Field("Advocate", max_length=80)
+
+
+def _field_error(exc: cases.FieldError) -> JSONResponse:
+    return JSONResponse({"detail": str(exc), "field": exc.field, "code": exc.code}, status_code=400)
+
+
+@app.get("/api/reference")
+def reference_data():
+    return reference.form_options()
 
 
 @app.get("/api/cases")
@@ -213,8 +311,8 @@ def list_cases():
 def create_case(body: CaseIn):
     try:
         return cases.create_case(body.model_dump(exclude_none=True))
-    except ValueError as exc:
-        raise HTTPException(400, str(exc))
+    except cases.FieldError as exc:
+        return _field_error(exc)
 
 
 @app.get("/api/cases/{case_id}")
@@ -227,7 +325,10 @@ def get_case(case_id: str):
 
 @app.patch("/api/cases/{case_id}")
 def update_case(case_id: str, body: CaseIn):
-    c = cases.update_case(case_id, body.model_dump(exclude_none=True))
+    try:
+        c = cases.update_case(case_id, body.model_dump(exclude_none=True))
+    except cases.FieldError as exc:
+        return _field_error(exc)
     if not c:
         raise HTTPException(404, "Case not found")
     return c
@@ -256,7 +357,8 @@ DOC_FIELDS = "id, case_id, collection, doc_type, title, filename, pages, chars, 
 def list_documents(case_id: str | None = None, collection: str | None = None):
     sql, args = f"SELECT {DOC_FIELDS} FROM documents WHERE 1=1", []
     if case_id:
-        sql += " AND case_id=?"
+        # Derived documents (English translations) are reached from their source document, not listed.
+        sql += " AND case_id=? AND json_extract(meta,'$.derived_from') IS NULL"
         args.append(case_id)
     if collection:
         sql += " AND collection=?"
@@ -272,7 +374,7 @@ def upload(case_id: str, file: UploadFile = File(...), doc_type: str = Form("aut
     name = security.safe_filename(file.filename or "document")
     ext = Path(name).suffix.lower()
     if ext not in security.ALLOWED_EXT:
-        raise HTTPException(415, "Only PDF, DOCX, TXT and MD files are accepted.")
+        raise HTTPException(415, "Accepted: PDF, DOC/DOCX, TXT, MD and images (PNG, JPG, TIFF, WEBP).")
     if doc_type not in ingest.DOC_TYPES and doc_type != "auto":
         doc_type = "auto"
     folder = config.UPLOAD_DIR / case_id.replace("/", "_")
@@ -302,6 +404,7 @@ def upload(case_id: str, file: UploadFile = File(...), doc_type: str = Form("aut
             _ingest_pool.submit(ingest.process, doc["id"])
         return {**_public(doc), "duplicate": True}
     _ingest_pool.submit(ingest.process, doc["id"])
+    db.audit("document.upload", "document", doc["id"], case_id=case_id, ext=ext, bytes=size)
     return _public(doc)
 
 
@@ -325,6 +428,7 @@ def delete_document(doc_id: str):
     if row["collection"] != "case":
         raise HTTPException(403, "Library documents are managed from the data/library folder.")
     ingest.delete_document(doc_id)
+    db.audit("document.delete", "document", doc_id)
     return {"ok": True}
 
 
@@ -341,7 +445,9 @@ def document_file(doc_id: str):
     resp = FileResponse(path, media_type=security.MIME.get(ext, "application/octet-stream"),
                         filename=row["filename"], content_disposition_type=disposition)
     if ext != ".pdf":  # browsers' PDF viewers do not run under a sandbox CSP
-        resp.headers["Content-Security-Policy"] = "sandbox; default-src 'none'"
+        resp.headers["Content-Security-Policy"] = "sandbox; default-src 'none'; img-src 'self'"
+    else:  # the document viewer embeds PDFs; only this origin may frame them
+        resp.headers["Content-Security-Policy"] = "frame-ancestors 'self'"
     return resp
 
 
@@ -450,6 +556,8 @@ class ChatIn(BaseModel):
     scope: Literal["all", "case", "library"] = "all"
     doc_id: str | None = Field(None, max_length=40)
     task: Literal["summary", "timeline", "issues", "parties", "arguments", "custom"] | None = None
+    lang: Literal["en", "hi", "mr"] = "en"
+    input_mode: Literal["text", "voice"] = "text"
 
 
 @app.post("/api/chat", dependencies=[Depends(rate(config.CHAT_RATE_PER_MIN, "chat"))])
@@ -457,7 +565,7 @@ def chat(body: ChatIn):
     def events():
         try:
             for evt in agent.run(message=body.message, chat_id=body.chat_id, case_id=body.case_id,
-                                 scope=body.scope, doc_id=body.doc_id, task=body.task):
+                                 scope=body.scope, doc_id=body.doc_id, task=body.task, lang=body.lang):
                 yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
         except Exception:
             log.exception("chat stream failed")
@@ -465,6 +573,339 @@ def chat(body: ChatIn):
 
     return StreamingResponse(events(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+
+
+# ── Background jobs ──────────────────────────────────────────────────────────
+@app.get("/api/jobs/{job_id}")
+def job_status(job_id: str):
+    j = jobs.get(job_id)
+    if not j:
+        raise HTTPException(404, "Job not found (the server may have restarted)")
+    return {k: v for k, v in j.items() if k != "key"}
+
+
+class ConsentIn(BaseModel):
+    """Whole-document AI tasks send document text to the configured LLM; the UI must obtain consent."""
+    consent: bool = False
+    lang: Literal["en", "hi", "mr"] = "en"
+
+
+def _need_consent(body: ConsentIn) -> None:
+    if not body.consent:
+        raise HTTPException(400, "This sends the document text to the AI service. Please confirm to continue.")
+
+
+# ── Document intelligence ────────────────────────────────────────────────────
+@app.get("/api/documents/{doc_id}/intel")
+def document_intel(doc_id: str):
+    try:
+        return docintel.overview(doc_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc))
+
+
+@app.post("/api/documents/{doc_id}/translate", dependencies=[Depends(rate(10, "docai"))])
+def document_translate(doc_id: str, body: ConsentIn):
+    _need_consent(body)
+    try:
+        docintel._doc(doc_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return jobs.submit("translate", lambda p: docintel.translate(doc_id, p), key=f"translate:{doc_id}")
+
+
+@app.post("/api/documents/{doc_id}/summarize", dependencies=[Depends(rate(10, "docai"))])
+def document_summarize(doc_id: str, body: ConsentIn):
+    _need_consent(body)
+    try:
+        docintel._doc(doc_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return jobs.submit("summarize", lambda p: docintel.summarize(doc_id, body.lang, p), key=f"summarize:{doc_id}:{body.lang}")
+
+
+# ── Drafting, notices, forums ────────────────────────────────────────────────
+@app.get("/api/drafting/config")
+def drafting_config():
+    return {"types": [{k: t[k] for k in ("id", "label", "kind", "categories")} for t in drafting.doc_types()],
+            "forums": [{k: f[k] for k in ("id", "name", "level")} for f in drafting.forums()],
+            "styles": drafting.styles(), "saved_style": db.get_pref("draft_style") or "formal"}
+
+
+@app.get("/api/drafting/types/{type_id}")
+def drafting_type(type_id: str):
+    try:
+        return drafting.type_profile(type_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc))
+
+
+@app.get("/api/drafting/forums/{forum_id}")
+def drafting_forum(forum_id: str):
+    try:
+        return drafting.forum_profile(forum_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc))
+
+
+class ForumReqIn(BaseModel):
+    text: str = Field(min_length=3, max_length=500)
+    url: str = Field(min_length=8, max_length=500, pattern=r"^https://")
+    verified_on: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+
+
+@app.post("/api/drafting/forums/{forum_id}/requirements")
+def add_forum_requirement(forum_id: str, body: ForumReqIn):
+    try:
+        drafting.forum(forum_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc))
+    items = drafting.user_requirements(forum_id) + [body.model_dump()]
+    db.set_pref(f"forum_reqs:{forum_id}", json.dumps(items[-50:], ensure_ascii=False))
+    db.audit("forum.requirement_add", "forum", forum_id, url=body.url)
+    return drafting.forum_profile(forum_id)
+
+
+class DraftIn(BaseModel):
+    doc_type: str = Field(max_length=40)
+    forum: str = Field(max_length=40)
+    style: str = Field("formal", max_length=20)
+    lang: Literal["en", "hi", "mr"] = "en"
+    case_id: str | None = Field(None, max_length=40)
+    doc_ids: list[str] = Field(default_factory=list, max_length=6)
+    known: dict[str, str] = Field(default_factory=dict)
+    instructions: str = Field("", max_length=4000)
+    template_doc_id: str | None = Field(None, max_length=40)
+    base_doc_id: str | None = Field(None, max_length=40)
+    base_text: str | None = Field(None, max_length=20000)
+    title: str | None = Field(None, max_length=200)
+    draft_id: str | None = Field(None, max_length=40)
+    consent: bool = False
+    save_style: bool = False
+
+
+@app.post("/api/drafts/generate", dependencies=[Depends(rate(10, "draft"))])
+def draft_generate(body: DraftIn):
+    if body.doc_ids or body.base_doc_id:
+        _need_consent(ConsentIn(consent=body.consent))
+    try:
+        drafting.doc_type(body.doc_type)
+        drafting.forum(body.forum)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    if len(body.known) > 40 or any(len(k) > 60 for k in body.known):
+        raise HTTPException(400, "Too many details")
+    if body.save_style:
+        db.set_pref("draft_style", body.style)
+    args = body.model_dump(exclude={"consent", "save_style", "doc_type", "forum"})
+    return jobs.submit("draft", lambda p: drafting.generate(doc_type_id=body.doc_type, forum_id=body.forum,
+                                                              progress=p, **args))
+
+
+@app.get("/api/drafts")
+def drafts_list(case_id: str | None = None, kind: str | None = None):
+    return {"drafts": drafting.list_drafts(case_id, kind)}
+
+
+@app.get("/api/drafts/{draft_id}")
+def draft_get(draft_id: str):
+    d = drafting.get(draft_id)
+    if not d:
+        raise HTTPException(404, "Draft not found")
+    return d
+
+
+class DraftEditIn(BaseModel):
+    content: str = Field(max_length=200000)
+    title: str | None = Field(None, max_length=200)
+
+
+@app.put("/api/drafts/{draft_id}")
+def draft_put(draft_id: str, body: DraftEditIn):
+    d = drafting.update_content(draft_id, body.content, body.title)
+    if not d:
+        raise HTTPException(404, "Draft not found")
+    return d
+
+
+@app.get("/api/drafts/{draft_id}/versions/{v}")
+def draft_version(draft_id: str, v: int):
+    d = drafting.version(draft_id, v)
+    if not d:
+        raise HTTPException(404, "Version not found")
+    return d
+
+
+@app.delete("/api/drafts/{draft_id}")
+def draft_delete(draft_id: str):
+    if not drafting.delete(draft_id):
+        raise HTTPException(404, "Draft not found")
+    return {"ok": True}
+
+
+@app.get("/api/drafts/{draft_id}/export")
+def draft_export(draft_id: str, format: Literal["docx", "pdf"] = "docx"):
+    d = drafting.get(draft_id)
+    if not d:
+        raise HTTPException(404, "Draft not found")
+    if format == "docx":
+        data, mime = export.to_docx(d["title"], d["content"], d["sources"]), security.MIME[".docx"]
+    else:
+        data, mime = export.to_pdf(d["title"], d["content"], d["sources"]), "application/pdf"
+    name = security.safe_filename(f"{d['title'][:80]}_v{d['version']}.{format}")
+    db.audit("draft.export", "draft", draft_id, format=format, version=d["version"])
+    return Response(data, media_type=mime, headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+# ── Applicable provisions ───────────────────────────────────────────────────
+class ProvSuggestIn(BaseModel):
+    consent: bool = False
+    extra: str = Field("", max_length=6000)
+    doc_ids: list[str] | None = None
+
+
+@app.post("/api/cases/{case_id}/provisions/suggest", dependencies=[Depends(rate(10, "prov"))])
+def provisions_suggest(case_id: str, body: ProvSuggestIn):
+    _need_consent(ConsentIn(consent=body.consent))
+    if not cases.get_case(case_id):
+        raise HTTPException(404, "Case not found")
+    return jobs.submit("provisions", lambda p: provisions.suggest(case_id, doc_ids=body.doc_ids, extra=body.extra, progress=p),
+                       key=f"prov:{case_id}")
+
+
+@app.get("/api/cases/{case_id}/provisions")
+def provisions_list(case_id: str):
+    return {"provisions": provisions.list_for(case_id)}
+
+
+class ProvUpdateIn(BaseModel):
+    status: Literal["accepted", "rejected", "suggested", "edited"] | None = None
+    note: str | None = Field(None, max_length=1000)
+    ref: str | None = Field(None, max_length=120)
+
+
+@app.patch("/api/provisions/{prov_id}")
+def provisions_update(prov_id: str, body: ProvUpdateIn):
+    p = provisions.update(prov_id, status=body.status, note=body.note, ref=body.ref)
+    if not p:
+        raise HTTPException(404, "Not found")
+    return p
+
+
+@app.get("/api/library/provision")
+def library_provision(act: str, ref: str):
+    from . import library
+    return library.lookup_provision(act[:120], ref[:60])
+
+
+# ── Case information search, imports, integrations ──────────────────────────
+class CaseSearchIn(BaseModel):
+    cnr_number: str | None = None
+    case_number: str | None = None
+    filing_number: str | None = None
+    fir_number: str | None = None
+    court: str | None = None
+    case_type: str | None = None
+    state: str | None = None
+    district: str | None = None
+    police_station: str | None = None
+    filing_year: str | None = None
+    petitioner: str | None = None
+    respondent: str | None = None
+
+
+@app.post("/api/casesearch", dependencies=[Depends(rate(30, "casesearch"))])
+def case_search(body: CaseSearchIn):
+    return casesearch.search(body.model_dump())
+
+
+class OrderIn(BaseModel):
+    date: str | None = Field(None, max_length=20)
+    title: str | None = Field(None, max_length=300)
+    url: str | None = Field(None, max_length=500)
+
+
+class RecordImportIn(CaseSearchIn):
+    source: str = Field(max_length=40)
+    title: str | None = Field(None, max_length=300)
+    category: str | None = Field(None, max_length=20)
+    status: str | None = Field(None, max_length=120)
+    stage: str | None = Field(None, max_length=120)
+    judge: str | None = Field(None, max_length=200)
+    next_hearing_date: str | None = Field(None, max_length=10)
+    sections: str | None = Field(None, max_length=300)
+    orders: list[OrderIn] = Field(default_factory=list, max_length=50)
+    source_url: str | None = Field(None, max_length=500, pattern=r"^https://")
+    case_id: str | None = Field(None, max_length=40)
+
+
+@app.post("/api/records/import")
+def record_import(body: RecordImportIn):
+    data = body.model_dump(exclude={"source", "case_id"})
+    data["orders"] = [o for o in data["orders"]]
+    try:
+        return casesearch.import_record(body.source, data, body.case_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.post("/api/records/{record_id}/save-case")
+def record_save_case(record_id: str):
+    try:
+        return casesearch.save_to_case(record_id)
+    except cases.FieldError as exc:
+        return _field_error(exc)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.get("/api/cases/{case_id}/records")
+def case_records(case_id: str):
+    return {"records": casesearch.records_for_case(case_id)}
+
+
+@app.get("/api/integrations")
+def integrations_status():
+    return {"integrations": integrations.status(), "scheduler": bool(_scheduler and _scheduler.is_alive())}
+
+
+@app.post("/api/integrations/{iid}/sync", dependencies=[Depends(rate(6, "sync"))])
+def integrations_sync(iid: str):
+    try:
+        return integrations.run_sync(iid, "manual")
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+
+class EnabledIn(BaseModel):
+    enabled: bool
+
+
+@app.post("/api/integrations/{iid}/enabled")
+def integrations_enable(iid: str, body: EnabledIn):
+    if iid not in integrations.ADAPTERS:
+        raise HTTPException(404, "Unknown integration")
+    integrations.set_enabled(iid, body.enabled)
+    return {"ok": True}
+
+
+@app.get("/api/news")
+def news(q: str = "", limit: int = 50):
+    return {"items": integrations.news(max(1, min(limit, 200)), q[:100])}
+
+
+# ── Legal awareness, unified search ─────────────────────────────────────────
+@app.get("/api/awareness")
+def awareness_list(state: str = "MH", subject: str | None = None, q: str = ""):
+    return awareness.listing(state[:20], subject, q[:100])
+
+
+@app.get("/api/search")
+def unified_search(q: str = "", types: str = "", court: str = "", state: str = "", year: str = "", case_type: str = "",
+                   doc_type: str = "", source: str = ""):
+    t = {x for x in types.split(",") if x} or None
+    return search.search(q, types=t, court=court[:100], state=state[:60], year=year[:4], case_type=case_type[:20],
+                         doc_type=doc_type[:20], source=source[:40])
 
 
 app.mount("/static", StaticFiles(directory=config.WEB_DIR), name="static")

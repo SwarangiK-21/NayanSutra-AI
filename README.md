@@ -24,13 +24,56 @@ Or just double-click **`start.bat`**. Configuration lives in `.env` (see `.env.e
 
 | Area | Features |
 |---|---|
-| Case files | Civil / Criminal / Family / Revenue matters, dossier, notes, hearing dates, per-matter documents |
-| Documents | PDF / DOCX / TXT / MD upload → parsed, chunked and embedded **on this computer**; auto document-type detection |
-| Legal research | Streaming answers with `[n]` citations, source drawer that opens the original PDF at the cited page, citation audit |
-| Document analysis | Summary, timeline, issues, parties, arguments over a whole document (map-reduce for very long files) |
-| Drafting | 22 model templates (bail, 138 NI notice/complaint, plaint, written statement, injunction, s.11 arbitration, divorce, 13B, maintenance, DV, custody, MLRC appeal/revision/mutation objection, vakalatnama, affidavit…) adapted to the case dossier |
-| Bare acts | 29 official texts (Constitution, BNS, BNSS, BSA, IPC, CPC, Contract, Specific Relief, Limitation, NI, Arbitration, TPA, Registration, Stamp, HMA, SMA, HSA, HAMA, GWA, DV, POCSO, MLRC, …) with instant section lookup |
+| Case files | Civil / Criminal / Family / Revenue / Consumer / Writ matters; party roles that follow the category; CNR, case, filing and FIR numbers, police station, state → district, court (searchable), filing year; save incomplete cases as drafts |
+| Case search | Any combination of identifiers; validates CNR / FIR requirements, infers jurisdiction, searches your workspace, lists the official portal and exact values to enter, imports what you find (change-detected) |
+| Documents | PDF (incl. scans via optional OCR), DOC/DOCX, TXT/MD, images; language + script detection (English, Hindi, Marathi, other Indian scripts); original, extracted text, English translation and summaries side by side; batch upload with progress |
+| Document intelligence | English translation (indexed, so English questions find Hindi/Marathi files), structured summary — parties, dates, case numbers, facts, claims, relief, provisions, deadlines, action items — each linked to its page and checked against the text; summaries in Hindi / Marathi |
+| Legal research | Streaming answers with `[n]` citations and citation audit, in English or Hindi; voice input (hi-IN / mr-IN / en-IN) with editable transcription; read-aloud; focus on one case document |
+| Applicable provisions | Suggests acts / sections / articles chosen only from the official library, with page links, temporal checks (IPC→BNS on 1 July 2024), accept / reject / edit |
+| Drafting studio | Document types × courts/forums × styles; facts with provenance (file / your input / case), missing-information questions, placeholders instead of guesses, side-by-side editor, versions, Word and PDF export (Hindi/Marathi shaped correctly) |
+| Legal notices | Structured form; statutory periods only from the provision text; special formalities flagged |
+| Updates & sources | LiveLaw RSS (hourly) and India Code act records (daily) synced with retries, back-off, conditional GET and logs; manual-only portals shown as such; notifications; activity log |
+| Legal awareness | Maharashtra first: licences, registration, road safety, challans, accident claims — with official statutory text (Motor Vehicles Act), official links and verification dates |
+| Search | One search across cases, documents, bare acts, judgments, drafts, news and awareness, with filters |
+| Bare acts | 30 official texts (Constitution, BNS, BNSS, BSA, IPC, CPC, … MLRC, Motor Vehicles Act) with instant section lookup; precedent search over the judgment library |
+| Languages | English / हिंदी toggle (JSON dictionaries in `web/i18n/`; Marathi dictionary started) |
 | Limitation | 24 deterministic limitation periods (Limitation Act Schedule, NI Act, Arbitration Act, HMA, MLRC, CPA) |
+
+## External sources — what is automated and what is not
+
+| Source | Access | How NyaySutra uses it |
+|---|---|---|
+| LiveLaw | Official RSS feed | Polled hourly (conditional GET); headlines + links only |
+| India Code | Public DSpace API | Daily check for changed act records → notification to re-fetch |
+| eCourts, Supreme Court, Bombay High Court | CAPTCHA-protected, no API | **Manual**: open official source, then import the record; re-imports are change-detected |
+| Maharashtra Police FIR portal | CAPTCHA / login, no API | **Manual** (FIR needs state + district + police station + year + number) |
+| LatestLaws | No public feed / API advertised | **Manual** link only |
+
+No source offers webhooks to a local app, so nothing is labelled "live". CAPTCHAs, logins and rate limits are never bypassed.
+
+## Optional: OCR for scanned documents
+Install Tesseract with **eng, hin and mar** language data (Windows: UB-Mannheim build, tick Hindi and Marathi), then
+restart. It is detected automatically, or set `TESSERACT_CMD` in `.env`. Without it, scanned PDFs and images are rejected
+with a clear message — text is never guessed. Low-confidence OCR words are shown as `[?word]`.
+
+## Database migrations
+`nyaya/db.py` applies versioned, additive migrations at start-up (`meta.schema_version`); new columns are added only when
+missing. Migration 1 adds case identifiers/jurisdiction columns and the tables `prefs`, `audit_log`, `notifications`,
+`integrations`, `sync_log`, `source_records`, `doc_derivatives`, `drafts`, `draft_versions`, `case_provisions`.
+Back up `data/nyaysutra.db` before upgrading.
+
+## Scheduled jobs
+A background thread (`nyaya/integrations.py`, `SYNC_ENABLED=true`) checks every `SYNC_TICK_SECONDS` which sources are
+due. Failures back off 5 → 10 → 20 min (capped at the source interval), are logged in `sync_log`, and notify after 3
+failures. Long AI tasks (translation, summaries, drafting, provisions) run as in-process jobs polled at `/api/jobs/{id}`.
+
+## Known limitations
+* Single-user local workspace: no user accounts or role-based access control; data at rest relies on OS disk encryption.
+* OCR requires Tesseract (not bundled). Legacy `.doc` needs `antiword` on PATH.
+* Court-specific formatting rules (paper, margins, fonts) are not assumed — forums list official sources and "confirm"
+  items; you can add requirements you verified (with source URL and date).
+* Legal-awareness content and backend notices are in English; the interface is English / Hindi; Marathi is partial.
+* Speech recognition is provided by the browser (Chrome/Edge send audio to their speech service; NyaySutra never receives audio).
 
 ## Architecture
 
@@ -79,8 +122,10 @@ web/ (vanilla JS, gov-portal theme) ──SSE──► nyaya/server.py (FastAPI,
 
 ## Tests
 ```powershell
-& "$env:USERPROFILE\.nyaysutra\venv\Scripts\python.exe" -m pytest      # offline, ~3 s
+& "$env:USERPROFILE\.nyaysutra\venv\Scripts\python.exe" -m pytest      # 42 offline tests, ~10 s
 ```
+`tests/test_features.py` uses synthetic records only, a fake LLM and `httpx.MockTransport` for feeds — no real court,
+police or news service is contacted by the tests.
 
 ## Data sources
 * Bare acts: India Code (indiacode.gov.in), Legislative Department, Ministry of Law & Justice. IPC (repealed

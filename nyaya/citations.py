@@ -39,6 +39,7 @@ ACT_ALIASES: dict[str, str] = {
     "pocso": "Sexual Offences", "pocso act": "Sexual Offences",
     "land acquisition act": "Land Acquisition", "rfctlarr": "Land Acquisition", "larr act": "Land Acquisition",
     "mlrc": "Maharashtra Land Revenue Code", "land revenue code": "Maharashtra Land Revenue Code",
+    "mv act": "Motor Vehicles Act", "m.v. act": "Motor Vehicles Act", "motor vehicles act": "Motor Vehicles Act",
     "constitution": "Constitution of India",
 }
 _ALIAS_RE = re.compile(

@@ -118,8 +118,9 @@ def _stream_llm(messages: list[dict], parts: list[str], model: str | None = None
 
 # ── Main entry ───────────────────────────────────────────────────────────────
 def run(*, message: str, chat_id: str | None = None, case_id: str | None = None, scope: str = "all",
-        doc_id: str | None = None, task: str | None = None) -> Iterator[dict]:
+        doc_id: str | None = None, task: str | None = None, lang: str = "en") -> Iterator[dict]:
     t0 = time.time()
+    rule = prompts.language_rule(lang)
     message = message.strip()[:6000]
     case = cases.get_case(case_id) if case_id else None
     if not case:
@@ -134,7 +135,7 @@ def run(*, message: str, chat_id: str | None = None, case_id: str | None = None,
     docs = _case_docs(case_id)
     answer: list[str] = []
     sources: list[dict] = []
-    meta: dict = {"scope": scope}
+    meta: dict = {"scope": scope, "lang": lang}
     try:
         if task and doc_id:
             p = {"intent": "analyze_document", "analysis": task, "query": message}
@@ -145,7 +146,7 @@ def run(*, message: str, chat_id: str | None = None, case_id: str | None = None,
         yield {"type": "meta", "intent": p["intent"], "query": p.get("query")}
 
         if p["intent"] == "chitchat":
-            msgs = [{"role": "system", "content": prompts.CHAT_SYSTEM}, *_prior_turns(hist, 2),
+            msgs = [{"role": "system", "content": prompts.CHAT_SYSTEM + rule}, *_prior_turns(hist, 2),
                     {"role": "user", "content": message}]
             yield from _stream_llm(msgs, answer, model=config.FAST_LLM_MODEL)
 
@@ -155,10 +156,10 @@ def run(*, message: str, chat_id: str | None = None, case_id: str | None = None,
             yield {"type": "token", "text": text}
 
         elif p["intent"] == "analyze_document":
-            yield from _analyze(message, p, docs, doc_id, case_id, answer, sources, meta)
+            yield from _analyze(message, p, docs, doc_id, case_id, answer, sources, meta, rule)
 
         else:
-            yield from _research(message, p, case, docs, scope, hist, answer, sources, meta)
+            yield from _research(message, p, case, docs, scope, hist, answer, sources, meta, rule)
 
     except llm.LLMError as exc:
         err = str(exc)
@@ -219,7 +220,7 @@ def _pick_doc(message: str, p: dict, docs: list[dict], doc_id: str | None, case_
 
 
 def _analyze(message: str, p: dict, docs: list[dict], doc_id: str | None, case_id: str | None,
-             answer: list[str], sources: list[dict], meta: dict) -> Iterator[dict]:
+             answer: list[str], sources: list[dict], meta: dict, rule: str = "") -> Iterator[dict]:
     doc = _pick_doc(message, p, docs, doc_id, case_id)
     if not doc:
         text = ("There is no uploaded document to analyse yet. Open a case, upload the judgment, petition or "
@@ -250,14 +251,14 @@ def _analyze(message: str, p: dict, docs: list[dict], doc_id: str | None, case_i
             notes = list(ex.map(note, enumerate(parts, 1)))
         body = "\n\n".join(f"NOTES ON PART {i}:\n{n}" for i, n in enumerate(notes, 1))
     yield {"type": "status", "step": "generate", "text": f"Analysing “{doc['title']}”…"}
-    msgs = [{"role": "system", "content": prompts.ANALYZE_SYSTEM},
+    msgs = [{"role": "system", "content": prompts.ANALYZE_SYSTEM + rule},
             {"role": "user", "content": f"TASK: {task}\nUSER REQUEST: {message}\n\nDOCUMENT: {doc['title']}\n"
                                         f"<<<DOCUMENT\n{body}\nDOCUMENT>>>"}]
     yield from _stream_llm(msgs, answer)
 
 
 def _research(message: str, p: dict, case: dict | None, docs: list[dict], scope: str, hist: list[dict],
-              answer: list[str], sources: list[dict], meta: dict) -> Iterator[dict]:
+              answer: list[str], sources: list[dict], meta: dict, rule: str = "") -> Iterator[dict]:
     case_id = case["id"] if case else None
     drafting = p["intent"] == "drafting"
     where = {"case": "this case's documents", "library": "the law library"}.get(scope, "case documents and the law library")
@@ -323,7 +324,7 @@ def _research(message: str, p: dict, case: dict | None, docs: list[dict], scope:
     dossier = cases.dossier(case, docs) if case else "(no case selected — general research)"
     user = (f"CASE DOSSIER:\n{dossier}\n\nSOURCES:\n{_context(hits)}\n\n"
             f"{'DRAFTING REQUEST' if drafting else 'QUESTION'}: {message}")
-    msgs = [{"role": "system", "content": prompts.DRAFT_SYSTEM if drafting else prompts.ANSWER_SYSTEM},
+    msgs = [{"role": "system", "content": (prompts.DRAFT_SYSTEM if drafting else prompts.ANSWER_SYSTEM) + rule},
             *_prior_turns(hist), {"role": "user", "content": user}]
     yield from _stream_llm(msgs, answer)
 

@@ -120,6 +120,160 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS ix_messages_chat ON messages(chat_id, id);
 """
 
+# Versioned, additive migrations (applied once each, in order; recorded in meta.schema_version).
+# Existing tables are extended rather than duplicated.
+# Columns added to existing tables: (table, column, declaration). Added only when missing, so re-running is safe.
+ADDED_COLUMNS = [
+    ("cases", "opposite_role", "TEXT DEFAULT ''"),
+    ("cases", "filing_number", "TEXT DEFAULT ''"),
+    ("cases", "fir_number", "TEXT DEFAULT ''"),
+    ("cases", "cnr_number", "TEXT DEFAULT ''"),
+    ("cases", "state", "TEXT DEFAULT ''"),
+    ("cases", "district", "TEXT DEFAULT ''"),
+    ("cases", "police_station", "TEXT DEFAULT ''"),
+    ("cases", "filing_year", "INTEGER"),
+    ("cases", "case_subtype", "TEXT DEFAULT ''"),
+    ("cases", "is_draft", "INTEGER DEFAULT 0"),
+]
+
+MIGRATIONS: list[str] = [
+    # 1 — prefs, audit, notifications, integrations + sync log, source records, document derivatives,
+    #     drafts + versions, case provisions (case columns come from ADDED_COLUMNS)
+    """
+    CREATE INDEX IF NOT EXISTS ix_cases_cnr ON cases(cnr_number);
+
+    CREATE TABLE IF NOT EXISTS prefs (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL);
+
+    CREATE TABLE IF NOT EXISTS audit_log (
+        id INTEGER PRIMARY KEY,
+        at TEXT NOT NULL,
+        action TEXT NOT NULL,          -- e.g. case.create, document.upload, draft.export, integration.sync
+        entity TEXT NOT NULL,
+        entity_id TEXT,
+        detail TEXT DEFAULT '{}'
+    );
+    CREATE INDEX IF NOT EXISTS ix_audit_at ON audit_log(at);
+
+    CREATE TABLE IF NOT EXISTS notifications (
+        id INTEGER PRIMARY KEY,
+        kind TEXT NOT NULL,            -- case_update | source_update | document | system
+        title TEXT NOT NULL,
+        body TEXT DEFAULT '',
+        link TEXT DEFAULT '',
+        case_id TEXT REFERENCES cases(id) ON DELETE CASCADE,
+        dedupe_key TEXT UNIQUE,
+        created_at TEXT NOT NULL,
+        read_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS ix_notifications_created ON notifications(created_at);
+
+    CREATE TABLE IF NOT EXISTS integrations (
+        id TEXT PRIMARY KEY,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        status TEXT NOT NULL DEFAULT 'never',   -- never | ok | error | manual
+        last_attempt_at TEXT,
+        last_success_at TEXT,
+        last_error TEXT,
+        fail_count INTEGER NOT NULL DEFAULT 0,
+        next_due_at TEXT,
+        etag TEXT,
+        last_modified TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS sync_log (
+        id INTEGER PRIMARY KEY,
+        integration_id TEXT NOT NULL,
+        trigger TEXT NOT NULL,                  -- scheduled | manual
+        started_at TEXT NOT NULL,
+        finished_at TEXT,
+        outcome TEXT,                           -- ok | not_modified | error
+        items_new INTEGER DEFAULT 0,
+        items_updated INTEGER DEFAULT 0,
+        error TEXT
+    );
+    CREATE INDEX IF NOT EXISTS ix_sync_log ON sync_log(integration_id, started_at);
+
+    -- Records retrieved from (or imported by the user from) an external source.
+    CREATE TABLE IF NOT EXISTS source_records (
+        id TEXT PRIMARY KEY,
+        source TEXT NOT NULL,                   -- integration id
+        external_id TEXT NOT NULL,              -- stable id at the source (guid, CNR, url)
+        kind TEXT NOT NULL,                     -- news | case_record | order | act_version
+        title TEXT NOT NULL,
+        url TEXT DEFAULT '',
+        jurisdiction TEXT DEFAULT '',
+        published_at TEXT,
+        retrieved_at TEXT NOT NULL,
+        verified_at TEXT,
+        content_hash TEXT NOT NULL,
+        provenance TEXT NOT NULL,               -- feed | api | user_import
+        data TEXT DEFAULT '{}',
+        case_id TEXT REFERENCES cases(id) ON DELETE SET NULL,
+        UNIQUE(source, external_id)
+    );
+    CREATE INDEX IF NOT EXISTS ix_source_records_case ON source_records(case_id);
+    CREATE INDEX IF NOT EXISTS ix_source_records_kind ON source_records(kind, published_at);
+
+    -- Derived text for a document: extracted text, English translation, summaries, extracted facts.
+    CREATE TABLE IF NOT EXISTS doc_derivatives (
+        doc_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL,                     -- translation_en | summary_en | summary_hi | summary_mr | facts
+        lang TEXT DEFAULT 'en',
+        content TEXT NOT NULL,
+        meta TEXT DEFAULT '{}',
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (doc_id, kind)
+    );
+
+    CREATE TABLE IF NOT EXISTS drafts (
+        id TEXT PRIMARY KEY,
+        case_id TEXT REFERENCES cases(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL DEFAULT 'draft',     -- draft | notice
+        doc_type TEXT NOT NULL,
+        forum TEXT DEFAULT '',
+        style TEXT DEFAULT 'formal',
+        lang TEXT DEFAULT 'en',
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        facts TEXT DEFAULT '[]',                -- [{text, origin: file|user|case|library, ref}]
+        missing TEXT DEFAULT '[]',
+        sources TEXT DEFAULT '[]',
+        inputs TEXT DEFAULT '{}',
+        version INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS ix_drafts_case ON drafts(case_id, updated_at);
+    CREATE TABLE IF NOT EXISTS draft_versions (
+        draft_id TEXT NOT NULL REFERENCES drafts(id) ON DELETE CASCADE,
+        version INTEGER NOT NULL,
+        content TEXT NOT NULL,
+        note TEXT DEFAULT '',
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (draft_id, version)
+    );
+
+    CREATE TABLE IF NOT EXISTS case_provisions (
+        id TEXT PRIMARY KEY,
+        case_id TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+        act TEXT NOT NULL,
+        ref TEXT NOT NULL,                      -- e.g. 'Section 138'
+        title TEXT DEFAULT '',
+        chunk_id INTEGER,
+        doc_id TEXT,
+        page INTEGER,
+        reason TEXT DEFAULT '',
+        flags TEXT DEFAULT '[]',                -- temporal / repealed / uncertainty warnings
+        verification TEXT NOT NULL,             -- verified_in_library | not_found
+        status TEXT NOT NULL DEFAULT 'suggested', -- suggested | accepted | rejected | edited
+        note TEXT DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(case_id, act, ref)
+    );
+    """,
+]
+
 _local = threading.local()
 # SQLite allows one writer at a time; serialising writes in-process avoids
 # "database is locked" errors when ingestion and chat run together.
@@ -173,7 +327,48 @@ def tx() -> Iterator[sqlite3.Connection]:
 def init() -> None:
     config.ensure_dirs()
     with write_lock:
-        conn().executescript(SCHEMA)
+        c = conn()
+        c.executescript(SCHEMA)
+        for table, col, decl in ADDED_COLUMNS:
+            if col not in {r["name"] for r in c.execute(f"PRAGMA table_info({table})")}:
+                c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+        c.commit()
+        row = c.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
+        version = int(row["value"]) if row else 0
+        for n, script in enumerate(MIGRATIONS[version:], version + 1):
+            # executescript commits on its own; the version bump follows only if every statement succeeded.
+            c.executescript(script)
+            c.execute("INSERT INTO meta(key, value) VALUES('schema_version', ?) "
+                      "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (str(n),))
+            c.commit()
+
+
+def audit(action: str, entity: str, entity_id: str | None = None, **detail: Any) -> None:
+    """Append-only activity log (who-did-what is implicit: single-user local workspace)."""
+    with tx() as c:
+        c.execute("INSERT INTO audit_log(at, action, entity, entity_id, detail) VALUES(?,?,?,?,?)",
+                  (now(), action, entity, entity_id, json.dumps(detail, ensure_ascii=False, default=str)[:4000]))
+
+
+def notify(kind: str, title: str, body: str = "", link: str = "", case_id: str | None = None,
+           dedupe_key: str | None = None) -> bool:
+    """In-app notification; a repeated dedupe_key is ignored (duplicate prevention). Returns True if created."""
+    with tx() as c:
+        cur = c.execute("INSERT OR IGNORE INTO notifications(kind, title, body, link, case_id, dedupe_key, created_at)"
+                        " VALUES(?,?,?,?,?,?,?)", (kind, title[:300], body[:2000], link[:500], case_id, dedupe_key, now()))
+        return cur.rowcount > 0
+
+
+def get_pref(key: str, default: str | None = None) -> str | None:
+    row = conn().execute("SELECT value FROM prefs WHERE key=?", (key,)).fetchone()
+    return row["value"] if row else default
+
+
+def set_pref(key: str, value: str) -> None:
+    with tx() as c:
+        c.execute("INSERT INTO prefs(key, value, updated_at) VALUES(?,?,?) "
+                  "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+                  (key, value, now()))
 
 
 def reset_connections() -> None:

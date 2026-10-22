@@ -1,0 +1,68 @@
+{
+  "_about": "Forum profiles for court-wise customisation. Every requirement carries its source and the date it was verified. Formatting rules (paper, margins, font, indexing) are NOT assumed: a forum lists them only when taken from an official source; otherwise the draft shows 'confirm with the registry'. Users can add verified requirements of their own (stored as user requirements, labelled as such).",
+  "forums": [
+    {"id": "none", "name": "Not filed before a court (notice / letter / representation)", "level": "none",
+     "heading": "", "official": [], "requirements": [],
+     "confirm": ["Mode of service and proof of delivery depend on the governing provision or contract — confirm before sending."]},
+    {"id": "sci", "name": "Supreme Court of India", "level": "supreme",
+     "heading": "IN THE SUPREME COURT OF INDIA",
+     "official": [
+       {"title": "Supreme Court Rules, 2013 and amendments (official page)", "url": "https://www.sci.gov.in/supreme-court-rules/", "verified_on": "2026-10-22"},
+       {"title": "E-filing (official page)", "url": "https://www.sci.gov.in/e-filing/", "verified_on": "2026-10-22"}],
+     "requirements": [],
+     "confirm": ["Paper size, margins, font, line spacing, indexing and paper-book requirements are prescribed by the Supreme Court Rules and practice directions — confirm the current requirements from the official page before filing."]},
+    {"id": "bombay_hc", "name": "High Court of Judicature at Bombay", "level": "high",
+     "heading": "IN THE HIGH COURT OF JUDICATURE AT BOMBAY",
+     "official": [
+       {"title": "Rules & Manuals — Original Side Rules, Appellate Side Rules (official page)", "url": "https://bombayhighcourt.gov.in/bhc/RulesManuals", "verified_on": "2026-10-22"},
+       {"title": "Practice Notes (official page)", "url": "https://bombayhighcourt.gov.in/bhc/PracticeNotes", "verified_on": "2026-10-22"},
+       {"title": "E-filing registration (official page)", "url": "https://bombayhighcourt.gov.in/bhc/ecasefiling/registerverify_new_bootstrap", "verified_on": "2026-10-22"}],
+     "requirements": [],
+     "confirm": ["Original Side and Appellate Side matters follow different rules; confirm the side, the bench (Mumbai, Nagpur, Aurangabad, Goa) and the current formatting requirements from the official Rules & Manuals and Practice Notes."]},
+    {"id": "district", "name": "District / Subordinate Courts (civil)", "level": "district",
+     "heading": "IN THE COURT OF THE [●: designation of the court] AT [●: place]",
+     "official": [{"title": "eCourts e-filing portal (official)", "url": "https://filing.ecourts.gov.in/pdedev/", "verified_on": "2026-10-22"}],
+     "requirements": [
+       {"text": "Pleadings: particulars of a plaint", "library_ref": ["CPC", "Order VII Rule 1"]},
+       {"text": "Pleadings to state material facts only", "library_ref": ["CPC", "Order VI Rule 2"]},
+       {"text": "Signing of pleadings", "library_ref": ["CPC", "Order VI Rule 14"]},
+       {"text": "Verification of pleadings", "library_ref": ["CPC", "Order VI Rule 15"]}],
+     "confirm": ["Local practice (paper size, court-fee stamps, index and list of documents) varies by district — confirm with the court's registry or the State's civil manual."]},
+    {"id": "criminal_district", "name": "Sessions / Magistrate Courts (criminal)", "level": "district",
+     "heading": "IN THE COURT OF THE [●: Sessions Judge / Judicial Magistrate First Class] AT [●: place]",
+     "official": [{"title": "eCourts e-filing portal (official)", "url": "https://filing.ecourts.gov.in/pdedev/", "verified_on": "2026-10-22"}],
+     "requirements": [],
+     "confirm": ["For offences committed before 1 July 2024 the old codes (IPC/CrPC) may govern — confirm the applicable law and transition provisions before citing BNS/BNSS sections."]},
+    {"id": "family", "name": "Family Court", "level": "district",
+     "heading": "IN THE FAMILY COURT AT [●: place]",
+     "official": [],
+     "requirements": [{"text": "Family Courts Act — procedure", "library_ref": ["Family Courts Act", "Section 10"]}],
+     "confirm": ["Confirm the Family Court's local practice and any mandatory counselling / mediation step."]},
+    {"id": "consumer_district", "name": "District Consumer Disputes Redressal Commission", "level": "consumer",
+     "heading": "BEFORE THE DISTRICT CONSUMER DISPUTES REDRESSAL COMMISSION, [●: district]",
+     "official": [{"title": "National Consumer Disputes Redressal Commission (official)", "url": "https://ncdrc.nic.in/", "verified_on": "2026-10-22"}],
+     "requirements": [
+       {"text": "Manner of making a complaint", "library_ref": ["Consumer Protection Act", "Section 35"]},
+       {"text": "Pecuniary jurisdiction of the District Commission", "library_ref": ["Consumer Protection Act", "Section 34"]},
+       {"text": "Limitation for filing", "library_ref": ["Consumer Protection Act", "Section 69"]}],
+     "confirm": ["Pecuniary limits can be changed by notification — confirm the currently notified limits before choosing the forum."]},
+    {"id": "consumer_state", "name": "State Consumer Disputes Redressal Commission", "level": "consumer",
+     "heading": "BEFORE THE STATE CONSUMER DISPUTES REDRESSAL COMMISSION, [●: State]",
+     "official": [{"title": "National Consumer Disputes Redressal Commission (official)", "url": "https://ncdrc.nic.in/", "verified_on": "2026-10-22"}],
+     "requirements": [{"text": "Jurisdiction of the State Commission", "library_ref": ["Consumer Protection Act", "Section 47"]}],
+     "confirm": ["Confirm the currently notified pecuniary limits."]},
+    {"id": "revenue_mh", "name": "Maharashtra revenue authorities (MLRC)", "level": "revenue",
+     "heading": "BEFORE THE [●: Sub-Divisional Officer / Collector / Additional Commissioner], [●: place]",
+     "official": [],
+     "requirements": [
+       {"text": "Appeals", "library_ref": ["MLRC", "Section 247"]},
+       {"text": "Revision", "library_ref": ["MLRC", "Section 257"]}],
+     "confirm": ["Confirm the appellate authority and the limitation period applicable to the specific order from the Code before filing."]}
+  ],
+  "styles": [
+    {"id": "formal", "label": "Formal", "instruction": "Formal, conventional court language; complete sentences; standard headings."},
+    {"id": "concise", "label": "Concise", "instruction": "Short numbered paragraphs, no repetition, only essential averments."},
+    {"id": "detailed", "label": "Detailed", "instruction": "Comprehensive narration of facts with full particulars and sub-paragraphs."},
+    {"id": "argument", "label": "Argument-focused", "instruction": "Lead with the strongest legal grounds; each ground in its own numbered paragraph with the supporting provision."}
+  ]
+}

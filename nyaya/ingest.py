@@ -127,40 +127,94 @@ def process(doc_id: str) -> dict:
              vecs[i].tobytes())
             for i, c in enumerate(chunks)
         ]
+        meta = {**row["meta"]}
+        lang = parsed.meta.get("language") or {}
+        meta.update({k: v for k, v in (("lang", lang.get("lang")), ("lang_name", lang.get("lang_name")),
+                                       ("script", lang.get("script")), ("lang_confidence", lang.get("confidence")),
+                                       ("ocr", parsed.meta.get("ocr")), ("ocr_needed_pages", parsed.meta.get("ocr_needed_pages")))
+                     if v})
         with db.tx() as c:
             c.execute("DELETE FROM chunks WHERE doc_id=?", (doc_id,))
             c.executemany(
                 "INSERT INTO chunks(doc_id, ord, header, text, page_start, page_end, label, section, title, chapter, emb)"
                 " VALUES(?,?,?,?,?,?,?,?,?,?,?)", rows)
             ids = [r[0] for r in c.execute("SELECT id FROM chunks WHERE doc_id=? ORDER BY ord", (doc_id,))]
-            c.execute("UPDATE documents SET status='ready', error=NULL, doc_type=?, pages=?, chars=?, n_chunks=? "
-                      "WHERE id=?", (doc_type, len(parsed.pages), parsed.chars, len(chunks), doc_id))
+            c.execute("UPDATE documents SET status='ready', error=NULL, doc_type=?, pages=?, chars=?, n_chunks=?, meta=? "
+                      "WHERE id=?", (doc_type, len(parsed.pages), parsed.chars, len(chunks),
+                                     json.dumps(meta, ensure_ascii=False), doc_id))
+            if row["collection"] == "case":
+                # The exact extracted text (page by page) is preserved next to the original file.
+                c.execute("INSERT INTO doc_derivatives(doc_id, kind, lang, content, meta, created_at) VALUES(?,?,?,?,?,?) "
+                          "ON CONFLICT(doc_id, kind) DO UPDATE SET content=excluded.content, meta=excluded.meta, "
+                          "created_at=excluded.created_at",
+                          (doc_id, "extracted", lang.get("lang") or "und", json.dumps(parsed.pages, ensure_ascii=False),
+                           json.dumps({"ocr": bool(parsed.meta.get("ocr"))}), db.now()))
         index.remove_doc(doc_id)
         index.add(ids, doc_id, row["case_id"], row["collection"], vecs)
         log.info("Indexed %s: %d pages, %d chunks in %.1fs", row["filename"], len(parsed.pages), len(chunks),
                  time.time() - t0)
+        if row["collection"] == "case":
+            db.notify("document", f"Document ready: {row['title']}", f"{len(parsed.pages)} page(s), "
+                      f"language: {lang.get('lang_name') or 'unknown'}" + (", OCR used" if parsed.meta.get("ocr") else ""),
+                      f"#/doc/{doc_id}", row["case_id"], dedupe_key=f"doc-ready:{doc_id}:{row['sha256'][:12]}")
     except parsing.ParseError as exc:
-        _fail(doc_id, str(exc))
+        _fail(doc_id, str(exc), row)
     except Exception as exc:  # unexpected: log details locally, show a generic message
         log.exception("Ingestion failed for %s", row["filename"])
-        _fail(doc_id, f"Could not process this file ({type(exc).__name__}).")
+        _fail(doc_id, f"Could not process this file ({type(exc).__name__}).", row)
     return db.row_to_dict(db.conn().execute("SELECT * FROM documents WHERE id=?", (doc_id,)).fetchone())
 
 
-def _fail(doc_id: str, msg: str) -> None:
+def _fail(doc_id: str, msg: str, row: dict | None = None) -> None:
     with db.tx() as c:
         c.execute("UPDATE documents SET status='failed', error=? WHERE id=?", (msg, doc_id))
+    if row and row.get("collection") == "case":
+        db.notify("document", f"Could not process: {row['title']}", msg, f"#/cases/{row['case_id']}", row["case_id"],
+                  dedupe_key=f"doc-failed:{doc_id}:{msg[:40]}")
+
+
+def index_derived(source: dict, pages: list[str], title: str, kind: str) -> str:
+    """Index derived text (e.g. an English translation) as its own searchable document linked to the source,
+    so English questions can retrieve content from Hindi/Marathi files. Returns the derived doc id."""
+    text = "\n".join(pages)
+    sha = hashlib.sha256(f"{kind}:{source['id']}:{text}".encode()).hexdigest()
+    old = db.conn().execute("SELECT id FROM documents WHERE case_id IS ? AND json_extract(meta,'$.derived_from')=? "
+                            "AND json_extract(meta,'$.derived_kind')=?", (source["case_id"], source["id"], kind)).fetchall()
+    for r in old:
+        delete_document(r["id"])
+    doc_id = db.new_id("doc_")
+    _insert_document(doc_id=doc_id, case_id=source["case_id"], collection=source["collection"], doc_type=source["doc_type"],
+                     title=title, filename=source["filename"], path=config.from_stored(source["path"]), sha=sha,
+                     meta={"derived_from": source["id"], "derived_kind": kind, "lang": "en", "lang_name": "English"})
+    chunks = chunking.chunk_document(pages, source["doc_type"], title, "")
+    vecs = embeddings.embed_passages([f"{c.header}\n{c.text}"[:EMBED_CHARS] for c in chunks])
+    with db.tx() as c:
+        c.executemany(
+            "INSERT INTO chunks(doc_id, ord, header, text, page_start, page_end, label, section, title, chapter, emb)"
+            " VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+            [(doc_id, i, ch.header, ch.text, ch.page_start, ch.page_end, ch.label, ch.section, ch.title, ch.chapter,
+              vecs[i].tobytes()) for i, ch in enumerate(chunks)])
+        ids = [r[0] for r in c.execute("SELECT id FROM chunks WHERE doc_id=? ORDER BY ord", (doc_id,))]
+        c.execute("UPDATE documents SET status='ready', pages=?, chars=?, n_chunks=? WHERE id=?",
+                  (len(pages), len(text), len(chunks), doc_id))
+    index.add(ids, doc_id, source["case_id"], source["collection"], vecs)
+    return doc_id
 
 
 def delete_document(doc_id: str) -> bool:
-    row = db.conn().execute("SELECT path, collection FROM documents WHERE id=?", (doc_id,)).fetchone()
+    row = db.conn().execute("SELECT path, collection, meta FROM documents WHERE id=?", (doc_id,)).fetchone()
     if not row:
         return False
+    derived = [r["id"] for r in db.conn().execute(
+        "SELECT id FROM documents WHERE json_extract(meta,'$.derived_from')=?", (doc_id,))]
     with db.tx() as c:
         c.execute("DELETE FROM documents WHERE id=?", (doc_id,))  # chunks + FTS rows cascade via triggers
     index.remove_doc(doc_id)
+    for d in derived:
+        delete_document(d)
+    is_derived = '"derived_from"' in (row["meta"] or "")
     p = config.from_stored(row["path"]).resolve()
-    if row["collection"] == "case" and config.UPLOAD_DIR.resolve() in p.parents and p.exists():
+    if row["collection"] == "case" and not is_derived and config.UPLOAD_DIR.resolve() in p.parents and p.exists():
         p.unlink()
     return True
 

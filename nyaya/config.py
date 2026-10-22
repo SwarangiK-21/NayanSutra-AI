@@ -65,6 +65,18 @@ CONTEXT_CHAR_BUDGET = 16000
 RELEVANCE_FLOOR = float(_env("RELEVANCE_FLOOR", default="-1.0"))  # cross-encoder logit below = weak evidence
 DOC_ANALYSIS_MAX_CHARS = 90000  # whole-document analysis in one call below this size
 
+# ── Document intelligence ───────────────────────────────────────────────────
+# Optional OCR engine for scanned PDFs / images (Tesseract with eng+hin+mar data). Empty = auto-detect.
+TESSERACT_CMD = _env("TESSERACT_CMD")
+OCR_MAX_PAGES = int(_env("OCR_MAX_PAGES", default="60"))
+# Whole-document translation / summaries send document text to the LLM; the UI asks first.
+DOC_LLM_MAX_CHARS = int(_env("DOC_LLM_MAX_CHARS", default="120000"))
+
+# ── Integrations / sync ─────────────────────────────────────────────────────
+SYNC_ENABLED = _bool("SYNC_ENABLED", True)
+SYNC_TICK_SECONDS = int(_env("SYNC_TICK_SECONDS", default="60"))
+HTTP_USER_AGENT = "NyaySutra-AI/1.0 (+local legal research assistant)"
+
 # ── Server / security ───────────────────────────────────────────────────────
 APP_HOST = _env("APP_HOST", default="127.0.0.1")
 APP_PORT = int(_env("APP_PORT", default="8000"))

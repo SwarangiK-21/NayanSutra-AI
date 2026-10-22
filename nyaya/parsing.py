@@ -97,6 +97,7 @@ def _pdf(path: Path) -> Parsed:
         if "password" in msg:
             raise ParseError("This PDF is password-protected. Remove the password and upload again.") from exc
         raise ParseError("This file could not be read as a PDF (it may be damaged).") from exc
+    meta: dict = {}
     try:
         if len(doc) > config.MAX_PDF_PAGES:
             raise ParseError(f"PDF has {len(doc)} pages; the limit is {config.MAX_PDF_PAGES}.")
@@ -107,16 +108,97 @@ def _pdf(path: Path) -> Parsed:
             raw.append(tp.get_text_range())
             tp.close()
             page.close()
+        # Pages without a text layer (scans) are OCR'd when an engine is installed.
+        scanned = [i for i, t in enumerate(raw) if len(t.strip()) < 25]
+        if scanned:
+            meta.update(_ocr_pdf_pages(doc, scanned, raw, all_scanned=len(scanned) == len(raw)))
     finally:
         doc.close()
     pages = clean_pages(raw)
     total = sum(len(p) for p in pages)
-    if total < max(200, 25 * len(pages)):
+    if total < max(200, 25 * len(pages)) and not meta.get("ocr"):
         raise ParseError(
-            "No readable text found — this looks like a scanned PDF. Please upload a text-based PDF "
-            "(or run OCR on it first)."
+            "No readable text found — this looks like a scanned PDF. OCR is not installed on this computer "
+            "(see README: Tesseract with Hindi/Marathi data), so the text cannot be read reliably."
         )
-    return Parsed(pages=pages, meta={"pages": len(pages)})
+    return Parsed(pages=pages, meta={"pages": len(pages), **meta})
+
+
+def _ocr_pdf_pages(doc, idx: list[int], raw: list[str], all_scanned: bool) -> dict:
+    from . import ocr
+
+    if not ocr.engine():
+        return {"ocr_needed_pages": [i + 1 for i in idx]} if not all_scanned else {}
+    if len(idx) > config.OCR_MAX_PAGES:
+        raise ParseError(f"{len(idx)} scanned pages need OCR; the limit is {config.OCR_MAX_PAGES} "
+                         "(OCR_MAX_PAGES in .env).")
+    per_page = []
+    for i in idx:
+        page = doc[i]
+        try:
+            img = page.render(scale=300 / 72).to_pil()  # ~300 dpi, what Tesseract is tuned for
+        finally:
+            page.close()
+        try:
+            res = ocr.ocr_image(img)
+        except RuntimeError as exc:
+            raise ParseError(f"OCR failed on page {i + 1}: {exc}.") from exc
+        raw[i] = res["text"]
+        per_page.append({"page": i + 1, "confidence": res["confidence"], "low_words": res["low_words"],
+                         "words": res["words"]})
+    words = sum(p["words"] for p in per_page) or 1
+    return {"ocr": {"engine": ocr.engine()["engine"], "langs": ocr.engine()["langs"], "pages": per_page,
+                    "low_conf_ratio": round(sum(p["low_words"] for p in per_page) / words, 3)}}
+
+
+def _image(path: Path) -> Parsed:
+    from . import ocr
+
+    if not ocr.engine():
+        raise ParseError("Image documents need OCR, which is not installed on this computer "
+                         "(see README: Tesseract with Hindi/Marathi data).")
+    try:
+        img = ocr.open_image(path)
+    except Exception as exc:  # PIL raises many types, including DecompressionBombError
+        raise ParseError("This image could not be opened (damaged, unsupported or too large).") from exc
+    frames = []
+    try:
+        n = getattr(img, "n_frames", 1)  # multi-page TIFF
+        for f in range(min(n, config.OCR_MAX_PAGES)):
+            img.seek(f)
+            frames.append(img.copy())
+    except EOFError:
+        pass
+    pages, per_page = [], []
+    for i, frame in enumerate(frames or [img], 1):
+        try:
+            res = ocr.ocr_image(frame)
+        except RuntimeError as exc:
+            raise ParseError(f"OCR failed on page {i}: {exc}.") from exc
+        pages.append(res["text"])
+        per_page.append({"page": i, "confidence": res["confidence"], "low_words": res["low_words"], "words": res["words"]})
+    words = sum(p["words"] for p in per_page) or 1
+    return Parsed(pages=clean_pages(pages), meta={"pages": len(pages), "ocr": {
+        "engine": ocr.engine()["engine"], "langs": ocr.engine()["langs"], "pages": per_page,
+        "low_conf_ratio": round(sum(p["low_words"] for p in per_page) / words, 3)}})
+
+
+def _doc(path: Path) -> Parsed:
+    """Legacy Word 97-2003 (.doc) via antiword when available."""
+    import shutil
+    import subprocess
+
+    exe = shutil.which("antiword")
+    if not exe:
+        raise ParseError("Legacy .doc files need the 'antiword' tool, which is not installed. "
+                         "Open the file in Word and save it as .docx, then upload again.")
+    try:
+        out = subprocess.run([exe, "-w", "0", str(path)], capture_output=True, timeout=60)
+    except subprocess.TimeoutExpired as exc:
+        raise ParseError("Reading the .doc file timed out.") from exc
+    if out.returncode != 0:
+        raise ParseError("This .doc file could not be read. Save it as .docx and upload again.")
+    return Parsed(pages=clean_pages([out.stdout.decode("utf-8", errors="replace")]), meta={"pages": 1})
 
 
 def _docx(path: Path) -> Parsed:
@@ -151,14 +233,18 @@ def _text(path: Path) -> Parsed:
     return Parsed(pages=clean_pages([txt]), meta={"pages": 1})
 
 
-EXTRACTORS = {".pdf": _pdf, ".docx": _docx, ".txt": _text, ".md": _text}
+EXTRACTORS = {".pdf": _pdf, ".docx": _docx, ".doc": _doc, ".txt": _text, ".md": _text,
+              ".png": _image, ".jpg": _image, ".jpeg": _image, ".tif": _image, ".tiff": _image, ".webp": _image}
 
 
 def extract(path: Path) -> Parsed:
+    from . import langdetect
+
     fn = EXTRACTORS.get(path.suffix.lower())
     if fn is None:
-        raise ParseError(f"Unsupported file type {path.suffix}. Use PDF, DOCX, TXT or MD.")
+        raise ParseError(f"Unsupported file type {path.suffix}. Use PDF, DOC/DOCX, TXT, MD or an image.")
     parsed = fn(path)
     if parsed.chars < 20:
         raise ParseError("The document appears to be empty.")
+    parsed.meta["language"] = langdetect.detect(parsed.text)
     return parsed

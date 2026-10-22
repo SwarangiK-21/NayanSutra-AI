@@ -2,16 +2,29 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import date, timedelta
 
-from . import config, db
+from . import config, db, reference
 
-CASE_TYPES = ["Civil", "Criminal", "Family", "Revenue"]
+CASE_TYPES = reference.CATEGORIES
 CASE_STATUSES = ["Draft / Pre-filing", "Active / In Court", "Evidence Stage", "Final Arguments",
                  "Reserved for Orders", "Disposed / Closed"]
-FIELDS = ["title", "case_type", "case_number", "court", "client_name", "client_role", "opposite_party",
-          "filing_date", "next_hearing_date", "status", "acts_sections", "description"]
+FIELDS = ["title", "case_type", "case_subtype", "case_number", "filing_number", "fir_number", "cnr_number", "court",
+          "state", "district", "police_station", "filing_year", "client_name", "client_role", "opposite_party",
+          "opposite_role", "filing_date", "next_hearing_date", "status", "acts_sections", "description", "is_draft"]
 LIMITS = {"title": 200, "description": 6000, "acts_sections": 600}
+# Names: letters in any script, spaces and the punctuation found in Indian party names (M/s., S/o, &, etc.).
+_NAME = re.compile(r"^[\w\s.,&'()/\-]+$", re.UNICODE)
+_IDENT = re.compile(r"^[\w\s./\-()]+$", re.UNICODE)
+
+
+class FieldError(ValueError):
+    """Validation failure tied to one form field; `code` lets the UI show a translated message."""
+
+    def __init__(self, field: str, code: str, message: str):
+        super().__init__(message)
+        self.field, self.code = field, code
 
 
 def _clean(data: dict) -> dict:
@@ -19,12 +32,59 @@ def _clean(data: dict) -> dict:
     for k in FIELDS:
         if k in data and data[k] is not None:
             v = str(data[k]).strip()[: LIMITS.get(k, 200)]
-            out[k] = v or None if k in ("filing_date", "next_hearing_date") else v
+            out[k] = v or None if k in ("filing_date", "next_hearing_date", "filing_year") else v
     if "case_type" in out and out["case_type"] not in CASE_TYPES:
         out["case_type"] = "Civil"
     if "status" in out and out["status"] not in CASE_STATUSES:
         out["status"] = "Active / In Court"
+    if "is_draft" in out:
+        out["is_draft"] = 1 if str(out["is_draft"]).lower() in ("1", "true", "yes", "on") else 0
     return out
+
+
+def auto_title(d: dict) -> str:
+    """Title derived from the parties ("Client v. Opposite party") when the user did not type one."""
+    parts = [d.get("client_name"), d.get("opposite_party")]
+    if all(parts):
+        return f"{parts[0]} v. {parts[1]}"[:200]
+    return (next((p for p in parts if p), None) or "Untitled matter")[:200]
+
+
+def validate(d: dict, *, final: bool) -> dict:
+    """Field rules. Drafts may be incomplete; anything entered must still be well-formed."""
+    for f in ("client_name", "opposite_party"):
+        v = d.get(f)
+        if v and (len(v) < 2 or not _NAME.match(v)):
+            raise FieldError(f, "invalid_name", "Use letters, spaces and . , & ' ( ) / - only (at least 2 characters).")
+    for f in ("case_number", "filing_number", "fir_number", "police_station"):
+        v = d.get(f)
+        if v and not _IDENT.match(v):
+            raise FieldError(f, "invalid_identifier", "Use letters, digits, spaces and . / - ( ) only.")
+    if d.get("cnr_number"):
+        cnr = reference.parse_cnr(d["cnr_number"])
+        if not cnr["valid"]:
+            raise FieldError("cnr_number", "invalid_cnr", cnr["error"])
+        d["cnr_number"] = cnr["cnr"]
+    if d.get("filing_year") is not None:
+        try:
+            y = int(d["filing_year"])
+        except ValueError:
+            raise FieldError("filing_year", "invalid_year", "Filing year must be a 4-digit year.") from None
+        if not 1950 <= y <= date.today().year:
+            raise FieldError("filing_year", "invalid_year", f"Filing year must be between 1950 and {date.today().year}.")
+        d["filing_year"] = y
+    if d.get("state") and d["state"] not in reference.STATES:
+        raise FieldError("state", "invalid_state", "Choose a state or union territory from the list.")
+    if d.get("district") and d.get("state") in reference.DISTRICTS and d["district"] not in reference.DISTRICTS[d["state"]]:
+        raise FieldError("district", "invalid_district", "Choose a district of the selected state.")
+    if not d.get("title"):
+        d["title"] = auto_title(d) if (d.get("client_name") or d.get("opposite_party") or not final) else None
+    if final:
+        if not d.get("title"):
+            raise FieldError("title", "required", "Case title is required (or enter both party names).")
+        if not d.get("client_name"):
+            raise FieldError("client_name", "required", "Client / party name is required.")
+    return d
 
 
 def list_cases() -> list[dict]:
@@ -46,9 +106,10 @@ def get_case(case_id: str) -> dict | None:
 
 def create_case(data: dict) -> dict:
     d = _clean(data)
-    if not d.get("title"):
-        raise ValueError("Case title is required")
+    d = validate(d, final=not d.get("is_draft"))
     d.setdefault("case_type", "Civil")
+    if d.get("is_draft") and "status" not in d:
+        d["status"] = "Draft / Pre-filing"
     prefix = d["case_type"][:3].upper()
     cid = db.new_id(f"CASE-{prefix}-")[:20]
     now = db.now()
@@ -56,16 +117,29 @@ def create_case(data: dict) -> dict:
     with db.tx() as c:
         c.execute(f"INSERT INTO cases({','.join(cols)}) VALUES({','.join('?' * len(cols))})",
                   [cid, *d.values(), now, now])
+    db.audit("case.create", "case", cid, draft=bool(d.get("is_draft")))
     return get_case(cid)
 
 
 def update_case(case_id: str, data: dict) -> dict | None:
+    current = get_case(case_id)
+    if not current:
+        return None
     d = _clean(data)
     if not d:
-        return get_case(case_id)
+        return current
+    merged = {**{k: current.get(k) for k in FIELDS}, **d}
+    # A title that was generated from the parties follows them when they change; a typed title is kept.
+    title_was_auto = current.get("title") == auto_title(current)
+    if "title" not in d and title_was_auto:
+        merged["title"] = None
+    final = not merged.get("is_draft")
+    d = {k: v for k, v in validate(dict(merged), final=final).items()
+         if k in d or (k == "title" and (title_was_auto or not current.get("title")))}
     with db.tx() as c:
         cur = c.execute(f"UPDATE cases SET {', '.join(f'{k}=?' for k in d)}, updated_at=? WHERE id=?",
                         [*d.values(), db.now(), case_id])
+    db.audit("case.update", "case", case_id, fields=sorted(d))
     return get_case(case_id) if cur.rowcount else None
 
 
@@ -75,7 +149,10 @@ def delete_case(case_id: str) -> bool:
     for r in db.conn().execute("SELECT id FROM documents WHERE case_id=?", (case_id,)).fetchall():
         delete_document(r["id"])
     with db.tx() as c:
-        return c.execute("DELETE FROM cases WHERE id=?", (case_id,)).rowcount > 0
+        ok = c.execute("DELETE FROM cases WHERE id=?", (case_id,)).rowcount > 0
+    if ok:
+        db.audit("case.delete", "case", case_id)
+    return ok
 
 
 def add_note(case_id: str, content: str, author: str = "Advocate") -> dict | None:
@@ -91,12 +168,18 @@ def add_note(case_id: str, content: str, author: str = "Advocate") -> dict | Non
 
 def dossier(case: dict, documents: list[dict] | None = None) -> str:
     """Compact case facts for the LLM."""
+    idents = ", ".join(f"{lbl}: {case[k]}" for k, lbl in (
+        ("case_number", "Case no."), ("filing_number", "Filing no."), ("cnr_number", "CNR"),
+        ("fir_number", "FIR no."), ("police_station", "Police station")) if case.get(k))
+    where = ", ".join(x for x in (case.get("district"), case.get("state")) if x)
     lines = [
-        f"Title: {case['title']}  |  Type: {case['case_type']}  |  No.: {case.get('case_number') or '—'}",
-        f"Court/Forum: {case.get('court') or '—'}  |  Status: {case.get('status') or '—'}",
+        f"Title: {case['title']}  |  Type: {case['case_type']}{' — ' + case['case_subtype'] if case.get('case_subtype') else ''}",
+        f"Identifiers: {idents or '—'}",
+        f"Court/Forum: {case.get('court') or '—'}{' (' + where + ')' if where else ''}  |  Status: {case.get('status') or '—'}",
         f"Client: {case.get('client_name') or '—'} ({case.get('client_role') or '—'})  |  "
-        f"Opposite party: {case.get('opposite_party') or '—'}",
-        f"Filing date: {case.get('filing_date') or '—'}  |  Next hearing: {case.get('next_hearing_date') or '—'}",
+        f"Opposite party: {case.get('opposite_party') or '—'} ({case.get('opposite_role') or '—'})",
+        f"Filing date: {case.get('filing_date') or '—'}  |  Filing year: {case.get('filing_year') or '—'}  |  "
+        f"Next hearing: {case.get('next_hearing_date') or '—'}",
         f"Provisions noted: {case.get('acts_sections') or '—'}",
         f"Facts / background: {case.get('description') or '—'}",
     ]
@@ -125,6 +208,9 @@ def seed_if_empty() -> None:
         it = dict(it)
         # Demo matters carried 2024 hearing dates; move them into the near future.
         it["next_hearing_date"] = (today + timedelta(days=7 + 6 * i)).isoformat()
-        case = create_case(it)
+        try:
+            case = create_case(it)
+        except FieldError:
+            continue
         for n in it.get("notes", [])[:5]:
             add_note(case["id"], n.get("content", ""), n.get("author", "Advocate"))

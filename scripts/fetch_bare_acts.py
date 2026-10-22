@@ -56,6 +56,8 @@ ACTS = [
     ("The Right to Fair Compensation and Transparency in Land Acquisition, Rehabilitation and Resettlement Act, 2013",
      "AC_CEN", "Land Acquisition Act 2013", ["Revenue"]),
     ("The Maharashtra Land Revenue Code, 1966", "AC_MH", "MLRC", ["Revenue"]),
+    # Legal awareness (road safety, licences, registration, challans)
+    ("The Motor Vehicles Act, 1988", "AC_CEN", "MV Act", ["Civil", "Criminal"]),
 ]
 
 

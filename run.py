@@ -14,7 +14,7 @@ from nyaya import config
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
                         datefmt="%H:%M:%S")
-    for noisy in ("httpx", "huggingface_hub", "urllib3", "fastembed"):
+    for noisy in ("httpx", "huggingface_hub", "urllib3", "fastembed", "fontTools", "fpdf"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
     local = config.APP_HOST in ("127.0.0.1", "localhost", "::1")

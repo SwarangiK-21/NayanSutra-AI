@@ -17,6 +17,7 @@ _TMP = Path(tempfile.mkdtemp(prefix="nyaya_test_"))
 os.environ["NYAYA_DB"] = str(_TMP / "test.db")
 os.environ["NYAYA_HOME"] = str(_TMP / "home")
 os.environ.setdefault("OLLAMA_API_KEY", "test-key")
+os.environ["SYNC_ENABLED"] = "false"  # no background network sync during tests
 
 from nyaya import config, db, embeddings, llm  # noqa: E402
 
