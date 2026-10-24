@@ -89,14 +89,15 @@ def _hash(*parts) -> str:
 
 def upsert_record(source: str, external_id: str, *, kind: str, title: str, url: str = "", published_at: str | None = None,
                   data: dict | None = None, provenance: str, jurisdiction: str = "", case_id: str | None = None,
-                  verified_at: str | None = None) -> str:
+                  verified_at: str | None = None, owner: str | None = None, org_id: str | None = None) -> str:
     """Insert or update a source record. Returns 'new', 'updated' or 'unchanged' (duplicate prevention by
-    (source, external_id) plus a content hash)."""
+    (source, external_id, owner) plus a content hash). Public feed items have no owner; a court record imported by
+    a user belongs to that user (another user's import of the same record is a separate row)."""
     h = _hash(title, url, published_at, data)
     now = db.now()
     with db.tx() as c:
-        row = c.execute("SELECT id, content_hash FROM source_records WHERE source=? AND external_id=?",
-                        (source, external_id)).fetchone()
+        row = c.execute("SELECT id, content_hash FROM source_records WHERE source=? AND external_id=? "
+                        "AND COALESCE(created_by, '') = ?", (source, external_id, owner or "")).fetchone()
         if row and row["content_hash"] == h:
             c.execute("UPDATE source_records SET retrieved_at=?, verified_at=COALESCE(?, verified_at), "
                       "case_id=COALESCE(?, case_id) WHERE id=?", (now, verified_at, case_id, row["id"]))
@@ -108,9 +109,10 @@ def upsert_record(source: str, external_id: str, *, kind: str, title: str, url: 
                        case_id, jurisdiction, row["id"]))
             return "updated"
         c.execute("INSERT INTO source_records(id, source, external_id, kind, title, url, jurisdiction, published_at, retrieved_at, "
-                  "verified_at, content_hash, provenance, data, case_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                  "verified_at, content_hash, provenance, data, case_id, created_by, org_id) "
+                  "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                   (db.new_id("rec_"), source, external_id[:500], kind, title[:500], url[:1000], jurisdiction, published_at, now,
-                   verified_at, h, provenance, json.dumps(data or {}, ensure_ascii=False), case_id))
+                   verified_at, h, provenance, json.dumps(data or {}, ensure_ascii=False), case_id, owner, org_id))
         return "new"
 
 
@@ -293,6 +295,10 @@ class Scheduler(threading.Thread):
         self.stop = threading.Event()
 
     def run(self):
+        with db.system():   # scheduled sync of public sources is internal work
+            self._loop()
+
+    def _loop(self):
         self.stop.wait(15)  # let the app start first
         while not self.stop.is_set():
             for iid in due():
@@ -306,6 +312,12 @@ class Scheduler(threading.Thread):
 
 
 def status() -> list[dict]:
+    """Health of each source (shared configuration; read by signed-in users, changed by administrators only)."""
+    with db.system():
+        return _status()
+
+
+def _status() -> list[dict]:
     out = []
     for iid, a in ADAPTERS.items():
         st = _state(iid)

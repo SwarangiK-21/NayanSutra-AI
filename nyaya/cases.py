@@ -87,20 +87,44 @@ def validate(d: dict, *, final: bool) -> dict:
     return d
 
 
-def list_cases() -> list[dict]:
+META_FIELDS = ("id", "title", "case_type", "case_subtype", "case_number", "cnr_number", "court", "state", "district",
+               "status", "filing_year", "next_hearing_date", "is_draft", "created_at", "updated_at", "org_id")
+
+
+def list_cases(principal) -> list[dict]:
+    """Cases the caller is on (with their access level). Administrators also see the rest of their organisation's
+    case list — metadata only — so they can assign people."""
+    if not principal.signed_in:
+        return []
     rows = db.conn().execute(
-        "SELECT c.*, (SELECT COUNT(*) FROM documents d WHERE d.case_id=c.id) AS n_docs "
-        "FROM cases c ORDER BY c.updated_at DESC").fetchall()
-    return [dict(r) for r in rows]
+        "SELECT c.*, cm.access, (SELECT COUNT(*) FROM documents d WHERE d.case_id=c.id) AS n_docs "
+        "FROM cases c JOIN case_members cm ON cm.case_id = c.id AND cm.user_id = ? "
+        "WHERE c.org_id = ? ORDER BY c.updated_at DESC", (principal.user_id, principal.org_id)).fetchall()
+    out = [dict(r) for r in rows]
+    if principal.role == "client":
+        for c in out:
+            c["access"] = "client"
+    if principal.role == "admin":
+        mine = {c["id"] for c in out}
+        for r in db.conn().execute(f"SELECT {', '.join(META_FIELDS)} FROM cases WHERE org_id=? ORDER BY updated_at DESC",
+                                   (principal.org_id,)):
+            if r["id"] not in mine:
+                out.append({**dict(r), "access": None, "n_docs": None})
+    return out
 
 
-def get_case(case_id: str) -> dict | None:
+def case_metadata(case_id: str) -> dict | None:
+    row = db.conn().execute(f"SELECT {', '.join(META_FIELDS)} FROM cases WHERE id=?", (case_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def get_case(case_id: str, with_notes: bool = True) -> dict | None:
     row = db.conn().execute("SELECT * FROM cases WHERE id=?", (case_id,)).fetchone()
     if not row:
         return None
     case = dict(row)
     case["notes"] = [dict(n) for n in db.conn().execute(
-        "SELECT * FROM case_notes WHERE case_id=? ORDER BY created_at DESC", (case_id,))]
+        "SELECT * FROM case_notes WHERE case_id=? ORDER BY created_at DESC", (case_id,))] if with_notes else []
     return case
 
 
@@ -113,10 +137,13 @@ def create_case(data: dict) -> dict:
     prefix = d["case_type"][:3].upper()
     cid = db.new_id(f"CASE-{prefix}-")[:20]
     now = db.now()
-    cols = ["id", *d.keys(), "created_at", "updated_at"]
+    ident = db.current()
+    # The creator becomes the case owner (database trigger trg_case_owner); the case belongs to their organisation.
+    owner = {"org_id": ident.org_id or db.DEFAULT_ORG, "created_by": ident.user_id}
+    cols = ["id", *d.keys(), *owner.keys(), "created_at", "updated_at"]
     with db.tx() as c:
         c.execute(f"INSERT INTO cases({','.join(cols)}) VALUES({','.join('?' * len(cols))})",
-                  [cid, *d.values(), now, now])
+                  [cid, *d.values(), *owner.values(), now, now])
     db.audit("case.create", "case", cid, draft=bool(d.get("is_draft")))
     return get_case(cid)
 
@@ -144,12 +171,15 @@ def update_case(case_id: str, data: dict) -> dict | None:
 
 
 def delete_case(case_id: str) -> bool:
+    """Delete a case with all its files and records. The caller's right to do so is checked by the API
+    (owner or organisation administrator); the clean-up itself runs as internal work so no file is left behind."""
     from .ingest import delete_document
 
-    for r in db.conn().execute("SELECT id FROM documents WHERE case_id=?", (case_id,)).fetchall():
-        delete_document(r["id"])
-    with db.tx() as c:
-        ok = c.execute("DELETE FROM cases WHERE id=?", (case_id,)).rowcount > 0
+    with db.system():
+        for r in db.conn().execute("SELECT id FROM documents WHERE case_id=?", (case_id,)).fetchall():
+            delete_document(r["id"])
+        with db.tx() as c:
+            ok = c.execute("DELETE FROM cases WHERE id=?", (case_id,)).rowcount > 0
     if ok:
         db.audit("case.delete", "case", case_id)
     return ok

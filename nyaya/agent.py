@@ -10,6 +10,11 @@
 
 Each step yields events that the server streams to the browser (Server-Sent Events),
 so the advocate sees progress immediately and tokens as they are generated.
+
+Guardrails (guardrails.py) wrap every step: the request is normalised and screened before the model sees it, the
+planner may only choose an allow-listed tool with validated arguments, sources are delimited and injection-flagged,
+and the answer's citations and output are checked deterministically. Which case, documents and chat may be used
+was decided by the server before run() is called; nothing the model writes can change that.
 """
 from __future__ import annotations
 
@@ -21,7 +26,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from typing import Iterator
 
-from . import cases, config, db, ingest, llm, prompts, retrieval, tools
+from . import authz, cases, config, db, guardrails, ingest, llm, prompts, retrieval, tools
 
 log = logging.getLogger(__name__)
 
@@ -30,15 +35,18 @@ KIND = {"case": "CASE FILE", "bare_act": "BARE ACT", "judgment": "JUDGMENT", "dr
 
 # ── Chat persistence ─────────────────────────────────────────────────────────
 def ensure_chat(chat_id: str | None, case_id: str | None, first_message: str) -> str:
+    """The caller's own chat (a chat id belonging to someone else starts a new chat instead)."""
+    ident = db.current()
     if chat_id:
-        row = db.conn().execute("SELECT id FROM chats WHERE id=?", (chat_id,)).fetchone()
+        row = db.conn().execute("SELECT id FROM chats WHERE id=? AND COALESCE(user_id, '') = ? AND COALESCE(case_id, '') = ?",
+                                (chat_id, ident.user_id or "", case_id or "")).fetchone()
         if row:
             return chat_id
     cid = db.new_id("chat_")
     title = re.sub(r"\s+", " ", first_message).strip()[:70] or "New research"
     with db.tx() as c:
-        c.execute("INSERT INTO chats(id, case_id, title, created_at, updated_at) VALUES(?,?,?,?,?)",
-                  (cid, case_id, title, db.now(), db.now()))
+        c.execute("INSERT INTO chats(id, case_id, title, created_at, updated_at, user_id, org_id) VALUES(?,?,?,?,?,?,?)",
+                  (cid, case_id, title, db.now(), db.now(), ident.user_id, ident.org_id))
     return cid
 
 
@@ -69,13 +77,15 @@ def _case_docs(case_id: str | None) -> list[dict]:
 def _source_items(hits: list[retrieval.Hit]) -> list[dict]:
     return [{"n": i, "chunk_id": h.chunk_id, "doc_id": h.doc_id, "title": h.title, "collection": h.collection,
              "kind": KIND.get(h.collection, h.collection), "label": h.label, "page": h.page_start,
-             "citation": h.citation(), "snippet": h.text[:320], "exact": h.exact}
+             "citation": h.citation(), "snippet": h.text[:320], "exact": h.exact,
+             "injection_suspected": guardrails.is_suspicious(h.text)}
             for i, h in enumerate(hits, 1)]
 
 
 def _context(hits: list[retrieval.Hit]) -> str:
-    return "\n\n".join(f"[{i}] ({KIND.get(h.collection, h.collection)}) {h.header}"
-                       f"{f' | p. {h.page_start}' if h.page_start else ''}\n{h.text}"
+    """Numbered sources, each inside delimiters the passage text cannot close (see guardrails.wrap_source)."""
+    return "\n\n".join(guardrails.wrap_source(i, KIND.get(h.collection, h.collection),
+                                              f"[{i}] {h.header}{f' | p. {h.page_start}' if h.page_start else ''}", h.text)
                        for i, h in enumerate(hits, 1))
 
 
@@ -88,18 +98,18 @@ def _prior_turns(hist: list[dict], n: int = 4) -> list[dict]:
 
 
 def plan(message: str, hist: list[dict], docs: list[dict]) -> dict:
-    doc_list = "; ".join(f"[D{i}] {d['title']} ({d['doc_type']})" for i, d in enumerate(docs, 1)) or "(none uploaded)"
-    p = llm.chat_json(
+    doc_list = "; ".join(f"[D{i}] {guardrails.neutralise(d['title'])} ({d['doc_type']})"
+                         for i, d in enumerate(docs, 1)) or "(none uploaded)"
+    raw = llm.chat_json(
         [{"role": "user", "content": prompts.PLANNER.format(
             docs=doc_list, keys=", ".join(tools.LIMITATION), today=date.today().isoformat(),
             history=_hist_text(hist), message=message)}],
         model=config.FAST_LLM_MODEL,
         default={"intent": "research", "query": message},
     )
-    if p.get("intent") not in {"research", "analyze_document", "drafting", "calculation", "chitchat"}:
-        p["intent"] = "research"
-    p["query"] = (p.get("query") or message).strip()[:500]
-    p["alt_queries"] = [q for q in (p.get("alt_queries") or []) if isinstance(q, str) and q.strip()][:2]
+    p = guardrails.validate_plan(raw, message)   # allow-listed tool + schema-checked arguments only
+    if p["doc_ref"] is not None and p["doc_ref"] > len(docs):
+        p["doc_ref"] = None
     return p
 
 
@@ -119,10 +129,11 @@ def _stream_llm(messages: list[dict], parts: list[str], model: str | None = None
 
 # ── Main entry ───────────────────────────────────────────────────────────────
 def run(*, message: str, chat_id: str | None = None, case_id: str | None = None, scope: str = "all",
-        doc_id: str | None = None, task: str | None = None, lang: str = "en") -> Iterator[dict]:
+        doc_id: str | None = None, task: str | None = None, lang: str = "en",
+        principal: authz.Principal | None = None) -> Iterator[dict]:
     t0 = time.time()
     rule = prompts.language_rule(lang)
-    message = message.strip()[:6000]
+    message = guardrails.normalise(message).strip()[:6000]
     case = cases.get_case(case_id) if case_id else None
     if not case:
         case_id = None
@@ -138,15 +149,28 @@ def run(*, message: str, chat_id: str | None = None, case_id: str | None = None,
     sources: list[dict] = []
     meta: dict = {"scope": scope, "lang": lang}
     try:
-        if task and doc_id:
-            p = {"intent": "analyze_document", "analysis": task, "query": message}
+        blocked = guardrails.screen_request(message)
+        if blocked:   # decided by code, before any model call
+            meta.update(intent="blocked", blocked=blocked[0])
+            db.audit("ai.request_blocked", "chat", chat_id, outcome="blocked", category=blocked[0])
+            answer.append(blocked[1])
+            yield {"type": "meta", "intent": "blocked", "query": None}
+            yield {"type": "token", "text": blocked[1]}
+            p = None
+        elif task and doc_id:
+            p = {"intent": "analyze_document", "analysis": task, "query": message, "calc": {}, "alt_queries": []}
         else:
             yield {"type": "status", "step": "plan", "text": "Understanding the question…"}
             p = plan(message, hist, docs)
-        meta["intent"] = p["intent"]
-        yield {"type": "meta", "intent": p["intent"], "query": p.get("query")}
+        if p is not None:
+            if principal is not None:
+                p["intent"] = guardrails.allowed_intent(principal, p["intent"], case_id)
+            meta["intent"] = p["intent"]
+            yield {"type": "meta", "intent": p["intent"], "query": p.get("query")}
 
-        if p["intent"] == "chitchat":
+        if p is None:
+            pass
+        elif p["intent"] == "chitchat":
             msgs = [{"role": "system", "content": prompts.CHAT_SYSTEM + rule}, *_prior_turns(hist, 2),
                     {"role": "user", "content": message}]
             yield from _stream_llm(msgs, answer, model=config.FAST_LLM_MODEL)
@@ -176,7 +200,13 @@ def run(*, message: str, chat_id: str | None = None, case_id: str | None = None,
             answer.append("⚠️ Something went wrong while answering. Please try again.")
 
     meta["elapsed"] = round(time.time() - t0, 2)
-    mid = save_message(chat_id, "assistant", normalise_citations("".join(answer)), sources, meta)
+    raw_text = normalise_citations("".join(answer))
+    final, findings = guardrails.scan_output(raw_text)   # never store or show secrets / internal instructions
+    if findings:
+        meta["output_filtered"] = findings
+        db.audit("ai.output_filtered", "chat", chat_id, outcome="filtered", findings=findings)
+        yield {"type": "final", "text": final}
+    mid = save_message(chat_id, "assistant", final, sources, meta)
     yield {"type": "done", "message_id": mid, "elapsed": meta["elapsed"], "meta": meta}
 
 
@@ -252,9 +282,12 @@ def _analyze(message: str, p: dict, docs: list[dict], doc_id: str | None, case_i
             notes = list(ex.map(note, enumerate(parts, 1)))
         body = "\n\n".join(f"NOTES ON PART {i}:\n{n}" for i, n in enumerate(notes, 1))
     yield {"type": "status", "step": "generate", "text": f"Analysing “{doc['title']}”…"}
+    if guardrails.is_suspicious(body):
+        item["injection_suspected"] = True
+        yield {"type": "sources", "items": sources}
     msgs = [{"role": "system", "content": prompts.ANALYZE_SYSTEM + rule},
-            {"role": "user", "content": f"TASK: {task}\nUSER REQUEST: {message}\n\nDOCUMENT: {doc['title']}\n"
-                                        f"<<<DOCUMENT\n{body}\nDOCUMENT>>>"}]
+            {"role": "user", "content": f"TASK: {task}\nUSER REQUEST: {message}\n\n"
+                                        f"{guardrails.wrap_document(doc['title'], body)}"}]
     yield from _stream_llm(msgs, answer)
 
 
@@ -323,7 +356,7 @@ def _research(message: str, p: dict, case: dict | None, docs: list[dict], scope:
     yield {"type": "status", "step": "generate", "text": "Drafting…" if drafting else "Writing a cited answer…"}
 
     dossier = cases.dossier(case, docs) if case else "(no case selected — general research)"
-    user = (f"CASE DOSSIER:\n{dossier}\n\nSOURCES:\n{_context(hits)}\n\n"
+    user = (f"CASE DOSSIER:\n{guardrails.neutralise(dossier)}\n\nSOURCES:\n{_context(hits)}\n\n"
             f"{'DRAFTING REQUEST' if drafting else 'QUESTION'}: {message}")
     msgs = [{"role": "system", "content": (prompts.DRAFT_SYSTEM if drafting else prompts.ANSWER_SYSTEM) + rule},
             *_prior_turns(hist), {"role": "user", "content": user}]
@@ -341,8 +374,14 @@ def _research(message: str, p: dict, case: dict | None, docs: list[dict], scope:
     unsupported = [str(u)[:300] for u in (v.get("unsupported") or [])][:6]
     if invalid:
         unsupported.append(f"Cites source numbers that do not exist: {invalid}")
+    # Deterministic check, independent of the model: every section/article and case citation must be in a source.
+    fabricated = guardrails.verify_citations(
+        text, [f"{h.label or ''} {h.title}\n{h.header}\n{h.text}" for h in hits],
+        allowed_text=f"{message}\n{dossier}")
+    unsupported += fabricated
     grounded = (v.get("grounded") is not False) and not invalid and not unsupported
     if not cited:
         grounded, unsupported = False, unsupported or ["The answer contains no citations."]
-    meta["verify"] = {"grounded": grounded, "unsupported": unsupported, "checked": v.get("grounded") is not None}
+    meta["verify"] = {"grounded": grounded, "unsupported": unsupported, "checked": v.get("grounded") is not None,
+                      "citation_check": "deterministic", "unverified_citations": len(fabricated)}
     yield {"type": "verify", **meta["verify"]}

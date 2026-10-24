@@ -1,6 +1,7 @@
 /* Modules 2 & 12 — notifications, integration status (periodic vs manual — never a fabricated "live"), news, activity log. */
 import { $, $$, api, crumbs, fmtDateTime, html, mount, num, spinner, toast } from "./core.js";
 import { t } from "./i18n.js";
+import { can } from "./auth.js";
 
 export async function refreshBell() {
   try {
@@ -16,7 +17,7 @@ export async function viewUpdates(main, r) {
   const tab = r.q.get("tab") || "notifications";
   crumbs([[t("nav.updates")]]);
   mount(main, html`<h1 class="page-title">${t("updates.title")}</h1><p class="page-lead">${t("updates.lead")}</p>
-    <div class="tabs" role="tablist">${["notifications", "sources", "news", "activity"].map((k) => html`<a role="tab" class="tab ${k === tab ? "active" : ""}" aria-selected="${String(k === tab)}" href="#/updates?tab=${k}">${t(`updates.tab_${k}`)}</a>`)}</div>
+    <div class="tabs" role="tablist">${["notifications", "sources", "news", ...(can("audit.read") ? ["activity"] : [])].map((k) => html`<a role="tab" class="tab ${k === tab ? "active" : ""}" aria-selected="${String(k === tab)}" href="#/updates?tab=${k}">${t(`updates.tab_${k}`)}</a>`)}</div>
     <div id="upBody">${spinner()}</div>`);
   const body = $("#upBody");
   if (tab === "notifications") return notifications(body);
@@ -34,7 +35,7 @@ async function notifications(el) {
 }
 
 async function sources(el) {
-  const { integrations, scheduler } = await api("/api/integrations");
+  const { integrations, scheduler, can_manage: manage } = await api("/api/integrations");
   mount(el, html`<div class="notice" style="margin-bottom:12px"><strong>${t("sync.modes")}</strong><ul>
       <li><strong>${t("sync.live")}</strong> — ${t("sync.live_desc")}</li>
       <li><strong>${t("sync.periodic")}</strong> — ${t("sync.periodic_desc")}</li>
@@ -55,7 +56,7 @@ async function sources(el) {
           : html`<p>${s.why_manual || ""}</p>`}
         ${s.note ? html`<p class="muted">${s.note}</p>` : ""}
         <div class="row" style="margin-top:8px">
-          ${s.mode === "periodic" ? html`<button class="btn btn-sm" data-sync="${s.id}">↻ ${t("sync.now")}</button><button class="btn btn-ghost btn-sm" data-toggle="${s.id}" data-on="${s.enabled ? "0" : "1"}">${s.enabled ? t("sync.disable") : t("sync.enable")}</button>` : ""}
+          ${s.mode === "periodic" && manage ? html`<button class="btn btn-sm" data-sync="${s.id}">↻ ${t("sync.now")}</button><button class="btn btn-ghost btn-sm" data-toggle="${s.id}" data-on="${s.enabled ? "0" : "1"}">${s.enabled ? t("sync.disable") : t("sync.enable")}</button>` : ""}
           <a class="btn btn-ghost btn-sm" href="${s.home || s.url}" target="_blank" rel="noopener noreferrer">${t("lookup.open_official")} ↗</a>
           ${s.kind === "case_records" || s.kind === "fir" ? html`<a class="btn btn-ghost btn-sm" href="#/lookup">${t("lookup.import")}</a>` : ""}</div>
         <div class="muted" style="margin-top:6px">${t("lookup.checked", { date: s.checked })}</div></div></div>`)}</div>`);
@@ -82,6 +83,6 @@ async function activity(el) {
   const { items } = await api("/api/audit?limit=200");
   mount(el, html`<div class="card"><div class="card-h"><h2>${t("updates.tab_activity")}</h2><span class="small muted">${t("activity.note")}</span></div><div class="table-wrap"><table class="gov compact">
     <thead><tr><th>${t("sync.when")}</th><th>${t("activity.action")}</th><th>${t("activity.item")}</th><th>${t("activity.details")}</th></tr></thead>
-    <tbody>${items.map((a) => html`<tr><td class="small">${fmtDateTime(a.at)}</td><td><code>${a.action}</code></td><td class="small">${a.entity} ${a.entity_id || ""}</td><td class="small">${Object.entries(a.detail || {}).map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`).join(" · ")}</td></tr>`)}</tbody></table>
+    <tbody>${items.map((a) => html`<tr class="${a.outcome && a.outcome !== "ok" ? "unread" : ""}"><td class="small">${fmtDateTime(a.at)}</td><td><code>${a.action}</code>${a.outcome && a.outcome !== "ok" ? html` <span class="chip chip-warn">${a.outcome}</span>` : ""}<br><span class="small muted">${a.actor_role || ""} ${a.actor_id ? a.actor_id.slice(0, 8) : ""} ${a.ip || ""}</span></td><td class="small">${a.entity} ${a.entity_id || ""}</td><td class="small">${Object.entries(a.detail || {}).map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`).join(" · ")}</td></tr>`)}</tbody></table>
     ${items.length ? "" : html`<div class="empty">${t("activity.none")}</div>`}</div></div>`);
 }

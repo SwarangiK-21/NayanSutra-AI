@@ -120,7 +120,12 @@ def official_sources(p: dict, j: dict) -> list[dict]:
     return out
 
 
-def local_matches(p: dict) -> tuple[list[dict], list[dict]]:
+def local_matches(p: dict, principal=None) -> tuple[list[dict], list[dict]]:
+    """Matches among the caller's own cases and their own imported records only."""
+    from . import authz
+
+    mine = authz.accessible_case_ids(principal) if principal is not None else []
+    user_id = principal.user_id if principal is not None else None
     conds, args = [], []
     for f in ("cnr_number", "case_number", "filing_number", "fir_number"):
         if p.get(f):
@@ -131,8 +136,9 @@ def local_matches(p: dict) -> tuple[list[dict], list[dict]]:
             conds.append("(client_name LIKE ? OR opposite_party LIKE ? OR title LIKE ?)")
             args += [f"%{p[f]}%"] * 3
     found = []
-    if conds:
-        rows = db.conn().execute(f"SELECT * FROM cases WHERE {' OR '.join(conds)} ORDER BY updated_at DESC LIMIT 20", args)
+    if conds and mine:
+        rows = db.conn().execute(f"SELECT * FROM cases WHERE id IN ({','.join('?' * len(mine))}) AND "
+                                 f"({' OR '.join(conds)}) ORDER BY updated_at DESC LIMIT 20", [*mine, *args])
         for r in rows:
             c = dict(r)
             score = sum(1 for f in ID_FIELDS if p.get(f) and (c.get(f) or "").replace(" ", "").upper() == p[f].replace(" ", "").upper())
@@ -144,8 +150,12 @@ def local_matches(p: dict) -> tuple[list[dict], list[dict]]:
             found.append(c)
     recs = []
     terms = [p[f] for f in (*ID_FIELDS, *PARTY_FIELDS) if p.get(f)]
-    if terms:
-        rows = db.conn().execute("SELECT * FROM source_records WHERE kind='case_record' ORDER BY retrieved_at DESC LIMIT 500")
+    if terms and user_id:
+        team = authz.team_case_ids(principal)
+        rows = db.conn().execute(
+            "SELECT * FROM source_records WHERE kind='case_record' AND (created_by = ?" +
+            (f" OR case_id IN ({','.join('?' * len(team))})" if team else "") + ") ORDER BY retrieved_at DESC LIMIT 500",
+            [user_id, *team])
         for r in rows:
             rec = db.row_to_dict(r, ("data",))
             blob = (rec["external_id"] + " " + json.dumps(rec["data"], ensure_ascii=False)).upper().replace(" ", "")
@@ -154,12 +164,12 @@ def local_matches(p: dict) -> tuple[list[dict], list[dict]]:
     return found, recs[:20]
 
 
-def search(params: dict) -> dict:
+def search(params: dict, principal=None) -> dict:
     p, errors, needs = validate(params)
     if errors:
         return {"ok": False, "query": p, "errors": errors, "needs": needs}
     j = jurisdiction(p)
-    cases_found, records = local_matches(p)
+    cases_found, records = local_matches(p, principal)
     return {"ok": True, "query": p, "errors": [], "needs": needs, "jurisdiction": j, "local_cases": cases_found,
             "imported_records": records, "official_sources": official_sources(p, j),
             "automated_retrieval": False,
@@ -189,8 +199,10 @@ def import_record(source: str, rec: dict, case_id: str | None = None) -> dict:
     data["unverified_fields"] = sorted(k for k in data if k not in ("orders", "unverified_fields"))
     title = rec.get("title") or " v. ".join(x for x in (p.get("petitioner"), p.get("respondent")) if x) or external_id(p)
     ext = external_id(p)
-    prev = db.conn().execute("SELECT id, data, case_id FROM source_records WHERE source=? AND external_id=?",
-                             (source, ext)).fetchone()
+    ident = db.current()
+    owner = ident.user_id
+    prev = db.conn().execute("SELECT id, data, case_id FROM source_records WHERE source=? AND external_id=? "
+                             "AND COALESCE(created_by, '') = ?", (source, ext, owner or "")).fetchone()
     changes = []
     if prev:
         old = json.loads(prev["data"] or "{}")
@@ -200,14 +212,21 @@ def import_record(source: str, rec: dict, case_id: str | None = None) -> dict:
     res = integrations.upsert_record(source, ext, kind="case_record", title=title[:300], url=rec.get("source_url") or
                                      reference.SOURCES[source]["url"], published_at=None, data=data,
                                      provenance="user_import", jurisdiction=p.get("state") or "", case_id=case_id,
-                                     verified_at=db.now())
-    row = db.row_to_dict(db.conn().execute("SELECT * FROM source_records WHERE source=? AND external_id=?",
-                                           (source, ext)).fetchone(), ("data",))
+                                     verified_at=db.now(), owner=owner, org_id=ident.org_id or db.DEFAULT_ORG)
+    row = db.row_to_dict(db.conn().execute("SELECT * FROM source_records WHERE source=? AND external_id=? "
+                                           "AND COALESCE(created_by, '') = ?", (source, ext, owner or "")).fetchone(),
+                         ("data",))
     linked = case_id or row.get("case_id")
+    if linked and not case_id and not db.conn().execute(   # a link made earlier counts only while still on the case team
+            "SELECT 1 FROM case_members WHERE case_id=? AND user_id=? AND access IN ('owner','advocate')",
+            (linked, owner or "")).fetchone():
+        linked = None
     if changes:
         desc = "; ".join(f"{c['field'].replace('_', ' ')}: {_short(c['old'])} → {_short(c['new'])}" for c in changes[:4])
         db.notify("case_update", f"Case record changed: {title[:120]}", desc,
-                  f"#/cases/{linked}" if linked else "#/lookup", linked, dedupe_key=f"rec:{row['id']}:{row['content_hash'][:16]}")
+                  f"#/cases/{linked}" if linked else "#/lookup", linked,
+                  dedupe_key=f"rec:{row['id']}:{row['content_hash'][:16]}",
+                  recipients=None if linked else [owner] if owner else [])
         if linked:
             apply_to_case(linked, data, changes)
     db.audit("record.import", "source_record", row["id"], source=source, result=res, changes=len(changes))

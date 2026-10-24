@@ -86,6 +86,40 @@ SYNC_ENABLED = _bool("SYNC_ENABLED", True)
 SYNC_TICK_SECONDS = int(_env("SYNC_TICK_SECONDS", default="60"))
 HTTP_USER_AGENT = "NyaySutra-AI/1.0 (+local legal research assistant)"
 
+# ── Accounts (Supabase Auth, used server-side) ──────────────────────────────
+# Publishable key ('sb_publishable_…' or the legacy anon key): used only by the backend for the Auth API.
+SUPABASE_PUBLISHABLE_KEY = _env("SUPABASE_PUBLISHABLE_KEY", "SUPABASE_ANON_KEY")
+# supabase = per-user accounts; local = single-user operator on this computer (no accounts); auto = supabase when
+# SUPABASE_URL and the publishable key are set.
+AUTH_MODE = _env("AUTH_MODE", default="auto").lower()
+# invite_only = an administrator must invite an e-mail address first; open = anyone may register (as a client).
+SIGNUP_MODE = _env("SIGNUP_MODE", default="invite_only").lower()
+MFA_REQUIRED_ROLES = tuple(r.strip() for r in _env("MFA_REQUIRED_ROLES", default="admin,auditor,advocate").split(",")
+                           if r.strip())
+SESSION_TTL_HOURS = int(_env("SESSION_TTL_HOURS", default="12"))
+SESSION_IDLE_MINUTES = int(_env("SESSION_IDLE_MINUTES", default="60"))
+LOGIN_MAX_FAILURES = int(_env("LOGIN_MAX_FAILURES", default="5"))
+LOGIN_LOCK_MINUTES = int(_env("LOGIN_LOCK_MINUTES", default="15"))
+INVITE_DAYS = int(_env("INVITE_DAYS", default="14"))
+# Shared server key for CSRF values and recovery-code hashes (needed when several app instances run).
+APP_SECRET_KEY = _env("APP_SECRET_KEY")
+# Public address of the app, e.g. https://nyaysutra.example.org — sets Secure cookies + HSTS and the e-mail link target.
+PUBLIC_URL = _env("PUBLIC_URL").rstrip("/")
+
+
+def auth_mode() -> str:
+    if AUTH_MODE in ("supabase", "local"):
+        return AUTH_MODE
+    return "supabase" if SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY else "local"
+
+
+# ── AI data protection ──────────────────────────────────────────────────────
+# Replace Aadhaar / PAN / phone / e-mail / bank account / card / passport numbers with placeholders before text is
+# sent to the external LLM, and put the real values back in the reply.
+AI_PII_REDACTION = _bool("AI_PII_REDACTION", True)
+# Optional malware scan of uploads with ClamAV (path to clamscan/clamdscan); empty = auto-detect, 'off' = disabled.
+CLAMAV_CMD = _env("CLAMAV_CMD")
+
 # ── Server / security ───────────────────────────────────────────────────────
 APP_HOST = _env("APP_HOST", default="127.0.0.1")
 APP_PORT = int(_env("APP_PORT", default="8000"))

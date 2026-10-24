@@ -12,6 +12,8 @@ import { refreshBell, viewUpdates } from "./js/updates.js";
 import { viewAwareness } from "./js/awareness.js";
 import { viewSearch } from "./js/search.js";
 import { voiceControls, speakButton, bindSpeak } from "./js/voice.js";
+import { applyNavPermissions, can, membersCard, renderEnroll, renderForgot, renderLogin, renderMfa, renderReset,
+  renderSignup, viewAccount, viewAdmin } from "./js/auth.js";
 
 // ── Status chips ──
 async function refreshStatus() {
@@ -31,7 +33,11 @@ async function refreshStatus() {
 const routes = { dashboard: viewDashboard, cases: viewCases, research: viewResearch, acts: viewActs,
   drafts: viewDrafts, limitation: viewLimitation, about: viewAbout, lookup: viewCaseSearch, doc: viewDocument,
   upload: viewUpload, drafting: viewDrafting, notice: viewNotice, updates: viewUpdates, awareness: viewAwareness,
-  search: viewSearch, tools: viewTools };
+  search: viewSearch, tools: viewTools, account: viewAccount, admin: viewAdmin,
+  login: (m, r) => renderLogin(route, r.q), signup: (m, r) => renderSignup(route, r.q), forgot: () => renderForgot(),
+  "reset-password": () => renderReset() };
+// Pages a signed-out visitor may open (public legal information); everything else asks them to sign in.
+const PUBLIC = new Set(["acts", "awareness", "limitation", "login", "signup", "forgot", "reset-password", "about"]);
 function parseHash() {
   const h = location.hash.replace(/^#\/?/, "") || "dashboard";
   const [path, qs] = h.split("?");
@@ -43,32 +49,35 @@ async function route() {
   window.onbeforeunload = null;  // the draft editor sets an unsaved-changes guard while it is open
   const r = parseHash();
   const fn = r.name === "cases" && r.arg ? viewCase : routes[r.name] || viewDashboard;
+  const s = state.session || {};
+  if (s.state === "mfa_pending") return renderMfa(route);
+  if (s.state === "mfa_enroll") return renderEnroll(true, route);
+  if (!s.authenticated && !PUBLIC.has(r.name)) return renderLogin(route, r.q);
+  if (s.authenticated && s.role === "guest" && !PUBLIC.has(r.name) && r.name !== "account") {
+    // Signed in, but no administrator has given this account a role yet.
+    crumbs([[t("auth.no_access_title")]]);
+    return mount($("#main"), html`<div class="card" style="max-width:560px;margin:32px auto"><div class="card-h"><h2>${t("auth.no_access_title")}</h2></div>
+      <div class="card-b stack"><p>${t("auth.no_access_body", { email: s.user?.email || "" })}</p>
+      <div class="small muted">${t("auth.public")} <a href="#/acts">${t("nav.acts")}</a> · <a href="#/awareness">${t("nav.awareness")}</a> · <a href="#/limitation">${t("nav.limitation")}</a></div></div></div>`);
+  }
   const navName = { doc: "cases", upload: "cases", notice: "drafting", drafts: "tools", limitation: "tools", about: "tools" }[r.name] || r.name;
   $$("[data-nav]").forEach((a) => { const on = a.dataset.nav === navName; a.classList.toggle("active", on); if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   $("#navList").classList.remove("open");
   const main = $("#main");
-  try { await fn(main, r); } catch (e) { mount(main, html`<div class="notice notice-red">${e.message}</div>`); }
+  try { await fn(main, r); } catch (e) { if (!e.handled) mount(main, html`<div class="notice notice-red">${e.message}</div>`); }
   // A new page starts at the top; staying on the same page (e.g. switching chats) keeps the scroll.
   const page = `${r.name}/${r.arg || ""}`;
   if (page !== state.lastPage) { state.lastPage = page; window.scrollTo(0, 0); }
   if (r.name !== "research") main.focus({ preventScroll: true });
 }
 
-// ── Login (only when APP_PASSWORD is set) ──
-function renderLogin() {
-  crumbs([[t("login.title")]]);
-  mount($("#main"), html`<div class="card" style="max-width:420px;margin:40px auto">
-    <div class="card-h"><h2>${t("login.title")}</h2></div>
-    <form class="card-b stack" id="loginForm">
-      <div><label class="f" for="pw">${t("login.password")}</label><input type="password" id="pw" autocomplete="current-password" required></div>
-      <button class="btn" type="submit">${t("login.submit")}</button></form></div>`);
-  $("#loginForm").onsubmit = async (e) => {
-    e.preventDefault();
-    try { const r = await api("/api/login", { method: "POST", body: { password: $("#pw").value }, retry: false });
-      state.csrf = r.csrf; route(); refreshStatus(); } catch (err) { toast(err.message, true); }
-  };
-}
-setUnauthenticatedHandler(renderLogin);
+// ── Signed out / half-finished sign-in (session expired, second factor pending) ──
+setUnauthenticatedHandler((s) => {
+  applyNavPermissions();
+  if (s?.state === "mfa_pending") return renderMfa(route);
+  if (s?.state === "mfa_enroll") return renderEnroll(true, route);
+  return renderLogin(route);
+});
 
 // ── Dashboard ──
 async function viewDashboard(main) {
@@ -126,9 +135,9 @@ async function viewCases(main, r) {
   crumbs([[t("nav.cases")]]);
   const [{ cases, types, statuses }, ref] = await Promise.all([api("/api/cases"), reference()]);
   mount(main, html`
-    <div class="row"><h1 class="page-title">${t("nav.cases")}</h1><span class="spacer"></span><button class="btn btn-saffron" id="newCaseBtn">＋ ${t("qa.new_case")}</button></div>
+    <div class="row"><h1 class="page-title">${t("nav.cases")}</h1><span class="spacer"></span>${can("case.create") ? html`<button class="btn btn-saffron" id="newCaseBtn">＋ ${t("qa.new_case")}</button>` : ""}</div>
     <p class="page-lead">${t("cases.lead")}</p>
-    <div class="card ${r.q.get("new") ? "" : "hidden"}" id="newCaseCard" style="margin-bottom:16px">
+    <div class="card ${r.q.get("new") && can("case.create") ? "" : "hidden"}" id="newCaseCard" style="margin-bottom:16px">
       <div class="card-h"><h2>${t("cases.register")}</h2><span class="small muted">${t("form.required_hint")}</span></div>
       <form class="card-b" id="caseForm" novalidate>${caseFormFields({}, statuses, ref, true)}
         <div class="row" style="margin-top:12px"><button class="btn" type="submit" data-final="1">${t("cases.create")}</button>
@@ -147,12 +156,12 @@ async function viewCases(main, r) {
       <td><strong>${c.title}</strong> ${c.is_draft ? html`<span class="chip chip-warn">${t("cases.draft_badge")}</span>` : ""}<br><span class="small muted">v. ${c.opposite_party || "—"}</span></td>
       <td><span class="badge ${TYPE_BADGE[c.case_type] || ""}">${t(`cat.${c.case_type}`, {}, c.case_type)}</span></td><td class="small">${c.case_number || c.cnr_number || "—"}</td>
       <td class="small">${c.court || "—"}</td><td class="small">${c.client_name || "—"}</td><td class="small">${fmtDate(c.next_hearing_date)}</td>
-      <td>${c.n_docs}</td><td class="small">${c.status}</td></tr>`)}` : html`<tr><td colspan="8"><div class="empty">${t("cases.none")}</div></td></tr>`);
+      <td>${c.n_docs ?? "—"}</td><td class="small">${c.status}${c.access ? "" : html` <span class="chip">${t("members.not_on_case")}</span>`}</td></tr>`)}` : html`<tr><td colspan="8"><div class="empty">${t("cases.none")}</div></td></tr>`);
     bindRowLinks($("#caseRows"));
   };
   rows();
   $("#fType").onchange = rows; $("#fSearch").oninput = rows;
-  $("#newCaseBtn").onclick = () => { $("#newCaseCard").classList.remove("hidden"); $("#f_client_name").focus(); };
+  if ($("#newCaseBtn")) $("#newCaseBtn").onclick = () => { $("#newCaseCard").classList.remove("hidden"); $("#f_client_name").focus(); };
   $("#cancelNew").onclick = () => $("#newCaseCard").classList.add("hidden");
   const form = $("#caseForm");
   bindCaseForm(form, ref, {});
@@ -252,9 +261,17 @@ const caseBody = (form) => { const b = formData(form); if (!b.filing_year) delet
 // ── Single case ──
 async function viewCase(main, r) {
   const id = r.arg;
-  const [c, meta, docsRes, ref] = await Promise.all([api(`/api/cases/${encodeURIComponent(id)}`), api("/api/cases"),
-    api(`/api/documents?case_id=${encodeURIComponent(id)}`), reference()]);
+  const c = await api(`/api/cases/${encodeURIComponent(id)}`);
   crumbs([[t("nav.cases"), "#/cases"], [c.title]]);
+  const may = c.can || {};
+  if (!c.access) {   // an administrator who is not on this case: listing data and the case team only
+    mount(main, html`<div class="row"><h1 class="page-title">${c.title}</h1><span class="badge ${TYPE_BADGE[c.case_type] || ""}">${t(`cat.${c.case_type}`, {}, c.case_type)}</span></div>
+      <p class="page-lead">${[c.case_number || c.cnr_number || t("case.no_number"), c.court || t("case.no_court"), c.status].filter(Boolean).join(" · ")}</p>
+      <div class="notice" style="margin-bottom:16px">${t("members.admin_not_member")}</div><div id="membersPanel"></div>`);
+    membersCard($("#membersPanel"), id);
+    return;
+  }
+  const [meta, docsRes, ref] = await Promise.all([api("/api/cases"), api(`/api/documents?case_id=${encodeURIComponent(id)}`), reference()]);
   state.caseId = id; store.set("caseId", id);
   const types = docsRes.types;
   const idents = [["form.case_number", c.case_number], ["form.filing_number", c.filing_number], ["form.cnr", c.cnr_number],
@@ -262,13 +279,13 @@ async function viewCase(main, r) {
   mount(main, html`
     <div class="row"><h1 class="page-title">${c.title}</h1><span class="badge ${TYPE_BADGE[c.case_type] || ""}">${t(`cat.${c.case_type}`, {}, c.case_type)}</span>
       ${c.is_draft ? html`<span class="chip chip-warn">${t("cases.draft_badge")}</span>` : ""}
-      <span class="spacer"></span><a class="btn btn-ghost" href="#/drafting?case=${encodeURIComponent(id)}">✍ ${t("qa.draft")}</a>
+      <span class="spacer"></span>${may.drafts ? html`<a class="btn btn-ghost" href="#/drafting?case=${encodeURIComponent(id)}">✍ ${t("qa.draft")}</a>` : ""}
       <a class="btn btn-saffron" href="#/research?case=${encodeURIComponent(id)}">💬 ${t("case.research_this")}</a></div>
     <p class="page-lead">${[c.case_subtype, c.case_number || c.cnr_number || t("case.no_number"), c.court || t("case.no_court"), [c.district, c.state].filter(Boolean).join(", "), c.status].filter(Boolean).join(" · ")}</p>
     ${c.is_draft ? html`<div class="notice" style="margin-bottom:16px">${t("case.draft_notice")}</div>` : ""}
     <div class="grid g-side">
       <div class="stack">
-        <div class="card dossier"><div class="card-h"><h2>${t("case.dossier")}</h2><button class="btn btn-ghost btn-sm" id="editBtn">${t("common.edit")}</button></div>
+        <div class="card dossier"><div class="card-h"><h2>${t("case.dossier")}</h2>${may["case.update"] ? html`<button class="btn btn-ghost btn-sm" id="editBtn">${t("common.edit")}</button>` : ""}</div>
           <div class="card-b" id="dossierView"><dl>
             <dt>${t("col.client")}</dt><dd>${c.client_name || "—"} (${c.client_role || "—"})</dd>
             <dt>${t("form.opposite_name")}</dt><dd>${c.opposite_party || "—"} (${c.opposite_role || "—"})</dd>
@@ -281,37 +298,39 @@ async function viewCase(main, r) {
             <div class="row" style="margin-top:12px"><button class="btn" type="submit" data-final="1">${c.is_draft ? t("case.save_complete") : t("common.save")}</button>
             ${c.is_draft ? html`<button class="btn btn-ghost" type="submit" data-final="0">${t("cases.save_draft")}</button>` : ""}
             <button class="btn btn-ghost" type="button" id="cancelEdit">${t("common.cancel")}</button>
-            <span class="spacer"></span><button class="btn btn-danger" type="button" id="deleteCase">${t("case.delete")}</button></div></form>
+            <span class="spacer"></span>${may["case.delete"] ? html`<button class="btn btn-danger" type="button" id="deleteCase">${t("case.delete")}</button>` : ""}</div></form>
         </div>
         <div id="provPanel"></div>
         <div class="card"><div class="card-h"><h2>${t("case.documents")}</h2><span class="small muted">${t("case.doc_formats")}</span></div>
           <div class="card-b">
-            <div class="row" style="margin-bottom:10px"><label class="f" for="docType" style="margin:0">${t("case.doc_type")}</label>
+            ${may["documents.upload"] ? html`<div class="row" style="margin-bottom:10px"><label class="f" for="docType" style="margin:0">${t("case.doc_type")}</label>
               <select id="docType" style="max-width:260px"><option value="auto">${t("case.detect")}</option>${Object.entries(types).filter(([k]) => k !== "template").map(([k, v]) => html`<option value="${k}">${v}</option>`)}</select></div>
             <label class="dropzone" id="drop"><input type="file" id="fileInput" multiple accept=".pdf,.docx,.doc,.txt,.md,.png,.jpg,.jpeg,.tif,.tiff,.webp">
-              <strong>${t("case.drop")}</strong><br><span class="small muted">${t("case.drop_hint")}</span></label>
+              <strong>${t("case.drop")}</strong><br><span class="small muted">${t("case.drop_hint")}</span></label>` : ""}
             <div id="docList" style="margin-top:8px"></div>
           </div></div>
       </div>
       <div class="stack">
-        <div class="card"><div class="card-h"><h2>${t("case.notes")}</h2></div><div class="card-b">
+        <div id="membersPanel"></div>
+        ${may.notes ? html`<div class="card"><div class="card-h"><h2>${t("case.notes")}</h2></div><div class="card-b">
           <form id="noteForm" class="stack"><textarea id="noteText" placeholder="${t("case.note_ph")}" aria-label="${t("case.new_note")}"></textarea>
             <button class="btn btn-sm" type="submit">${t("case.add_note")}</button></form>
           <div style="margin-top:12px">${(c.notes || []).length ? c.notes.map((n) => html`<div class="note"><div class="small muted">${n.author} · ${fmtDate(n.created_at)}</div>${n.content}</div>`) : html`<div class="empty">${t("case.no_notes")}</div>`}</div>
-        </div></div>
+        </div></div>` : ""}
         <div class="card"><div class="card-h"><h2>${t("case.ask")}</h2></div><div class="card-b quick">
           ${["case.q1", "case.q2", "case.q3", "case.q4"].map((k) =>
             html`<a class="btn btn-ghost" href="#/research?case=${encodeURIComponent(id)}&q=${encodeURIComponent(t(k))}">${t(k)}</a>`)}
         </div></div>
       </div>
     </div>`);
-  provisionsPanel($("#provPanel"), c, () => route());
+  if (may.provisions) provisionsPanel($("#provPanel"), c, () => route());
+  membersCard($("#membersPanel"), id);
 
   const renderDocs = (docs) => {
     mount($("#docList"), docs.length ? html`${docs.map((d) => html`<div class="doc-item">
       <span class="doc-ico">${(d.filename.split(".").pop() || "").toUpperCase()}</span>
       <div class="doc-main"><div class="doc-title">${d.title}</div>
-        <div class="small muted">${types[d.doc_type] || d.doc_type} · ${d.pages ? `${t("case.pages", { n: d.pages })} · ` : ""}${d.n_chunks ? `${t("case.passages", { n: d.n_chunks })} · ` : ""}${d.meta?.lang_name ? `${d.meta.lang_name} · ` : ""}${d.meta?.ocr ? `OCR · ` : ""}${fmtDate(d.created_at)}</div>
+        <div class="small muted">${types[d.doc_type] || d.doc_type} · ${d.pages ? `${t("case.pages", { n: d.pages })} · ` : ""}${d.n_chunks ? `${t("case.passages", { n: d.n_chunks })} · ` : ""}${d.meta?.lang_name ? `${d.meta.lang_name} · ` : ""}${d.meta?.ocr ? `OCR · ` : ""}${fmtDate(d.created_at)}${d.meta?.instruction_like_text ? html` <span class="chip chip-warn" title="${t("guard.injection_hint")}">${t("guard.injection")}</span>` : ""}</div>
         ${d.status === "processing" ? html`<div class="status-line small"><span class="spinner"></span> ${t("case.indexing")}</div>` : ""}
         ${d.status === "failed" ? html`<div class="small" style="color:var(--red)">⚠ ${d.error || t("common.failed")}</div>` : ""}
         <div class="doc-actions">
@@ -320,7 +339,7 @@ async function viewCase(main, r) {
             <a class="btn btn-ghost btn-sm" href="#/research?case=${encodeURIComponent(id)}&doc=${encodeURIComponent(d.id)}&task=summary">${t("case.summarise")}</a>
             <a class="btn btn-ghost btn-sm" href="#/research?case=${encodeURIComponent(id)}&doc=${encodeURIComponent(d.id)}&task=timeline">${t("case.timeline")}</a>
             <a class="btn btn-ghost btn-sm" href="/api/documents/${encodeURIComponent(d.id)}/file" target="_blank" rel="noopener">${t("case.original")} ↗</a>` : ""}
-          <button class="btn btn-danger btn-sm" data-del="${d.id}">${t("common.delete")}</button></div></div></div>`)}` : html`<div class="empty">${t("case.no_docs")}</div>`);
+          ${may["documents.delete"] ? html`<button class="btn btn-danger btn-sm" data-del="${d.id}">${t("common.delete")}</button>` : ""}</div></div></div>`)}` : html`<div class="empty">${t("case.no_docs")}</div>`);
     $$("[data-del]", $("#docList")).forEach((b) => { b.onclick = async () => {
       if (!confirm(t("case.confirm_delete_doc"))) return;
       try { await api(`/api/documents/${encodeURIComponent(b.dataset.del)}`, { method: "DELETE" }); toast(t("case.doc_deleted")); loadDocs(); } catch (e) { toast(e.message, true); }
@@ -341,15 +360,17 @@ async function viewCase(main, r) {
     loadDocs();
   };
   const drop = $("#drop");
-  $("#fileInput").onchange = (e) => { upload([...e.target.files]); e.target.value = ""; };
-  ["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("drag"); }));
-  ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("drag"); }));
-  drop.addEventListener("drop", (e) => upload([...e.dataTransfer.files]));
+  if (drop) {
+    $("#fileInput").onchange = (e) => { upload([...e.target.files]); e.target.value = ""; };
+    ["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("drag"); }));
+    ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("drag"); }));
+    drop.addEventListener("drop", (e) => upload([...e.dataTransfer.files]));
+  }
 
   const form = $("#dossierForm");
   bindCaseForm(form, ref, c);
-  $("#editBtn").onclick = () => { $("#dossierView").classList.add("hidden"); form.classList.remove("hidden"); };
-  if (c.is_draft && r.q.get("edit")) $("#editBtn").click();
+  if ($("#editBtn")) $("#editBtn").onclick = () => { $("#dossierView").classList.add("hidden"); form.classList.remove("hidden"); };
+  if (c.is_draft && r.q.get("edit")) $("#editBtn")?.click();
   $("#cancelEdit").onclick = () => { form.classList.add("hidden"); $("#dossierView").classList.remove("hidden"); };
   form.onsubmit = async (e) => {
     e.preventDefault();
@@ -357,11 +378,11 @@ async function viewCase(main, r) {
     if (c.is_draft) body.is_draft = e.submitter?.dataset.final === "0";
     try { await api(`/api/cases/${encodeURIComponent(id)}`, { method: "PATCH", body }); toast(t("common.saved")); route(); } catch (err) { fieldError(form, err); }
   };
-  $("#deleteCase").onclick = async () => {
+  if ($("#deleteCase")) $("#deleteCase").onclick = async () => {
     if (!confirm(t("case.confirm_delete"))) return;
     try { await api(`/api/cases/${encodeURIComponent(id)}`, { method: "DELETE" }); state.caseId = null; store.set("caseId", null); toast(t("case.deleted")); location.hash = "#/cases"; } catch (err) { toast(err.message, true); }
   };
-  $("#noteForm").onsubmit = async (e) => {
+  if ($("#noteForm")) $("#noteForm").onsubmit = async (e) => {
     e.preventDefault(); const x = $("#noteText").value.trim(); if (!x) return;
     try { await api(`/api/cases/${encodeURIComponent(id)}/notes`, { method: "POST", body: { content: x } }); route(); } catch (err) { toast(err.message, true); }
   };
@@ -524,7 +545,7 @@ function renderSourcesPanel(sources) {
   $("#srcCount").textContent = sources.length ? t("research.n_used", { n: sources.length }) : "";
   const L = COLL_LABEL();
   mount($("#sourcesPanel"), sources.length ? html`${sources.map((s) => html`<div class="src-card" role="button" tabindex="0" data-src="${JSON.stringify(s)}">
-    <div><span class="src-n">${s.n}</span><span class="badge b-${s.collection}">${L[s.collection] || s.kind}</span> ${s.exact ? html`<span class="chip chip-ok" title="${t("research.exact_hint")}">${t("research.exact")}</span>` : ""}</div>
+    <div><span class="src-n">${s.n}</span><span class="badge b-${s.collection}">${L[s.collection] || s.kind}</span> ${s.exact ? html`<span class="chip chip-ok" title="${t("research.exact_hint")}">${t("research.exact")}</span>` : ""}${s.injection_suspected ? html` <span class="chip chip-warn" title="${t("guard.injection_hint")}">${t("guard.injection")}</span>` : ""}</div>
     <div class="src-title" style="margin-top:4px">${s.title}</div>
     <div class="small muted">${[s.label, s.page && !/^pp?\./.test(s.label || "") ? `p. ${s.page}` : ""].filter(Boolean).join(" · ")}</div>
     <div class="src-snip">${s.snippet}</div></div>`)}` : html`<div class="empty">${t("research.no_sources")}</div>`);
@@ -582,6 +603,7 @@ async function send(text, extra = {}) {
           case "sources": sources = evt.items; renderSourcesPanel(sources); break;
           case "token": content += evt.text; if (live && !/verify/.test(live)) live = t("research.writing"); break;
           case "verify": meta.verify = evt; break;
+          case "final": content = evt.text; break;   // the server removed something from the reply (output filter)
           case "error": meta.error = evt.text; break;
           case "done": meta = { ...meta, ...(evt.meta || {}), elapsed: evt.elapsed }; live = null; break;
         }
@@ -738,24 +760,25 @@ async function viewLimitation(main) {
 async function viewTools(main) {
   crumbs([[t("nav.tools")]]);
   const items = [["⏱", t("nav.limitation"), t("tools.limitation"), "#/limitation"], ["📑", t("nav.templates"), t("tools.templates"), "#/drafts"],
-    ["🔌", t("tools.integrations"), t("tools.integrations_hint"), "#/updates?tab=sources"], ["🗒", t("tools.activity"), t("tools.activity_hint"), "#/updates?tab=activity"],
-    ["⚙", t("tools.privacy"), t("tools.privacy_hint"), "#/tools?privacy=1"], ["ℹ", t("nav.about"), t("tools.about"), "#/about"]];
+    ...(can("integrations.read") ? [["🔌", t("tools.integrations"), t("tools.integrations_hint"), "#/updates?tab=sources"]] : []),
+    ...(can("audit.read") ? [["🗒", t("tools.activity"), t("tools.activity_hint"), "#/updates?tab=activity"]] : []),
+    ...(can("account.self") ? [["⚙", t("tools.privacy"), t("tools.privacy_hint"), "#/tools?privacy=1"]] : []), ["ℹ", t("nav.about"), t("tools.about"), "#/about"]];
   mount(main, html`<h1 class="page-title">${t("nav.tools")}</h1><p class="page-lead">${t("tools.lead")}</p>
     <div class="grid g-3">${items.map(([ico, title, hint, href]) => html`<a class="card act-card tool" href="${href}"><h3><span aria-hidden="true">${ico}</span> ${title}</h3><div class="small muted">${hint}</div></a>`)}</div>
-    <div class="card" style="margin-top:16px" id="privacyCard"><div class="card-h"><h2>${t("tools.privacy")}</h2></div><form class="card-b stack" id="privForm">
-      <div><label class="f" for="ret">${t("privacy.retention")}</label><select id="ret" name="chat_retention_days">
+    ${can("account.self") ? html`<div class="card" style="margin-top:16px" id="privacyCard"><div class="card-h"><h2>${t("tools.privacy")}</h2></div><form class="card-b stack" id="privForm">
+      ${can("settings.manage") ? html`<div><label class="f" for="ret">${t("privacy.retention")}</label><select id="ret" name="chat_retention_days">
         ${[["", t("privacy.keep")], ["30", "30"], ["90", "90"], ["180", "180"], ["365", "365"]].map(([v, l]) => html`<option value="${v}" ${String(state.prefs.chat_retention_days || "") === v ? raw("selected") : ""}>${l}${v ? ` ${t("privacy.days")}` : ""}</option>`)}</select>
-        <div class="hint">${t("privacy.retention_hint")}</div></div>
+        <div class="hint">${t("privacy.retention_hint")}</div></div>` : ""}
       <div class="small">${t("privacy.voice_status")}: <strong>${state.prefs.voice_consent === "granted" ? t("privacy.granted") : t("privacy.not_granted")}</strong>
         ${state.prefs.voice_consent === "granted" ? html` <button class="btn btn-ghost btn-sm" type="button" id="revokeVoice">${t("privacy.revoke")}</button>` : ""}</div>
       <div class="small muted">${t("privacy.facts")}</div>
-      <div><button class="btn btn-sm" type="submit">${t("common.save")}</button></div></form></div>`);
-  $("#privForm").onsubmit = async (e) => {
+      ${can("settings.manage") ? html`<div><button class="btn btn-sm" type="submit">${t("common.save")}</button></div>` : ""}</form></div>` : ""}`);
+  if ($("#privForm")) $("#privForm").onsubmit = async (e) => {
     e.preventDefault();
     try { state.prefs = await api("/api/prefs", { method: "PUT", body: { values: { chat_retention_days: $("#ret").value } } }); toast(t("common.saved")); } catch (err) { toast(err.message, true); }
   };
   $("#revokeVoice")?.addEventListener("click", async () => { state.prefs = await api("/api/prefs", { method: "PUT", body: { values: { voice_consent: "denied" } } }); toast(t("privacy.revoked")); route(); });
-  if (new URLSearchParams(location.hash.split("?")[1] || "").get("privacy")) $("#privacyCard").scrollIntoView();
+  if (new URLSearchParams(location.hash.split("?")[1] || "").get("privacy")) $("#privacyCard")?.scrollIntoView();
 }
 
 // ── About ──
@@ -807,18 +830,22 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#drawerClose").onclick = hideDrawer;
   $("#drawer").addEventListener("click", (e) => { if (e.target.id === "drawer") hideDrawer(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#drawer").hidden) hideDrawer(); });
-  $("#logoutBtn").onclick = async () => { await api("/api/logout", { method: "POST" }); location.reload(); };
+  $("#logoutBtn").onclick = async () => { try { await api("/api/auth/logout", { method: "POST", retry: false }); } catch { /* already gone */ }
+    state.caseId = null; store.set("caseId", null); location.hash = "#/login"; location.reload(); };
   $("#globalSearch").onsubmit = (e) => { e.preventDefault(); const q = $("#gq").value.trim(); if (q) location.hash = `#/search?q=${encodeURIComponent(q)}`; };
   window.addEventListener("hashchange", route);
+  let s;
   try {
-    const s = await initSession();
-    if (!s.authenticated) { renderLogin(); return; }
+    s = await initSession();
+    applyNavPermissions();
   } catch { mount($("#main"), html`<div class="notice notice-red">${t("err.server_down")}</div>`); return; }
+  if (s.state === "recovery") location.hash = "#/reset-password";
   try {
-    state.prefs = await api("/api/prefs");
+    state.prefs = await api("/api/prefs", { retry: false });
     if (state.prefs.lang && state.prefs.lang !== lang() && !store.get("lang", null)) { await setLang(state.prefs.lang); renderLangToggle(); }
   } catch { /* defaults */ }
   refreshStatus(); setInterval(refreshStatus, 30000);
-  refreshBell(); setInterval(refreshBell, 60000);
+  const bell = () => { if (can("notifications.read")) refreshBell(); };
+  bell(); setInterval(bell, 60000);
   route();
 });

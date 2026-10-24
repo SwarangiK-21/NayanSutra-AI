@@ -117,8 +117,10 @@ def test_security_helpers(tmp_path: Path):
     txt = tmp_path / "c.txt"
     txt.write_bytes(b"plain text")
     assert security.sniff_ok(txt, ".txt") and not security.sniff_ok(exe, ".txt")
-    tok = security.issue_token()
-    assert security.valid_token(tok) and not security.valid_token(tok[:-2] + "00") and not security.valid_token(None)
+    from nyaya import sessions
+    csrf = sessions.csrf_for("token-a")
+    assert sessions.csrf_ok("token-a", csrf) and not sessions.csrf_ok("token-b", csrf) and not sessions.csrf_ok(None, csrf)
+    assert not sessions.csrf_ok("token-a", None) and not sessions.csrf_ok("token-a", csrf[:-1] + "0")
     assert security.host_allowed("127.0.0.1:8000") and security.host_allowed("localhost")
     assert not security.host_allowed("evil.example.com") and not security.host_allowed(None)
     assert security.origin_allowed("http://127.0.0.1:8000", "127.0.0.1:8000")

@@ -1,6 +1,9 @@
 """Minimal Ollama client (cloud via API key, or a local server) with streaming,
 JSON mode, retries and user-friendly errors. One pooled HTTP connection is
-reused for every call, which keeps per-request latency low."""
+reused for every call, which keeps per-request latency low.
+
+This is the single point where text leaves the server for the language model, so personal identifiers are
+pseudonymised here (privacy.redact_messages) and restored in the reply."""
 from __future__ import annotations
 
 import json
@@ -12,7 +15,7 @@ from typing import Iterator
 
 import httpx
 
-from . import config
+from . import config, privacy
 
 log = logging.getLogger(__name__)
 
@@ -59,7 +62,7 @@ def _raise_for(r: httpx.Response) -> None:
         detail = r.json().get("error", "")
     except ValueError:
         detail = r.text[:200]
-    log.warning("Ollama error %s: %s", r.status_code, detail)
+    log.warning("Ollama error %s: %s", r.status_code, str(detail)[:200])
     if r.status_code in (401, 403):
         raise LLMError("The Ollama API key was rejected. Check OLLAMA_API_KEY in .env.")
     if r.status_code == 404 or "not found" in detail.lower():
@@ -71,6 +74,7 @@ def _raise_for(r: httpx.Response) -> None:
 
 def chat(messages: list[dict], *, model: str | None = None, json_mode: bool = False, temperature: float = 0.1,
          max_tokens: int | None = None, retries: int = 2) -> str:
+    messages, red = privacy.redact_messages(messages)
     body = _payload(messages, model, False, json_mode, temperature, max_tokens)
     for attempt in range(retries + 1):
         try:
@@ -79,7 +83,7 @@ def chat(messages: list[dict], *, model: str | None = None, json_mode: bool = Fa
                 time.sleep(1.5 * (attempt + 1))
                 continue
             _raise_for(r)
-            return (r.json().get("message") or {}).get("content", "")
+            return red.restore((r.json().get("message") or {}).get("content", ""))
         except httpx.TimeoutException as exc:
             if attempt == retries:
                 raise LLMError("The language model took too long to respond. Please try again.") from exc
@@ -92,7 +96,12 @@ def chat(messages: list[dict], *, model: str | None = None, json_mode: bool = Fa
 
 def stream(messages: list[dict], *, model: str | None = None, temperature: float = 0.1,
            max_tokens: int | None = None) -> Iterator[str]:
-    """Yield answer tokens as they arrive (reasoning tokens are skipped)."""
+    """Yield answer tokens as they arrive (reasoning tokens are skipped), with identifiers restored."""
+    messages, red = privacy.redact_messages(messages)
+    yield from red.stream(_stream(messages, model, temperature, max_tokens))
+
+
+def _stream(messages: list[dict], model: str | None, temperature: float, max_tokens: int | None) -> Iterator[str]:
     body = _payload(messages, model, True, False, temperature, max_tokens)
     for attempt in range(2):
         try:

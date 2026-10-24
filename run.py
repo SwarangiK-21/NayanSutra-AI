@@ -16,12 +16,18 @@ def main() -> int:
                         datefmt="%H:%M:%S")
     for noisy in ("httpx", "huggingface_hub", "urllib3", "fastembed", "fontTools", "fpdf"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
+    from nyaya import privacy
+    privacy.install_log_filter()   # secrets, tokens and e-mail addresses never reach the log output
 
     local = config.APP_HOST in ("127.0.0.1", "localhost", "::1")
-    if not local and not config.APP_PASSWORD:
-        print("Refusing to listen on a network interface without APP_PASSWORD set in .env "
-              "(client documents would be exposed). Set APP_PASSWORD or use APP_HOST=127.0.0.1.")
+    accounts = config.auth_mode() == "supabase"
+    if not local and not accounts and not config.APP_PASSWORD:
+        print("Refusing to listen on a network interface in single-user mode without APP_PASSWORD set in .env "
+              "(client documents would be exposed). Configure Supabase Auth, set APP_PASSWORD, or use APP_HOST=127.0.0.1.")
         return 2
+    if not local and not config.PUBLIC_URL.startswith("https://"):
+        print("Warning: serving on a network interface without HTTPS. Put the app behind a TLS reverse proxy and set "
+              "PUBLIC_URL=https://… so session cookies are marked Secure.")
     if not config.OLLAMA_API_KEY and "ollama.com" in config.OLLAMA_HOST:
         print("OLLAMA_API_KEY is missing in .env")
         return 2

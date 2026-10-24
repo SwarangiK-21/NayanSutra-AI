@@ -112,7 +112,7 @@ table.gov tr.clickable:hover td { background: var(--blue-bg); }
 .table-wrap { overflow-x: auto; }
 
 label.f { display: block; font-size: .82rem; font-weight: 600; color: var(--navy); margin-bottom: 4px; }
-input[type=text], input[type=date], input[type=password], input[type=search], select, textarea {
+input[type=text], input[type=date], input[type=password], input[type=search], input[type=email], input:not([type]), select, textarea {
   width: 100%; font: inherit; font-size: .92rem; padding: 7px 9px; border: 1px solid #b8c2d1; border-radius: var(--radius);
   background: #fff; color: var(--text); }
 textarea { resize: vertical; min-height: 70px; }

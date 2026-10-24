@@ -20,6 +20,17 @@ py -3.12 -m venv "$env:USERPROFILE\.nyaysutra\venv"
 
 Or just double-click **`start.bat`**. Configuration lives in `.env` (see `.env.example`).
 
+**Accounts.** With Supabase configured (`SUPABASE_URL` + `SUPABASE_PUBLISHABLE_KEY`) every person signs in with their
+own account. Create the first administrator once, then sign in and set up two-step verification:
+
+```powershell
+& "$env:USERPROFILE\.nyaysutra\venv\Scripts\python.exe" scripts\bootstrap_admin.py --email you@example.org
+```
+
+Administrators invite everyone else (Administration → Invite someone) and assign people to cases. Without Supabase
+the app runs in local single-user mode, as before. Details, roles and the Supabase dashboard settings needed for
+e-mail links: [docs/SECURITY.md](docs/SECURITY.md).
+
 ## What it does
 
 | Area | Features |
@@ -68,7 +79,7 @@ due. Failures back off 5 → 10 → 20 min (capped at the source interval), are 
 failures. Long AI tasks (translation, summaries, drafting, provisions) run as in-process jobs polled at `/api/jobs/{id}`.
 
 ## Known limitations
-* Single-user local workspace: no user accounts or role-based access control; data at rest relies on OS disk encryption.
+* Security limits and open items are listed in [docs/SECURITY.md](docs/SECURITY.md) (section "Remaining risks").
 * OCR requires Tesseract (not bundled). Legacy `.doc` needs `antiword` on PATH.
 * Court-specific formatting rules (paper, margins, fonts) are not assumed — forums list official sources and "confirm"
   items; you can add requirements you verified (with source URL and date).
@@ -91,7 +102,8 @@ web/ (vanilla JS, gov-portal theme) ──SSE──► nyaya/server.py (FastAPI,
      │
  llm.py (Ollama: gpt-oss:120b answers, gpt-oss:20b plan/verify) → stream → citation audit
      │
- db.py  SQLite: cases · documents · chunks · FTS5 · embeddings · chats      vectorindex.py (NumPy, exact cosine)
+ db.py  Supabase Postgres + RLS (or SQLite offline): cases · documents · chunks · embeddings · chats   vectorindex.py
+ authz.py (roles, case access) · accounts.py + sessions.py (Supabase Auth, server-side sessions) · guardrails.py
  ingest.py  parsing.py (PDFium) → chunking.py (section / paragraph / clause aware) → embeddings.py (fastembed ONNX)
 ```
 
@@ -110,22 +122,28 @@ web/ (vanilla JS, gov-portal theme) ──SSE──► nyaya/server.py (FastAPI,
 * **Cross-encoder reranker** decides relevance far better than either retriever and gates weak evidence.
 
 ## Security
-* Binds to `127.0.0.1`; refuses to listen on a network interface unless `APP_PASSWORD` is set.
-* HttpOnly SameSite=Strict session cookie, CSRF header, Host allow-list (DNS-rebinding defence), Origin check.
-* Uploads: extension allow-list, magic-byte check, size limit, server-generated storage names, zip-bomb guard,
-  PDFium parser. Strict CSP; all UI text escaped; no third-party scripts or fonts.
-* Rate limits on chat, upload and login. Generic error messages; secrets never reach the browser; `.env` is git-ignored.
-* Per-matter isolation: a case's documents are only ever searched for that case.
-* Prompt-injection hardening: document text is passed as data and every prompt instructs the model to ignore
-  instructions inside sources.
-* Only the question and selected passages are sent to the LLM (Ollama Cloud); documents, embeddings and chats stay local.
+Full description, test evidence and remaining risks: [docs/SECURITY.md](docs/SECURITY.md) (audit and risk register:
+[docs/SECURITY_AUDIT.md](docs/SECURITY_AUDIT.md)). In short:
+* Per-user accounts on Supabase Auth (verified e-mail, reset links, TOTP two-step verification + recovery codes),
+  used server-side; the browser holds only an HttpOnly session cookie. Server-side sessions with idle/absolute expiry,
+  revocation and rotation; account lockout; CSRF header; Host allow-list; Origin check.
+* Roles (client, advocate, administrator, security auditor) assigned only by an administrator; a central permission
+  matrix (`nyaya/authz.py`) and per-case membership checked on every request; the same rules enforced again by
+  Postgres row-level security.
+* Uploads: extension allow-list, magic-byte check, active-content check (PDF JavaScript, Word macros/remote
+  templates), optional ClamAV, size limit, server-generated names. Strict CSP; all UI text escaped.
+* AI guardrails in code: request screening, delimited and injection-flagged sources, allow-listed tools with
+  validated arguments, deterministic citation verification, output secret filter, identity numbers masked before
+  text is sent to the LLM (Ollama Cloud).
+* Append-only audit log with actor, role, IP and outcome (no document contents); redacted application logs.
 
 ## Tests
 ```powershell
-& "$env:USERPROFILE\.nyaysutra\venv\Scripts\python.exe" -m pytest      # 42 offline tests, ~10 s
+& "$env:USERPROFILE\.nyaysutra\venv\Scripts\python.exe" -m pytest      # offline suite incl. 35 security tests
 ```
-`tests/test_features.py` uses synthetic records only, a fake LLM and `httpx.MockTransport` for feeds — no real court,
-police or news service is contacted by the tests.
+All tests use synthetic records, a fake LLM, a fake Supabase Auth server (`tests/fake_auth.py`) and
+`httpx.MockTransport` for feeds. Opt-in live tests against the real Supabase project (synthetic accounts, deleted
+afterwards): set `NYAYA_LIVE_SUPABASE=1`.
 
 ## Data sources
 * Bare acts: India Code (indiacode.gov.in), Legislative Department, Ministry of Law & Justice. IPC (repealed

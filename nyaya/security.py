@@ -1,19 +1,17 @@
-"""Security controls for a local, single-user legal workspace that holds
-privileged client documents.
+"""HTTP-level security controls for a legal workspace that holds privileged client documents.
 
 Threats addressed
-* Other websites in the same browser driving the local API (CSRF / DNS rebinding)
+* Other websites in the same browser driving the API (CSRF / DNS rebinding)
   → Host allow-list, SameSite=Strict HttpOnly session cookie, custom request
-    header required on every state-changing call, Origin check.
-* Other users on the network → server binds to 127.0.0.1; binding elsewhere
-  requires APP_PASSWORD (enforced in run.py).
-* Malicious uploads → extension allow-list, magic-byte check, size cap,
-  server-generated storage names (no user-controlled paths), zip-bomb guard
-  in parsing, PDFium for PDFs.
+    header required on every state-changing call (sessions.csrf_for), Origin check.
+* Unauthenticated network access → per-user accounts (Supabase Auth, see accounts.py) or, in local single-user
+  mode, loopback binding (binding elsewhere requires APP_PASSWORD, enforced in run.py).
+* Malicious uploads → extension allow-list, magic-byte check, active-content checks (filescan.py), size cap,
+  server-generated storage names (no user-controlled paths), zip-bomb guard in parsing, PDFium for PDFs.
 * XSS → strict Content-Security-Policy (no inline script, no third-party
   origins); the frontend escapes all text before rendering Markdown.
-* Abuse / runaway cost → per-client rate limits on chat, upload and login.
-* Information leaks → generic error messages; secrets never sent to the browser.
+* Abuse / runaway cost → per-client rate limits on chat, upload and sign-in; account lockout (accounts.py).
+* Information leaks → generic error messages; secrets never sent to the browser; redacted logs (privacy.py).
 """
 from __future__ import annotations
 
@@ -28,10 +26,6 @@ from collections import defaultdict, deque
 from pathlib import Path
 
 from . import config
-
-COOKIE = "nyaya_session"
-CSRF_HEADER = "x-nyaya-csrf"
-SESSION_TTL = 12 * 3600
 
 ALLOWED_EXT = {".pdf", ".docx", ".doc", ".txt", ".md", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp"}
 MIME = {
@@ -51,12 +45,22 @@ CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 
        "form-action 'self'")
 
 
-def _secret() -> bytes:
-    """Per-installation signing key, created once and kept outside the project folder."""
+_secret_cache: bytes | None = None
+
+
+def secret_key() -> bytes:
+    """Server key for CSRF values and recovery-code hashes: APP_SECRET_KEY (shared by every app instance), else a
+    per-installation key created once and kept outside the project folder."""
+    global _secret_cache
+    if config.APP_SECRET_KEY:
+        return hashlib.sha256(config.APP_SECRET_KEY.encode()).digest()
+    if _secret_cache:
+        return _secret_cache
     path = config.HOME_DIR / "session.key"
     try:
         data = path.read_bytes()
         if len(data) >= 32:
+            _secret_cache = data
             return data
     except OSError:
         pass
@@ -67,41 +71,22 @@ def _secret() -> bytes:
         os.chmod(path, 0o600)
     except OSError:
         pass
+    _secret_cache = data
     return data
 
 
-_SECRET = _secret()
-
-
-def issue_token() -> str:
-    exp = int(time.time()) + SESSION_TTL
-    nonce = secrets.token_urlsafe(12)
-    msg = f"{exp}.{nonce}"
-    sig = hmac.new(_SECRET, msg.encode(), hashlib.sha256).hexdigest()
-    return f"{msg}.{sig}"
-
-
-def valid_token(token: str | None) -> bool:
-    if not token or token.count(".") != 2:
-        return False
-    exp, nonce, sig = token.split(".")
-    expected = hmac.new(_SECRET, f"{exp}.{nonce}".encode(), hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(sig, expected):
-        return False
-    return exp.isdigit() and int(exp) > time.time()
-
-
-def csrf_for(token: str) -> str:
-    """CSRF value bound to the session (double-submit, but unforgeable without the key)."""
-    return hmac.new(_SECRET, f"csrf:{token}".encode(), hashlib.sha256).hexdigest()[:32]
-
-
 def check_password(candidate: str) -> bool:
+    """Local single-user mode only: the shared APP_PASSWORD (constant-time comparison)."""
     if not config.APP_PASSWORD:
         return True
     a = hashlib.sha256(candidate.encode()).digest()
     b = hashlib.sha256(config.APP_PASSWORD.encode()).digest()
     return hmac.compare_digest(a, b)
+
+
+def cookie_secure() -> bool:
+    """Mark cookies Secure (and send HSTS) when the app is served over HTTPS."""
+    return config.PUBLIC_URL.startswith("https://")
 
 
 def host_allowed(host_header: str | None) -> bool:

@@ -192,6 +192,7 @@ def test_live_supabase_crud_files_and_access(monkeypatch, tmp_path):
     from nyaya import cases
     db.close_pool()
     assert db.backend() == "postgres"
+    token = db.set_identity(db.Identity(system=True))            # storage-layer test: internal context (RLS: system)
     db.init()                                                     # schema version check
     case = cases.create_case({"title": f"{SYNTH} live", "client_name": "Asha Rao", "case_type": "Civil"})
     try:
@@ -210,4 +211,5 @@ def test_live_supabase_crud_files_and_access(monkeypatch, tmp_path):
         storage.delete(ref)
     finally:
         assert cases.delete_case(case["id"])
+        db.reset_identity(token)
         db.close_pool()

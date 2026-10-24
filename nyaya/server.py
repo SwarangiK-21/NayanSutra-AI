@@ -1,8 +1,14 @@
-"""FastAPI server: JSON API + Server-Sent Events chat stream + static frontend."""
+"""FastAPI server: JSON API + Server-Sent Events chat stream + static frontend.
+
+Every request is bound to a principal (the signed-in user, or a guest) before the endpoint runs; the database sees
+the same identity (db.Identity → request.jwt.claims). Each endpoint declares its permission (authz.require) and
+object endpoints check the caller's access to the case the object belongs to (authz.require_case/require_document).
+"""
 from __future__ import annotations
 
 import json
 import logging
+import re
 import tempfile
 import threading
 import time
@@ -14,12 +20,16 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import (agent, awareness, cases, casesearch, citations, config, db, docintel, drafting, embeddings, export,
-               ingest, integrations, jobs, llm, ocr, provisions, reference, retrieval, search, security, storage, tools)
+from . import (accounts, agent, authz, awareness, cases, casesearch, citations, config, db, docintel, drafting,
+               embeddings, export, filescan, ingest, integrations, jobs, llm, ocr, privacy, provisions, reference,
+               retrieval, search, security, sessions, storage, tools)
+from . import supabase_auth as sb
+from .authz import Principal
 from .vectorindex import index
 
 log = logging.getLogger("nyaya")
@@ -27,41 +37,62 @@ log = logging.getLogger("nyaya")
 _ingest_pool: ThreadPoolExecutor | None = None  # created per app lifespan
 _state = {"models_ready": False, "llm": None, "llm_checked": 0.0}
 _scheduler: integrations.Scheduler | None = None
+PRE_COOKIE = "nyaya_pre"     # random value that anchors the CSRF token before anyone has signed in
+PKCE_COOKIE = "nyaya_pkce"   # verifier for an e-mail link (sign-up confirmation / password reset)
 
 
 def _warm():
-    index.load()          # vectors from SQLite → RAM (background, so the UI is up immediately)
+    with db.system():
+        index.load()      # vectors → RAM (background, so the UI is up immediately)
     embeddings.warm_up()  # load ONNX models
     _state["models_ready"] = True
 
 
+def _process(doc_id: str) -> None:
+    """Ingestion runs as internal work: authorization happened when the file was uploaded."""
+    with db.system():
+        ingest.process(doc_id)
+
+
+def _submit_ingest(doc_id: str) -> None:
+    _ingest_pool.submit(_process, doc_id)
+
+
 def _apply_retention() -> None:
-    """Data minimisation: delete conversations older than the configured retention period (if one is set)."""
-    days = db.get_pref("chat_retention_days")
-    if days and days.isdigit():
-        cutoff = (date.today() - timedelta(days=int(days))).isoformat()
-        with db.tx() as c:
-            n = c.execute("DELETE FROM chats WHERE updated_at < ?", (cutoff,)).rowcount
-        if n:
-            db.audit("retention.purge_chats", "chat", None, deleted=n, older_than_days=int(days))
+    """Data minimisation: delete conversations older than each organisation's retention period (if one is set)."""
+    with db.system():
+        rows = db.conn().execute("SELECT org_id, value FROM org_settings WHERE key='chat_retention_days'").fetchall()
+        for r in rows:
+            if not (r["value"] or "").isdigit():
+                continue
+            cutoff = (date.today() - timedelta(days=int(r["value"]))).isoformat()
+            with db.tx() as c:
+                n = c.execute("DELETE FROM chats WHERE COALESCE(org_id, ?) = ? AND updated_at < ?",
+                              (db.DEFAULT_ORG, r["org_id"], cutoff)).rowcount
+            if n:
+                db.audit("retention.purge_chats", "chat", None, deleted=n, older_than_days=int(r["value"]))
+        sessions.purge_expired()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _ingest_pool
+    global _ingest_pool, _scheduler
+    privacy.install_log_filter()
     _ingest_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ingest")
-    db.init()
-    cases.seed_if_empty()
-    _apply_retention()
-    stored = db.get_meta("embed_model")
-    if stored and stored != embeddings.model_name():
-        log.warning("Index was built with %s but EMBED_MODEL is %s — run: python -m nyaya.ingest reembed",
-                    stored, embeddings.model_name())
-    # Re-queue uploads interrupted by a restart.
-    for r in db.conn().execute("SELECT id FROM documents WHERE status='processing'").fetchall():
-        _ingest_pool.submit(ingest.process, r["id"])
+    with db.system():
+        db.init()
+        cases.seed_if_empty()
+        if accounts.mode() == "local":
+            accounts.ensure_local_operator()   # also takes ownership of matters created before accounts existed
+        _apply_retention()
+        stored = db.get_meta("embed_model")
+        if stored and stored != embeddings.model_name():
+            log.warning("Index was built with %s but EMBED_MODEL is %s — run: python -m nyaya.ingest reembed",
+                        stored, embeddings.model_name())
+        # Re-queue uploads interrupted by a restart.
+        for r in db.conn().execute("SELECT id FROM documents WHERE status='processing'").fetchall():
+            _submit_ingest(r["id"])
     threading.Thread(target=_warm, daemon=True).start()
-    global _scheduler
     if config.SYNC_ENABLED:
         _scheduler = integrations.Scheduler()
         _scheduler.start()
@@ -72,25 +103,57 @@ async def lifespan(app: FastAPI):
     db.close_pool()
 
 
-app = FastAPI(title="NyaySutra AI", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+# ── Principal (who is calling) — bound once per request, before the endpoint runs ──
+def client_ip(request: Request) -> str:
+    return request.client.host if request.client else "local"
+
+
+def _resolve(token: str | None, ip: str) -> dict | None:
+    row = sessions.lookup(token)
+    if row and row["state"] == "active":
+        try:
+            accounts.revalidate(row)   # Supabase session still alive? (at most once per access-token lifetime)
+        except accounts.AccountError as exc:
+            if exc.status == 401:
+                return None
+            log.warning("Could not revalidate a session: %s", exc.code)   # Supabase unreachable: keep the session
+    return row
+
+
+async def principal(request: Request) -> Principal:
+    if hasattr(request.state, "principal"):
+        return request.state.principal
+    ip = client_ip(request)
+    row = await run_in_threadpool(_resolve, request.cookies.get(sessions.COOKIE), ip)
+    p = accounts.principal_from_row(row, ip)
+    request.state.principal, request.state.session_row = p, row
+    db.set_identity(p.identity())   # the database (RLS) sees the same caller in this request's context
+    return p
+
+
+app = FastAPI(title="NyaySutra AI", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan,
+              dependencies=[Depends(principal)])
+P = Depends(principal)
 
 
 # ── Security middleware ──────────────────────────────────────────────────────
+SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
+
+
 @app.middleware("http")
 async def guard(request: Request, call_next):
     host = request.headers.get("host")
     if not security.host_allowed(host):
         return JSONResponse({"detail": "Host not allowed"}, status_code=400)
     path = request.url.path
-    if path.startswith("/api/") and path not in ("/api/login", "/api/session"):
-        token = request.cookies.get(security.COOKIE)
-        if not security.valid_token(token):
-            return JSONResponse({"detail": "Session expired — reload the page"}, status_code=401)
-        if request.method not in ("GET", "HEAD", "OPTIONS"):
-            if not security.origin_allowed(request.headers.get("origin"), host):
-                return JSONResponse({"detail": "Cross-origin request blocked"}, status_code=403)
-            if request.headers.get(security.CSRF_HEADER) != security.csrf_for(token):
-                return JSONResponse({"detail": "Missing or invalid CSRF token"}, status_code=403)
+    if path.startswith("/api/") and request.method not in SAFE_METHODS:
+        if not security.origin_allowed(request.headers.get("origin"), host):
+            return JSONResponse({"detail": "Cross-origin request blocked"}, status_code=403)
+        # The header must be derived from one of this browser's own HttpOnly cookies (session, or the pre-sign-in
+        # value); another site can neither read those cookies nor send a custom header here.
+        header = request.headers.get(sessions.CSRF_HEADER)
+        if not any(sessions.csrf_ok(request.cookies.get(name), header) for name in (sessions.COOKIE, PRE_COOKIE)):
+            return JSONResponse({"detail": "Missing or invalid CSRF token"}, status_code=403)
     response: Response = await call_next(request)
     if "content-security-policy" not in response.headers:  # endpoints may set a stricter / specific policy
         response.headers["Content-Security-Policy"] = security.CSP
@@ -98,14 +161,45 @@ async def guard(request: Request, call_next):
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
     # Microphone only for this origin (voice input in Legal Research); the browser still asks the user.
     response.headers["Permissions-Policy"] = "camera=(), microphone=(self), geolocation=()"
-    if path.startswith("/api/"):
+    if security.cookie_secure():
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    if path.startswith("/api/") or path.startswith("/auth/"):
         response.headers["Cache-Control"] = "no-store"
     elif path.startswith("/static/"):
         # Revalidate (cheap 304 via ETag) so an updated app.js / app.css is picked up on reload.
         response.headers["Cache-Control"] = "no-cache"
     return response
+
+
+# ── Errors: never leak internals ─────────────────────────────────────────────
+_denied_seen: dict[tuple, float] = {}
+
+
+@app.exception_handler(authz.Denied)
+async def denied(request: Request, exc: authz.Denied):
+    p = getattr(request.state, "principal", authz.GUEST)
+    key = (p.user_id, request.url.path)
+    if p.user_id and time.monotonic() - _denied_seen.get(key, 0) > 60:   # one audit entry per user+path a minute
+        if len(_denied_seen) > 5000:
+            _denied_seen.clear()
+        _denied_seen[key] = time.monotonic()
+        await run_in_threadpool(db.audit, "authz.denied", "endpoint", request.url.path[:200], outcome="denied",
+                                method=request.method)
+    status = 403 if p.signed_in else 401
+    return JSONResponse({"detail": str(exc), "code": "forbidden" if p.signed_in else "sign_in"}, status_code=status)
+
+
+@app.exception_handler(authz.NotFound)
+async def not_found(request: Request, exc: authz.NotFound):
+    return JSONResponse({"detail": str(exc)}, status_code=404)
+
+
+@app.exception_handler(accounts.AccountError)
+async def account_error(request: Request, exc: accounts.AccountError):
+    return JSONResponse({"detail": str(exc), "code": exc.code}, status_code=exc.status)
 
 
 @app.exception_handler(Exception)
@@ -114,102 +208,458 @@ async def unhandled(request: Request, exc: Exception):
     return JSONResponse({"detail": "Internal error"}, status_code=500)
 
 
-def client_key(request: Request) -> str:
-    return request.client.host if request.client else "local"
-
-
-def rate(limit: int, bucket: str):
+def rate(limit: int, bucket: str, window: float = 60.0):
     def dep(request: Request):
-        if not security.limiter.allow(f"{bucket}:{client_key(request)}", limit):
+        if not security.limiter.allow(f"{bucket}:{client_ip(request)}", limit, window):
             raise HTTPException(429, "Too many requests — please slow down.")
     return dep
 
 
-def _set_session(resp: Response, token: str | None = None) -> str:
-    token = token or security.issue_token()
-    resp.set_cookie(security.COOKIE, token, max_age=security.SESSION_TTL, httponly=True, samesite="strict",
-                    path="/")
-    return token
+def need(perm: str):
+    """Dependency: the caller must hold this permission."""
+    def dep(p: Principal = P) -> Principal:
+        authz.require(p, perm)
+        return p
+    return dep
 
 
-# ── Pages / session ──────────────────────────────────────────────────────────
+def _row(request: Request) -> dict:
+    row = getattr(request.state, "session_row", None)
+    if not row:
+        raise accounts.AccountError("Please sign in.", 401, "sign_in")
+    return row
+
+
+def _set_cookie(resp: Response, name: str, value: str, max_age: int, *, samesite: str = "strict", path: str = "/") -> None:
+    resp.set_cookie(name, value, max_age=max_age, httponly=True, samesite=samesite, secure=security.cookie_secure(),
+                    path=path)
+
+
+def _set_session(resp: Response, token: str, row: dict) -> None:
+    minutes = sessions.SHORT_STATES.get(row.get("state", "active"))
+    _set_cookie(resp, sessions.COOKIE, token, minutes * 60 if minutes else config.SESSION_TTL_HOURS * 3600)
+
+
+def _session_body(p: Principal, token: str | None) -> dict:
+    mfa_required = accounts.mode() == "supabase" and p.role in config.MFA_REQUIRED_ROLES
+    body = {"authenticated": p.signed_in, "state": p.session_state, "auth_mode": accounts.mode(),
+            "signup_mode": config.SIGNUP_MODE, "password_required": accounts.mode() == "local" and bool(config.APP_PASSWORD),
+            "csrf": sessions.csrf_for(token) if token else None,
+            "permissions": sorted(k for k in authz.PERMISSIONS if p.can(k))}
+    if p.user_id:
+        body.update(user={"id": p.user_id, "email": p.email if not p.local else None, "display_name": p.display_name},
+                    role=p.role if p.signed_in else "guest", org_id=p.org_id,
+                    mfa={"enabled": p.mfa_enabled, "required": mfa_required}, local=p.local)
+    return body
+
+
+# ── Pages / e-mail link callback ─────────────────────────────────────────────
 @app.get("/", include_in_schema=False)
-def index_page(request: Request):
+def index_page(request: Request, p: Principal = P):
     resp = FileResponse(config.WEB_DIR / "index.html", media_type="text/html")
     resp.headers["Cache-Control"] = "no-store"
-    if not config.APP_PASSWORD and not security.valid_token(request.cookies.get(security.COOKIE)):
-        _set_session(resp)
+    if accounts.mode() == "local" and not config.APP_PASSWORD and not p.user_id:
+        token, row = accounts.local_session(client_ip(request), request.headers.get("user-agent", ""))
+        _set_session(resp, token, row)
     return resp
 
 
+@app.get("/auth/callback", include_in_schema=False)
+def auth_callback(request: Request, flow: Literal["signup", "recovery"] = "signup", code: str = "",
+                  error_code: str = ""):
+    if error_code or not code:
+        return RedirectResponse(f"/#/login?e={quote(error_code or 'link')}", status_code=303)
+    try:
+        token, row, target = accounts.callback(code, flow, request.cookies.get(PKCE_COOKIE), client_ip(request),
+                                               request.headers.get("user-agent", ""))
+    except accounts.AccountError as exc:
+        return RedirectResponse(f"/#/login?e={quote(exc.code or 'link')}", status_code=303)
+    resp = RedirectResponse(target, status_code=303)
+    _set_session(resp, token, row)
+    resp.delete_cookie(PKCE_COOKIE, path="/auth/callback")
+    return resp
+
+
+# ── Session and sign-in ──────────────────────────────────────────────────────
 @app.get("/api/session")
-def session(request: Request):
-    token = request.cookies.get(security.COOKIE)
-    if security.valid_token(token):
-        return {"authenticated": True, "csrf": security.csrf_for(token), "password_required": bool(config.APP_PASSWORD)}
-    if not config.APP_PASSWORD:
-        token = security.issue_token()
-        resp = JSONResponse({"authenticated": True, "csrf": security.csrf_for(token), "password_required": False})
-        _set_session(resp, token)
+def session(request: Request, p: Principal = P):
+    token = request.cookies.get(sessions.COOKIE) if p.user_id else None
+    if not p.user_id and accounts.mode() == "local" and not config.APP_PASSWORD:
+        token, row = accounts.local_session(client_ip(request), request.headers.get("user-agent", ""))
+        p = accounts.principal_from_row(row, client_ip(request))
+        resp = JSONResponse(_session_body(p, token))
+        _set_session(resp, token, row)
         return resp
-    return {"authenticated": False, "password_required": True}
+    if token:
+        return _session_body(p, token)
+    pre = request.cookies.get(PRE_COOKIE)
+    if not pre or len(pre) > 100:
+        import secrets as _s
+        pre = _s.token_urlsafe(24)
+    resp = JSONResponse(_session_body(p, pre))
+    _set_cookie(resp, PRE_COOKIE, pre, 12 * 3600)
+    if request.cookies.get(sessions.COOKIE):   # an ended or expired session: drop the stale cookie
+        resp.delete_cookie(sessions.COOKIE, path="/")
+    return resp
 
 
-class Login(BaseModel):
+class LoginIn(BaseModel):
+    email: str | None = Field(None, max_length=254)
     password: str = Field(max_length=200)
 
 
-@app.post("/api/login", dependencies=[Depends(rate(5, "login"))])
-def login(body: Login):
-    if not security.check_password(body.password):
-        time.sleep(0.5)
-        raise HTTPException(401, "Incorrect password")
-    token = security.issue_token()
-    resp = JSONResponse({"ok": True, "csrf": security.csrf_for(token)})
-    _set_session(resp, token)
+def _login(request: Request, body: LoginIn) -> JSONResponse:
+    ip, ua = client_ip(request), request.headers.get("user-agent", "")
+    if accounts.mode() == "local":
+        token, row = accounts.local_login(body.password, ip, ua)
+    else:
+        if not body.email:
+            raise accounts.AccountError("Enter your e-mail address.", 400, "invalid_email")
+        token, row = accounts.login(body.email, body.password, ip, ua)
+    p = accounts.principal_from_row(row, ip)
+    resp = JSONResponse({"ok": True, **_session_body(p, token)})
+    _set_session(resp, token, row)
     return resp
 
 
+@app.post("/api/auth/login", dependencies=[Depends(rate(10, "login"))])
+def auth_login(request: Request, body: LoginIn):
+    return _login(request, body)
+
+
+@app.post("/api/login", dependencies=[Depends(rate(10, "login"))])
+def login(request: Request, body: LoginIn):   # kept for older clients
+    return _login(request, body)
+
+
+@app.post("/api/auth/logout")
 @app.post("/api/logout")
-def logout():
+def logout(request: Request):
+    row = getattr(request.state, "session_row", None)
+    if row:
+        accounts.logout(row)
     resp = JSONResponse({"ok": True})
-    resp.delete_cookie(security.COOKIE, path="/")
+    resp.delete_cookie(sessions.COOKIE, path="/")
     return resp
+
+
+class SignupIn(BaseModel):
+    email: str = Field(max_length=254)
+    password: str = Field(max_length=200)
+    display_name: str = Field("", max_length=80)
+
+
+def _supabase_only() -> None:
+    if accounts.mode() != "supabase":
+        raise accounts.AccountError("Accounts are not enabled on this installation (local single-user mode).", 400,
+                                    "local_mode")
+
+
+@app.post("/api/auth/signup", dependencies=[Depends(rate(5, "signup", 3600))])
+def auth_signup(request: Request, body: SignupIn):
+    _supabase_only()
+    verifier = accounts.signup(body.email, body.password, body.display_name, client_ip(request))
+    resp = JSONResponse({"ok": True, "message": accounts.GENERIC_SENT})
+    _set_cookie(resp, PKCE_COOKIE, verifier, 24 * 3600, samesite="lax", path="/auth/callback")
+    return resp
+
+
+class EmailIn(BaseModel):
+    email: str = Field(max_length=254)
+
+
+@app.post("/api/auth/resend", dependencies=[Depends(rate(3, "resend", 3600))])
+def auth_resend(body: EmailIn):
+    _supabase_only()
+    return {"ok": True, "message": accounts.resend(body.email)}
+
+
+@app.post("/api/auth/password/forgot", dependencies=[Depends(rate(5, "forgot", 3600))])
+def auth_forgot(request: Request, body: EmailIn):
+    _supabase_only()
+    verifier = accounts.forgot(body.email, client_ip(request))
+    resp = JSONResponse({"ok": True, "message": accounts.GENERIC_SENT})
+    if verifier:
+        _set_cookie(resp, PKCE_COOKIE, verifier, 3600, samesite="lax", path="/auth/callback")
+    return resp
+
+
+class PasswordIn(BaseModel):
+    password: str = Field(max_length=200)
+
+
+@app.post("/api/auth/password/reset", dependencies=[Depends(rate(10, "reset"))])
+def auth_reset(request: Request, body: PasswordIn):
+    accounts.reset_password(_row(request), body.password)
+    resp = JSONResponse({"ok": True, "message": "Password changed. Sign in with the new password."})
+    resp.delete_cookie(sessions.COOKIE, path="/")
+    return resp
+
+
+class ChangePasswordIn(BaseModel):
+    current_password: str = Field(max_length=200)
+    new_password: str = Field(max_length=200)
+
+
+@app.post("/api/auth/password/change", dependencies=[Depends(rate(5, "pwchange"))])
+def auth_change_password(request: Request, body: ChangePasswordIn, p: Principal = Depends(need("account.self"))):
+    _supabase_only()
+    token, row = accounts.change_password(_row(request), body.current_password, body.new_password)
+    resp = JSONResponse({"ok": True})
+    _set_session(resp, token, row)
+    return resp
+
+
+class CodeIn(BaseModel):
+    code: str = Field(min_length=6, max_length=20)
+
+
+def _session_response(request: Request, token: str, row: dict, extra: dict | None = None) -> JSONResponse:
+    p = accounts.principal_from_row(row, client_ip(request))
+    resp = JSONResponse({"ok": True, **(extra or {}), **_session_body(p, token)})
+    _set_session(resp, token, row)
+    return resp
+
+
+@app.post("/api/auth/mfa/verify", dependencies=[Depends(rate(10, "mfa"))])
+def mfa_verify(request: Request, body: CodeIn):
+    token, row = accounts.mfa_verify(_row(request), body.code, client_ip(request), request.headers.get("user-agent", ""))
+    return _session_response(request, token, row)
+
+
+@app.post("/api/auth/mfa/recovery", dependencies=[Depends(rate(10, "mfa"))])
+def mfa_recovery(request: Request, body: CodeIn):
+    token, row = accounts.use_recovery_code(_row(request), body.code, client_ip(request),
+                                            request.headers.get("user-agent", ""))
+    return _session_response(request, token, row)
+
+
+@app.post("/api/auth/mfa/enroll", dependencies=[Depends(rate(10, "mfa"))])
+def mfa_enroll(request: Request):
+    _supabase_only()
+    return accounts.mfa_enroll_start(_row(request))
+
+
+class EnrollVerifyIn(BaseModel):
+    factor_id: str = Field(max_length=64)
+    code: str = Field(min_length=6, max_length=10)
+
+
+@app.post("/api/auth/mfa/enroll/verify", dependencies=[Depends(rate(10, "mfa"))])
+def mfa_enroll_verify(request: Request, body: EnrollVerifyIn):
+    token, row, codes = accounts.mfa_enroll_finish(_row(request), body.factor_id, body.code, client_ip(request),
+                                                   request.headers.get("user-agent", ""))
+    return _session_response(request, token, row, {"recovery_codes": codes})
+
+
+@app.post("/api/auth/mfa/disable", dependencies=[Depends(rate(5, "mfa"))])
+def mfa_disable(request: Request, body: CodeIn, p: Principal = Depends(need("account.self"))):
+    accounts.mfa_disable(_row(request), body.code)
+    return {"ok": True}
+
+
+@app.post("/api/auth/mfa/recovery-codes", dependencies=[Depends(rate(5, "mfa"))])
+def mfa_new_codes(request: Request, body: CodeIn, p: Principal = Depends(need("account.self"))):
+    return {"recovery_codes": accounts.regenerate_recovery_codes(_row(request), body.code)}
+
+
+# ── Account: profile, sessions ───────────────────────────────────────────────
+@app.get("/api/account")
+def account(request: Request, p: Principal = Depends(need("account.self"))):
+    row = _row(request)
+    return {"user": {"id": p.user_id, "email": p.email, "display_name": p.display_name}, "role": p.role,
+            "org_id": p.org_id, "local": p.local, "auth_mode": accounts.mode(),
+            "mfa": {"enabled": p.mfa_enabled, "required": accounts.mode() == "supabase" and p.role in config.MFA_REQUIRED_ROLES,
+                    "recovery_codes_left": accounts.recovery_codes_left(p.user_id)},
+            "sessions": [{**s, "current": s["public_id"] == row["public_id"]} for s in sessions.list_for(p.user_id)]}
+
+
+class AccountIn(BaseModel):
+    display_name: str = Field(min_length=1, max_length=80)
+
+
+@app.patch("/api/account")
+def account_update(body: AccountIn, p: Principal = Depends(need("account.self"))):
+    name = re.sub(r"[\x00-\x1f<>]", "", body.display_name).strip()[:80]
+    with db.tx() as c:
+        c.execute("UPDATE profiles SET display_name=?, updated_at=? WHERE user_id=?", (name, db.now(), p.user_id))
+    sessions.invalidate(user_id=p.user_id)
+    return {"ok": True, "display_name": name}
+
+
+@app.get("/api/auth/sessions")
+def my_sessions(request: Request, p: Principal = Depends(need("account.self"))):
+    row = _row(request)
+    return {"sessions": [{**s, "current": s["public_id"] == row["public_id"]} for s in sessions.list_for(p.user_id)]}
+
+
+@app.delete("/api/auth/sessions/{public_id}")
+def revoke_session(public_id: str, p: Principal = Depends(need("account.self"))):
+    target = sessions.by_public_id(p.user_id, public_id[:40])
+    if not target:
+        raise authz.NotFound("Session not found")
+    sessions.revoke(target, "revoked_by_user")
+    db.audit("auth.session_revoke", "session", public_id[:40])
+    return {"ok": True}
+
+
+@app.post("/api/auth/sessions/revoke-others")
+def revoke_other_sessions(request: Request, p: Principal = Depends(need("account.self"))):
+    row = _row(request)
+    n = sessions.revoke_all(p.user_id, except_id=row["id"])
+    if accounts.mode() == "supabase":
+        try:
+            sb.sign_out(accounts.access_token(row), "others")
+        except (sb.AuthError, accounts.AccountError):
+            pass
+    db.audit("auth.sessions_revoke_others", "user", p.user_id, revoked=n)
+    return {"ok": True, "revoked": n}
+
+
+# ── Administration: users, roles, invitations ───────────────────────────────
+def _admin_users(org_id: str) -> list[dict]:
+    rows = db.conn().execute(
+        "SELECT p.user_id, p.email, p.display_name, p.status, p.mfa_enabled, m.role, m.created_at, "
+        "(SELECT MAX(s.last_seen_at) FROM app_sessions s WHERE s.user_id = p.user_id) AS last_seen "
+        "FROM memberships m JOIN profiles p ON p.user_id = m.user_id WHERE m.org_id = ? ORDER BY p.email", (org_id,))
+    return [dict(r) for r in rows]
+
+
+@app.get("/api/admin/users")
+def admin_users(p: Principal = Depends(need("users.manage"))):
+    with db.system():   # last-seen comes from the sessions table, which only the backend reads
+        users = _admin_users(p.org_id)
+    return {"users": users, "roles": list(authz.ASSIGNABLE_ROLES)}
+
+
+class UserUpdateIn(BaseModel):
+    role: Literal["client", "advocate", "admin", "auditor"] | None = None
+    status: Literal["active", "disabled"] | None = None
+
+
+@app.patch("/api/admin/users/{user_id}")
+def admin_update_user(user_id: str, body: UserUpdateIn, p: Principal = Depends(need("users.manage"))):
+    if user_id == p.user_id:
+        raise authz.Denied("You cannot change your own role or status. Ask another administrator.")
+    with db.system():
+        target = db.conn().execute("SELECT m.role, p.status FROM memberships m JOIN profiles p ON p.user_id = m.user_id "
+                                   "WHERE m.org_id=? AND m.user_id=?", (p.org_id, user_id)).fetchone()
+        n_admins = db.conn().execute("SELECT COUNT(*) FROM memberships m JOIN profiles p ON p.user_id = m.user_id "
+                                     "WHERE m.org_id=? AND m.role='admin' AND p.status='active'", (p.org_id,)).fetchone()[0]
+    if not target:
+        raise authz.NotFound("User not found")
+    removing_admin = target["role"] == "admin" and target["status"] == "active" and (
+        (body.role and body.role != "admin") or body.status == "disabled")
+    if removing_admin and n_admins <= 1:
+        raise authz.Denied("The organisation must keep at least one active administrator.")
+    if body.role and body.role != target["role"]:
+        with db.tx() as c:   # RLS: only an administrator of this organisation, never on their own row
+            c.execute("UPDATE memberships SET role=? WHERE org_id=? AND user_id=?", (body.role, p.org_id, user_id))
+        db.audit("user.role_change", "user", user_id, old=target["role"], new=body.role)
+        db.notify("security", "Your role was changed", f"An administrator changed your role to {body.role}.",
+                  "#/account", recipients=[user_id])
+    if body.status and body.status != target["status"]:
+        with db.tx() as c:
+            c.execute("UPDATE profiles SET status=?, updated_at=? WHERE user_id=?", (body.status, db.now(), user_id))
+        if body.status == "disabled":
+            sessions.revoke_all(user_id)
+        if accounts.mode() == "supabase" and config.SUPABASE_SECRET_KEY:
+            try:   # also stops sign-in and token refresh at Supabase
+                sb.admin_set_banned(user_id, body.status == "disabled")
+            except sb.AuthError as exc:
+                log.warning("Could not update the Supabase ban state: %s", exc.code)
+        db.audit("user.status_change", "user", user_id, new=body.status)
+    sessions.invalidate(user_id=user_id)
+    with db.system():
+        users = _admin_users(p.org_id)
+    return {"users": users}
+
+
+class InviteIn(BaseModel):
+    email: str = Field(max_length=254)
+    role: Literal["client", "advocate", "admin", "auditor"]
+
+
+@app.get("/api/admin/invitations")
+def admin_invitations(p: Principal = Depends(need("users.manage"))):
+    rows = db.conn().execute("SELECT id, email, role, created_at, expires_at, accepted_at FROM invitations "
+                             "WHERE org_id=? ORDER BY created_at DESC LIMIT 200", (p.org_id,))
+    return {"invitations": [dict(r) for r in rows]}
+
+
+@app.post("/api/admin/invitations")
+def admin_invite(body: InviteIn, p: Principal = Depends(need("users.manage"))):
+    inv = accounts.create_invitation(p.org_id, body.email, body.role, p.user_id)
+    base = config.PUBLIC_URL or "http://127.0.0.1:%d" % config.APP_PORT
+    return {**inv, "signup_link": f"{base}/#/signup?email={quote(inv['email'])}"}
+
+
+@app.delete("/api/admin/invitations/{inv_id}")
+def admin_invite_delete(inv_id: str, p: Principal = Depends(need("users.manage"))):
+    with db.tx() as c:
+        n = c.execute("DELETE FROM invitations WHERE id=? AND org_id=? AND accepted_at IS NULL", (inv_id, p.org_id)).rowcount
+    if not n:
+        raise authz.NotFound("Invitation not found")
+    db.audit("invitation.revoke", "invitation", inv_id)
+    return {"ok": True}
+
+
+@app.get("/api/org/directory")
+def directory(q: str = "", p: Principal = Depends(need("directory.read"))):
+    like = f"%{q.strip()[:80]}%"
+    rows = db.conn().execute(
+        "SELECT p.user_id, p.display_name, p.email, m.role FROM memberships m JOIN profiles p ON p.user_id = m.user_id "
+        "WHERE m.org_id=? AND p.status='active' AND m.role IN ('client','advocate','admin') "
+        "AND (p.display_name LIKE ? OR p.email LIKE ?) ORDER BY p.display_name LIMIT 50", (p.org_id, like, like))
+    return {"people": [dict(r) for r in rows]}
 
 
 # ── Status / dashboard ───────────────────────────────────────────────────────
 @app.get("/api/status")
-def status():
+def status(p: Principal = P):
     if time.time() - _state["llm_checked"] > 120:
         ok, _ = llm.ping()
         _state.update(llm=ok, llm_checked=time.time())
-    counts = {r["collection"]: r["n"] for r in db.conn().execute(
-        "SELECT collection, COUNT(*) n FROM documents WHERE status='ready' GROUP BY collection")}
+    lib = {r["collection"]: r["n"] for r in db.conn().execute(
+        "SELECT collection, COUNT(*) n FROM documents WHERE status='ready' AND collection <> 'case' GROUP BY collection")}
+    mine = authz.accessible_case_ids(p)
+    if mine:
+        ph = ",".join("?" * len(mine))
+        lib["case"] = db.conn().execute(f"SELECT COUNT(*) FROM documents WHERE status='ready' AND collection='case' "
+                                        f"AND case_id IN ({ph})", mine).fetchone()[0]
+        processing = db.conn().execute(f"SELECT COUNT(*) FROM documents WHERE status='processing' AND case_id IN ({ph})",
+                                       mine).fetchone()[0]
+    else:
+        processing = 0
     return {
         "llm_model": config.LLM_MODEL, "fast_model": config.FAST_LLM_MODEL, "embed_model": config.EMBED_MODEL,
         "reranker": config.RERANK_MODEL if config.RERANK_ENABLED else None, "llm_reachable": _state["llm"],
         "llm_host": "Ollama Cloud" if "ollama.com" in config.OLLAMA_HOST else "Local Ollama",
-        "models_ready": _state["models_ready"], "indexed_chunks": len(index), "documents": counts,
-        "processing": db.conn().execute("SELECT COUNT(*) FROM documents WHERE status='processing'").fetchone()[0],
-        "ocr": ocr.status(), "sync_enabled": config.SYNC_ENABLED,
+        "models_ready": _state["models_ready"], "indexed_chunks": len(index), "documents": lib,
+        "processing": processing, "ocr": ocr.status(), "sync_enabled": config.SYNC_ENABLED,
         "database": "Supabase Postgres" if db.backend() == "postgres" else "Local SQLite",
         "file_storage": "Supabase Storage (private)" if storage.remote_enabled() else "Local folder",
+        "accounts": "Supabase Auth" if accounts.mode() == "supabase" else "Local single user",
+        "malware_scan": filescan.malware_scan_status(), "pii_redaction": config.AI_PII_REDACTION,
     }
 
 
 @app.get("/api/dashboard")
-def dashboard():
+def dashboard(p: Principal = Depends(need("cases.list"))):
     today = date.today()
+    mine = authz.accessible_case_ids(p) or ["-"]
+    ph = ",".join("?" * len(mine))
     upcoming = [dict(r) for r in db.conn().execute(
-        "SELECT id, title, case_type, court, next_hearing_date, status FROM cases "
-        "WHERE next_hearing_date >= ? AND next_hearing_date <= ? ORDER BY next_hearing_date LIMIT 8",
-        (today.isoformat(), (today + timedelta(days=45)).isoformat()))]
-    by_type = {r["case_type"]: r["n"] for r in db.conn().execute("SELECT case_type, COUNT(*) n FROM cases GROUP BY case_type")}
+        f"SELECT id, title, case_type, court, next_hearing_date, status FROM cases WHERE id IN ({ph}) "
+        "AND next_hearing_date >= ? AND next_hearing_date <= ? ORDER BY next_hearing_date LIMIT 8",
+        (*mine, today.isoformat(), (today + timedelta(days=45)).isoformat()))]
+    by_type = {r["case_type"]: r["n"] for r in db.conn().execute(
+        f"SELECT case_type, COUNT(*) n FROM cases WHERE id IN ({ph}) GROUP BY case_type", mine)}
     recent = [dict(r) for r in db.conn().execute(
         "SELECT ch.id, ch.title, ch.case_id, ch.updated_at, c.title AS case_title FROM chats ch "
-        "LEFT JOIN cases c ON c.id = ch.case_id ORDER BY ch.updated_at DESC LIMIT 6")]
+        "LEFT JOIN cases c ON c.id = ch.case_id WHERE ch.user_id = ? ORDER BY ch.updated_at DESC LIMIT 6", (p.user_id,))]
     lib = {r["collection"]: r["n"] for r in db.conn().execute(
-        "SELECT collection, COUNT(*) n FROM documents WHERE status='ready' GROUP BY collection")}
+        "SELECT collection, COUNT(*) n FROM documents WHERE status='ready' AND collection <> 'case' GROUP BY collection")}
     return {"upcoming": upcoming, "by_type": by_type, "recent_chats": recent, "library": lib,
             "total_cases": sum(by_type.values())}
 
@@ -217,7 +667,8 @@ def dashboard():
 # ── Preferences, notifications, activity ────────────────────────────────────
 LANGS = ("en", "hi", "mr")
 PREF_KEYS = {"lang": LANGS, "voice_lang": ("en-IN", "hi-IN", "mr-IN"), "tts": ("on", "off"),
-             "voice_consent": ("granted", "denied", ""), "draft_style": None, "chat_retention_days": None}
+             "voice_consent": ("granted", "denied", ""), "draft_style": None}
+ORG_KEYS = {"chat_retention_days"}
 
 
 class PrefsIn(BaseModel):
@@ -225,45 +676,64 @@ class PrefsIn(BaseModel):
 
 
 @app.get("/api/prefs")
-def get_prefs():
-    rows = db.conn().execute("SELECT key, value FROM prefs").fetchall()
+def get_prefs(p: Principal = P):
     out = {"lang": "en"}
-    out.update({r["key"]: r["value"] for r in rows if r["key"] in PREF_KEYS})
+    if p.signed_in:
+        out.update({k: v for k, v in db.user_prefs(p.user_id).items() if k in PREF_KEYS})
+        out["chat_retention_days"] = db.get_setting("chat_retention_days", "") or ""
     return out
 
 
 @app.put("/api/prefs")
-def put_prefs(body: PrefsIn):
+def put_prefs(body: PrefsIn, p: Principal = Depends(need("account.self"))):
     for k, v in body.values.items():
-        allowed = PREF_KEYS.get(k, ())
         v = str(v)[:200]
+        if k in ORG_KEYS:
+            authz.require(p, "settings.manage")
+            if v and not (v.isdigit() and 1 <= int(v) <= 3650):
+                raise HTTPException(400, "Retention must be 1–3650 days, or empty to keep forever.")
+            db.set_setting(k, v)
+            db.audit("settings.update", "setting", k, value=v or "forever")
+            continue
+        allowed = PREF_KEYS.get(k, ())
         if k not in PREF_KEYS or (allowed is not None and v not in allowed):
             raise HTTPException(400, f"Invalid preference: {k}")
-        if k == "chat_retention_days" and v and not (v.isdigit() and 1 <= int(v) <= 3650):
-            raise HTTPException(400, "Retention must be 1–3650 days, or empty to keep forever.")
-        db.set_pref(k, v)
-    return get_prefs()
+        db.set_user_pref(k, v)
+    return get_prefs(p)
 
 
 @app.get("/api/notifications")
-def notifications(unread: bool = False, limit: int = 50):
-    sql = "SELECT * FROM notifications" + (" WHERE read_at IS NULL" if unread else "") + \
+def notifications(unread: bool = False, limit: int = 50, p: Principal = Depends(need("notifications.read"))):
+    sql = "SELECT * FROM notifications WHERE user_id=?" + (" AND read_at IS NULL" if unread else "") + \
           " ORDER BY created_at DESC, id DESC LIMIT ?"
-    items = [dict(r) for r in db.conn().execute(sql, (max(1, min(limit, 200)),))]
-    n_unread = db.conn().execute("SELECT COUNT(*) FROM notifications WHERE read_at IS NULL").fetchone()[0]
+    items = [dict(r) for r in db.conn().execute(sql, (p.user_id, max(1, min(limit, 200))))]
+    n_unread = db.conn().execute("SELECT COUNT(*) FROM notifications WHERE user_id=? AND read_at IS NULL",
+                                 (p.user_id,)).fetchone()[0]
     return {"items": items, "unread": n_unread}
 
 
 @app.post("/api/notifications/read")
-def notifications_read():
+def notifications_read(p: Principal = Depends(need("notifications.read"))):
     with db.tx() as c:
-        c.execute("UPDATE notifications SET read_at=? WHERE read_at IS NULL", (db.now(),))
+        c.execute("UPDATE notifications SET read_at=? WHERE user_id=? AND read_at IS NULL", (db.now(), p.user_id))
     return {"ok": True}
 
 
 @app.get("/api/audit")
-def audit_log(limit: int = 100):
-    rows = db.conn().execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (max(1, min(limit, 500)),))
+def audit_log(limit: int = 100, action: str = "", outcome: str = "", actor: str = "",
+              p: Principal = Depends(need("audit.read"))):
+    sql, args = "SELECT * FROM audit_log WHERE org_id=?", [p.org_id]
+    if action:
+        sql += " AND action LIKE ?"
+        args.append(f"{action[:60]}%")
+    if outcome:
+        sql += " AND outcome=?"
+        args.append(outcome[:20])
+    if actor:
+        sql += " AND actor_id=?"
+        args.append(actor[:60])
+    rows = db.conn().execute(sql + " ORDER BY id DESC LIMIT ?", (*args, max(1, min(limit, 500))))
+    # Records only: who, what, which id, outcome. Details never contain document text (see db.audit).
     return {"items": [db.row_to_dict(r, ("detail",)) for r in rows]}
 
 
@@ -303,17 +773,18 @@ def _field_error(exc: cases.FieldError) -> JSONResponse:
 
 
 @app.get("/api/reference")
-def reference_data():
+def reference_data(p: Principal = Depends(need("library.read"))):
     return reference.form_options()
 
 
 @app.get("/api/cases")
-def list_cases():
-    return {"cases": cases.list_cases(), "types": cases.CASE_TYPES, "statuses": cases.CASE_STATUSES}
+def list_cases(p: Principal = Depends(need("cases.list"))):
+    return {"cases": cases.list_cases(p), "types": cases.CASE_TYPES, "statuses": cases.CASE_STATUSES,
+            "can_create": p.can("case.create")}
 
 
 @app.post("/api/cases")
-def create_case(body: CaseIn):
+def create_case(body: CaseIn, p: Principal = Depends(need("case.create"))):
     try:
         return cases.create_case(body.model_dump(exclude_none=True))
     except cases.FieldError as exc:
@@ -321,37 +792,124 @@ def create_case(body: CaseIn):
 
 
 @app.get("/api/cases/{case_id}")
-def get_case(case_id: str):
-    c = cases.get_case(case_id)
+def get_case(case_id: str, p: Principal = P):
+    access = authz.case_access(p, case_id)
+    if access is None:
+        if p.signed_in and p.role == "admin" and authz.case_org(case_id) == p.org_id:
+            access = "admin"
+        else:
+            authz.require_case(p, case_id, "case.read")   # raises NotFound / Denied
+    if access == "admin":   # administrator who is not on the case: the listing data only, no contents
+        c = cases.case_metadata(case_id)
+    else:
+        c = cases.get_case(case_id, with_notes=access in authz.CASE_ACTIONS["notes"])
     if not c:
-        raise HTTPException(404, "Case not found")
+        raise authz.NotFound("Case not found")
+    c["access"] = None if access == "admin" else access
+    c["can"] = {a: authz.can_case(p, case_id, a) for a in ("case.update", "case.delete", "case.members", "notes",
+                                                            "documents.upload", "documents.delete", "drafts",
+                                                            "provisions", "records")}
     return c
 
 
 @app.patch("/api/cases/{case_id}")
-def update_case(case_id: str, body: CaseIn):
+def update_case(case_id: str, body: CaseIn, p: Principal = P):
+    authz.require_case(p, case_id, "case.update")
     try:
         c = cases.update_case(case_id, body.model_dump(exclude_none=True))
     except cases.FieldError as exc:
         return _field_error(exc)
     if not c:
-        raise HTTPException(404, "Case not found")
+        raise authz.NotFound("Case not found")
     return c
 
 
 @app.delete("/api/cases/{case_id}")
-def delete_case(case_id: str):
+def delete_case(case_id: str, p: Principal = P):
+    authz.require_case(p, case_id, "case.delete")
     if not cases.delete_case(case_id):
-        raise HTTPException(404, "Case not found")
+        raise authz.NotFound("Case not found")
     return {"ok": True}
 
 
 @app.post("/api/cases/{case_id}/notes")
-def add_note(case_id: str, body: NoteIn):
-    c = cases.add_note(case_id, body.content, body.author)
+def add_note(case_id: str, body: NoteIn, p: Principal = P):
+    authz.require_case(p, case_id, "notes")
+    c = cases.add_note(case_id, body.content, p.display_name or body.author)
     if not c:
-        raise HTTPException(404, "Case not found")
+        raise authz.NotFound("Case not found")
     return c
+
+
+# ── Case members ─────────────────────────────────────────────────────────────
+def _members(case_id: str) -> list[dict]:
+    with db.system():   # names of the people on the case (visible to anyone who can see the case)
+        rows = db.conn().execute(
+            "SELECT cm.user_id, cm.access, cm.created_at, p.display_name, p.email, m.role FROM case_members cm "
+            "JOIN profiles p ON p.user_id = cm.user_id JOIN cases c ON c.id = cm.case_id "
+            "LEFT JOIN memberships m ON m.user_id = cm.user_id AND m.org_id = c.org_id "
+            "WHERE cm.case_id=? ORDER BY cm.access, p.display_name", (case_id,))
+        return [dict(r) for r in rows]
+
+
+@app.get("/api/cases/{case_id}/members")
+def case_members(case_id: str, p: Principal = P):
+    if not authz.can_case(p, case_id, "case.members"):
+        authz.require_case(p, case_id, "case.read")
+    members = _members(case_id)
+    if not authz.can_case(p, case_id, "case.members"):   # clients see names and roles, not e-mail addresses
+        members = [{k: v for k, v in m.items() if k != "email"} for m in members]
+    return {"members": members, "can_manage": authz.can_case(p, case_id, "case.members")}
+
+
+class MemberIn(BaseModel):
+    user_id: str | None = Field(None, max_length=64)
+    email: str | None = Field(None, max_length=254)
+    access: Literal["owner", "advocate", "client"] = "advocate"
+
+
+@app.post("/api/cases/{case_id}/members")
+def add_case_member(case_id: str, body: MemberIn, p: Principal = P):
+    authz.require_case(p, case_id, "case.members")
+    org = authz.case_org(case_id)
+    with db.system():
+        if body.user_id:
+            who = db.conn().execute("SELECT m.user_id, m.role FROM memberships m JOIN profiles p ON p.user_id = m.user_id "
+                                    "WHERE m.org_id=? AND m.user_id=? AND p.status='active'", (org, body.user_id)).fetchone()
+        else:
+            who = db.conn().execute("SELECT m.user_id, m.role FROM memberships m JOIN profiles p ON p.user_id = m.user_id "
+                                    "WHERE m.org_id=? AND lower(p.email)=? AND p.status='active'",
+                                    (org, (body.email or "").strip().lower())).fetchone()
+    if not who:
+        raise authz.NotFound("No active member of your organisation has that account.")
+    if not authz.compatible_access(who["role"], body.access):
+        raise authz.Denied("That person's role does not allow this level of access "
+                           "(clients can only be given client access; auditors cannot be added to cases).")
+    with db.tx() as c:
+        c.execute("INSERT INTO case_members(case_id, user_id, access, added_by, created_at) VALUES(?,?,?,?,?) "
+                  "ON CONFLICT(case_id, user_id) DO UPDATE SET access=excluded.access",
+                  (case_id, who["user_id"], body.access, p.user_id, db.now()))
+    self_assigned = who["user_id"] == p.user_id
+    db.audit("case.member_add", "case", case_id, member=who["user_id"], access=body.access, self_assigned=self_assigned)
+    if not self_assigned:
+        db.notify("case_update", "You were added to a case", f"Access: {body.access}.", f"#/cases/{case_id}",
+                  recipients=[who["user_id"]])
+    return {"members": _members(case_id)}
+
+
+@app.delete("/api/cases/{case_id}/members/{user_id}")
+def remove_case_member(case_id: str, user_id: str, p: Principal = P):
+    authz.require_case(p, case_id, "case.members")
+    members = _members(case_id)
+    target = next((m for m in members if m["user_id"] == user_id), None)
+    if not target:
+        raise authz.NotFound("Not a member of this case")
+    if target["access"] == "owner" and sum(m["access"] == "owner" for m in members) <= 1:
+        raise authz.Denied("A case must keep at least one owner.")
+    with db.tx() as c:
+        c.execute("DELETE FROM case_members WHERE case_id=? AND user_id=?", (case_id, user_id))
+    db.audit("case.member_remove", "case", case_id, member=user_id)
+    return {"members": _members(case_id)}
 
 
 # ── Documents ────────────────────────────────────────────────────────────────
@@ -359,12 +917,18 @@ DOC_FIELDS = "id, case_id, collection, doc_type, title, filename, pages, chars, 
 
 
 @app.get("/api/documents")
-def list_documents(case_id: str | None = None, collection: str | None = None):
+def list_documents(case_id: str | None = None, collection: str | None = None, p: Principal = P):
     sql, args = f"SELECT {DOC_FIELDS} FROM documents WHERE 1=1", []
     if case_id:
+        authz.require_case(p, case_id, "documents.read")
         # Derived documents (English translations) are reached from their source document, not listed.
         sql += " AND case_id=? AND meta->>'derived_from' IS NULL"
         args.append(case_id)
+    else:
+        authz.require(p, "library.read")
+        mine = authz.accessible_case_ids(p)
+        sql += " AND (collection <> 'case'" + (f" OR case_id IN ({','.join('?' * len(mine))})" if mine else "") + ")"
+        args += mine
     if collection:
         sql += " AND collection=?"
         args.append(collection)
@@ -373,9 +937,8 @@ def list_documents(case_id: str | None = None, collection: str | None = None):
 
 
 @app.post("/api/cases/{case_id}/documents", dependencies=[Depends(rate(30, "upload"))])
-def upload(case_id: str, file: UploadFile = File(...), doc_type: str = Form("auto")):
-    if not cases.get_case(case_id):
-        raise HTTPException(404, "Case not found")
+def upload(case_id: str, file: UploadFile = File(...), doc_type: str = Form("auto"), p: Principal = P):
+    authz.require_case(p, case_id, "documents.upload")
     name = security.safe_filename(file.filename or "document")
     ext = Path(name).suffix.lower()
     if ext not in security.ALLOWED_EXT:
@@ -397,11 +960,16 @@ def upload(case_id: str, file: UploadFile = File(...), doc_type: str = Form("aut
                 out.write(chunk)
         if not security.sniff_ok(staged, ext):
             raise HTTPException(415, "File content does not match its extension.")
+        try:
+            filescan.check(staged, ext)
+        except filescan.Rejected as exc:
+            db.audit("document.rejected", "case", case_id, outcome="rejected", ext=ext, reason=str(exc)[:120])
+            raise HTTPException(422, str(exc)) from None
         sha = ingest.sha256_file(staged)
         dup = ingest.find_duplicate(case_id, sha)
         if dup:
             if dup["status"] == "failed":  # retry a previously failed file
-                _ingest_pool.submit(ingest.process, dup["id"])
+                _submit_ingest(dup["id"])
             return {**_public(dup), "duplicate": True}
         try:
             ref = storage.put_file(staged, case_id, doc_id, ext, security.MIME.get(ext, "application/octet-stream"))
@@ -417,7 +985,7 @@ def upload(case_id: str, file: UploadFile = File(...), doc_type: str = Form("aut
     if not created:  # lost a race with an identical concurrent upload
         storage.delete(ref)
         return {**_public(doc), "duplicate": True}
-    _ingest_pool.submit(ingest.process, doc["id"])
+    _submit_ingest(doc["id"])
     db.audit("document.upload", "document", doc["id"], case_id=case_id, ext=ext, bytes=size)
     return _public(doc)
 
@@ -427,30 +995,30 @@ def _public(doc: dict) -> dict:
 
 
 @app.get("/api/documents/{doc_id}")
-def document(doc_id: str):
+def document(doc_id: str, p: Principal = P):
+    authz.require_document(p, doc_id)
     row = db.conn().execute(f"SELECT {DOC_FIELDS} FROM documents WHERE id=?", (doc_id,)).fetchone()
     if not row:
-        raise HTTPException(404, "Document not found")
+        raise authz.NotFound("Document not found")
     return db.row_to_dict(row)
 
 
 @app.delete("/api/documents/{doc_id}")
-def delete_document(doc_id: str):
-    row = db.conn().execute("SELECT collection FROM documents WHERE id=?", (doc_id,)).fetchone()
-    if not row:
-        raise HTTPException(404, "Document not found")
-    if row["collection"] != "case":
-        raise HTTPException(403, "Library documents are managed from the data/library folder.")
+def delete_document(doc_id: str, p: Principal = P):
+    collection, _ = authz.require_document(p, doc_id, "documents.delete")
     ingest.delete_document(doc_id)
     db.audit("document.delete", "document", doc_id)
     return {"ok": True}
 
 
 @app.get("/api/documents/{doc_id}/file")
-def document_file(doc_id: str):
+def document_file(doc_id: str, p: Principal = P):
+    collection, case_id = authz.require_document(p, doc_id)
     row = db.conn().execute("SELECT path, filename FROM documents WHERE id=?", (doc_id,)).fetchone()
     if not row:
-        raise HTTPException(404, "Document not found")
+        raise authz.NotFound("Document not found")
+    if collection == "case":
+        db.audit("document.open", "document", doc_id, case_id=case_id)
     ext = Path(row["filename"]).suffix.lower() or Path(row["path"]).suffix.lower()
     disposition = "attachment" if ext in (".docx", ".doc") else "inline"
     media = security.MIME.get(ext, "application/octet-stream")
@@ -472,14 +1040,16 @@ def document_file(doc_id: str):
         resp.headers["Content-Security-Policy"] = "sandbox; default-src 'none'; img-src 'self'"
     else:  # the document viewer embeds PDFs; only this origin may frame them
         resp.headers["Content-Security-Policy"] = "frame-ancestors 'self'"
+    resp.headers["Cache-Control"] = "private, no-store"
     return resp
 
 
 @app.get("/api/documents/{doc_id}/text")
-def document_text(doc_id: str):
+def document_text(doc_id: str, p: Principal = P):
+    authz.require_document(p, doc_id)
     row = db.conn().execute("SELECT path, collection, title FROM documents WHERE id=?", (doc_id,)).fetchone()
     if not row:
-        raise HTTPException(404, "Document not found")
+        raise authz.NotFound("Document not found")
     if row["collection"] == "draft":
         return {"title": row["title"], "text": config.from_stored(row["path"]).read_text("utf-8")}
     chunks, _ = ingest.document_text(doc_id)
@@ -487,18 +1057,26 @@ def document_text(doc_id: str):
 
 
 @app.get("/api/chunks/{chunk_id}")
-def chunk(chunk_id: int):
+def chunk(chunk_id: int, p: Principal = P):
+    with db.system():
+        owner = db.conn().execute("SELECT doc_id FROM chunks WHERE id=?", (chunk_id,)).fetchone()
+    if not owner:
+        raise authz.NotFound("Passage not found")
+    try:
+        authz.require_document(p, owner["doc_id"])
+    except authz.NotFound:
+        raise authz.NotFound("Passage not found") from None
     row = db.conn().execute(
         "SELECT c.id, c.doc_id, c.header, c.text, c.label, c.page_start, c.page_end, d.title, d.collection "
         "FROM chunks c JOIN documents d ON d.id=c.doc_id WHERE c.id=?", (chunk_id,)).fetchone()
     if not row:
-        raise HTTPException(404, "Passage not found")
+        raise authz.NotFound("Passage not found")
     return dict(row)
 
 
 # ── Library ──────────────────────────────────────────────────────────────────
 @app.get("/api/library")
-def library():
+def library(p: Principal = Depends(need("library.read"))):
     out: dict[str, list] = {"bare_act": [], "draft": [], "judgment": []}
     for r in db.conn().execute(f"SELECT {DOC_FIELDS} FROM documents WHERE collection IN ('bare_act','draft','judgment') "
                                "ORDER BY title"):
@@ -508,11 +1086,12 @@ def library():
 
 
 @app.get("/api/library/lookup")
-def lookup(q: str = "", act: str | None = None, limit: int = 12):
+def lookup(q: str = "", act: str | None = None, limit: int = 12, p: Principal = Depends(need("library.read"))):
     """Instant provision lookup (no LLM): exact section/article/rule match, else keyword search."""
     q = q.strip()[:300]
     if not q:
         return {"results": []}
+    limit = max(1, min(limit, 30))
     query = f"{q} {act}" if act else q
     refs = citations.parse_refs(query)
     doc_ids = retrieval.act_doc_ids([act]) if act else None
@@ -532,12 +1111,12 @@ class LimitationIn(BaseModel):
 
 
 @app.get("/api/limitation")
-def limitation_categories():
+def limitation_categories(p: Principal = Depends(need("library.read"))):
     return {"categories": tools.categories(), "caveat": tools.CAVEAT}
 
 
 @app.post("/api/limitation")
-def limitation(body: LimitationIn):
+def limitation(body: LimitationIn, p: Principal = Depends(need("library.read"))):
     try:
         return tools.limitation(body.cause, body.start_date)
     except KeyError:
@@ -546,30 +1125,39 @@ def limitation(body: LimitationIn):
         raise HTTPException(400, "Date must be YYYY-MM-DD")
 
 
-# ── Chats ────────────────────────────────────────────────────────────────────
+# ── Chats (personal research history) ───────────────────────────────────────
 @app.get("/api/chats")
-def chats(case_id: str | None = None):
+def chats(case_id: str | None = None, p: Principal = Depends(need("research.use"))):
     if case_id:
-        rows = db.conn().execute("SELECT * FROM chats WHERE case_id=? ORDER BY updated_at DESC LIMIT 50", (case_id,))
+        authz.require_case(p, case_id, "chat")
+        rows = db.conn().execute("SELECT * FROM chats WHERE case_id=? AND user_id=? ORDER BY updated_at DESC LIMIT 50",
+                                 (case_id, p.user_id))
     else:
-        rows = db.conn().execute("SELECT * FROM chats WHERE case_id IS NULL ORDER BY updated_at DESC LIMIT 50")
+        rows = db.conn().execute("SELECT * FROM chats WHERE case_id IS NULL AND user_id=? ORDER BY updated_at DESC LIMIT 50",
+                                 (p.user_id,))
     return {"chats": [dict(r) for r in rows]}
 
 
+def _own_chat(p: Principal, chat_id: str) -> dict:
+    chat = db.conn().execute("SELECT * FROM chats WHERE id=? AND user_id=?", (chat_id, p.user_id)).fetchone()
+    if not chat or (chat["case_id"] and not authz.can_case(p, chat["case_id"], "chat")):
+        raise authz.NotFound("Chat not found")
+    return dict(chat)
+
+
 @app.get("/api/chats/{chat_id}")
-def chat_messages(chat_id: str):
-    chat = db.conn().execute("SELECT * FROM chats WHERE id=?", (chat_id,)).fetchone()
-    if not chat:
-        raise HTTPException(404, "Chat not found")
+def chat_messages(chat_id: str, p: Principal = Depends(need("research.use"))):
+    chat = _own_chat(p, chat_id)
     msgs = [db.row_to_dict(r) for r in db.conn().execute(
         "SELECT id, role, content, sources, meta, created_at FROM messages WHERE chat_id=? ORDER BY id", (chat_id,))]
-    return {"chat": dict(chat), "messages": msgs}
+    return {"chat": chat, "messages": msgs}
 
 
 @app.delete("/api/chats/{chat_id}")
-def delete_chat(chat_id: str):
+def delete_chat(chat_id: str, p: Principal = Depends(need("research.use"))):
+    _own_chat(p, chat_id)
     with db.tx() as c:
-        c.execute("DELETE FROM chats WHERE id=?", (chat_id,))
+        c.execute("DELETE FROM chats WHERE id=? AND user_id=?", (chat_id, p.user_id))
     return {"ok": True}
 
 
@@ -585,11 +1173,24 @@ class ChatIn(BaseModel):
 
 
 @app.post("/api/chat", dependencies=[Depends(rate(config.CHAT_RATE_PER_MIN, "chat"))])
-def chat(body: ChatIn):
+def chat(body: ChatIn, p: Principal = Depends(need("research.use"))):
+    # Deterministic authorization before the model sees anything: the case, the document and the chat must all
+    # be the caller's to use. The agent never chooses them.
+    if body.case_id:
+        authz.require_case(p, body.case_id, "chat")
+    if body.doc_id:
+        collection, doc_case = authz.require_document(p, body.doc_id)
+        if collection == "case" and doc_case != body.case_id:
+            raise authz.NotFound("Document not found")
+        if collection == "case":
+            authz.require_case(p, doc_case, "documents.ai")
+    if body.chat_id:
+        _own_chat(p, body.chat_id)
+
     def events():
         try:
-            for evt in agent.run(message=body.message, chat_id=body.chat_id, case_id=body.case_id,
-                                 scope=body.scope, doc_id=body.doc_id, task=body.task, lang=body.lang):
+            for evt in agent.run(message=body.message, chat_id=body.chat_id, case_id=body.case_id, scope=body.scope,
+                                 doc_id=body.doc_id, task=body.task, lang=body.lang, principal=p):
                 yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
         except Exception:
             log.exception("chat stream failed")
@@ -601,11 +1202,11 @@ def chat(body: ChatIn):
 
 # ── Background jobs ──────────────────────────────────────────────────────────
 @app.get("/api/jobs/{job_id}")
-def job_status(job_id: str):
-    j = jobs.get(job_id)
+def job_status(job_id: str, p: Principal = Depends(need("account.self"))):
+    j = jobs.get(job_id, owner=p.user_id)
     if not j:
-        raise HTTPException(404, "Job not found (the server may have restarted)")
-    return {k: v for k, v in j.items() if k != "key"}
+        raise authz.NotFound("Job not found (the server may have restarted)")
+    return {k: v for k, v in j.items() if k not in ("key", "owner")}
 
 
 class ConsentIn(BaseModel):
@@ -621,43 +1222,54 @@ def _need_consent(body: ConsentIn) -> None:
 
 # ── Document intelligence ────────────────────────────────────────────────────
 @app.get("/api/documents/{doc_id}/intel")
-def document_intel(doc_id: str):
+def document_intel(doc_id: str, p: Principal = P):
+    authz.require_document(p, doc_id)
     try:
         return docintel.overview(doc_id)
     except ValueError as exc:
         raise HTTPException(404, str(exc))
 
 
+def _doc_ai(p: Principal, doc_id: str) -> None:
+    collection, _ = authz.require_document(p, doc_id, "documents.ai")
+    if collection != "case":
+        raise authz.Denied("Translation and summaries are for case documents.")
+
+
 @app.post("/api/documents/{doc_id}/translate", dependencies=[Depends(rate(10, "docai"))])
-def document_translate(doc_id: str, body: ConsentIn):
+def document_translate(doc_id: str, body: ConsentIn, p: Principal = P):
+    _doc_ai(p, doc_id)
     _need_consent(body)
     try:
         docintel._doc(doc_id)
     except ValueError as exc:
         raise HTTPException(400, str(exc))
-    return jobs.submit("translate", lambda p: docintel.translate(doc_id, p), key=f"translate:{doc_id}")
+    return jobs.submit("translate", lambda pr: docintel.translate(doc_id, pr), key=f"translate:{doc_id}",
+                       owner=p.user_id)
 
 
 @app.post("/api/documents/{doc_id}/summarize", dependencies=[Depends(rate(10, "docai"))])
-def document_summarize(doc_id: str, body: ConsentIn):
+def document_summarize(doc_id: str, body: ConsentIn, p: Principal = P):
+    _doc_ai(p, doc_id)
     _need_consent(body)
     try:
         docintel._doc(doc_id)
     except ValueError as exc:
         raise HTTPException(400, str(exc))
-    return jobs.submit("summarize", lambda p: docintel.summarize(doc_id, body.lang, p), key=f"summarize:{doc_id}:{body.lang}")
+    return jobs.submit("summarize", lambda pr: docintel.summarize(doc_id, body.lang, pr),
+                       key=f"summarize:{doc_id}:{body.lang}", owner=p.user_id)
 
 
 # ── Drafting, notices, forums ────────────────────────────────────────────────
 @app.get("/api/drafting/config")
-def drafting_config():
+def drafting_config(p: Principal = Depends(need("drafting.use"))):
     return {"types": [{k: t[k] for k in ("id", "label", "kind", "categories")} for t in drafting.doc_types()],
             "forums": [{k: f[k] for k in ("id", "name", "level")} for f in drafting.forums()],
-            "styles": drafting.styles(), "saved_style": db.get_pref("draft_style") or "formal"}
+            "styles": drafting.styles(), "saved_style": db.get_user_pref("draft_style") or "formal"}
 
 
 @app.get("/api/drafting/types/{type_id}")
-def drafting_type(type_id: str):
+def drafting_type(type_id: str, p: Principal = Depends(need("drafting.use"))):
     try:
         return drafting.type_profile(type_id)
     except ValueError as exc:
@@ -665,7 +1277,7 @@ def drafting_type(type_id: str):
 
 
 @app.get("/api/drafting/forums/{forum_id}")
-def drafting_forum(forum_id: str):
+def drafting_forum(forum_id: str, p: Principal = Depends(need("drafting.use"))):
     try:
         return drafting.forum_profile(forum_id)
     except ValueError as exc:
@@ -679,13 +1291,13 @@ class ForumReqIn(BaseModel):
 
 
 @app.post("/api/drafting/forums/{forum_id}/requirements")
-def add_forum_requirement(forum_id: str, body: ForumReqIn):
+def add_forum_requirement(forum_id: str, body: ForumReqIn, p: Principal = Depends(need("forum.edit"))):
     try:
         drafting.forum(forum_id)
     except ValueError as exc:
         raise HTTPException(404, str(exc))
     items = drafting.user_requirements(forum_id) + [body.model_dump()]
-    db.set_pref(f"forum_reqs:{forum_id}", json.dumps(items[-50:], ensure_ascii=False))
+    db.set_setting(f"forum_reqs:{forum_id}", json.dumps(items[-50:], ensure_ascii=False))
     db.audit("forum.requirement_add", "forum", forum_id, url=body.url)
     return drafting.forum_profile(forum_id)
 
@@ -708,8 +1320,31 @@ class DraftIn(BaseModel):
     save_style: bool = False
 
 
+def _require_draft(p: Principal, draft_id: str) -> dict:
+    authz.require(p, "drafting.use")
+    with db.system():
+        row = db.conn().execute("SELECT case_id, created_by FROM drafts WHERE id=?", (draft_id,)).fetchone()
+    ok = row and ((row["case_id"] and authz.can_case(p, row["case_id"], "drafts")) or
+                  (not row["case_id"] and row["created_by"] == p.user_id))
+    if not ok:
+        raise authz.NotFound("Draft not found")
+    return dict(row)
+
+
 @app.post("/api/drafts/generate", dependencies=[Depends(rate(10, "draft"))])
-def draft_generate(body: DraftIn):
+def draft_generate(body: DraftIn, p: Principal = Depends(need("drafting.use"))):
+    if body.case_id:
+        authz.require_case(p, body.case_id, "drafts")
+    for d in [*body.doc_ids, *([body.base_doc_id] if body.base_doc_id else [])]:
+        collection, doc_case = authz.require_document(p, d, "documents.ai")
+        if collection != "case" or doc_case != body.case_id:
+            raise authz.NotFound("A supporting document was not found in this case")
+    if body.template_doc_id and (authz.document_case(body.template_doc_id) or ("", None))[0] != "draft":
+        raise authz.NotFound("Template not found")
+    if body.draft_id:
+        existing = _require_draft(p, body.draft_id)
+        if existing["case_id"] != body.case_id:
+            raise authz.NotFound("Draft not found")
     if body.doc_ids or body.base_doc_id:
         _need_consent(ConsentIn(consent=body.consent))
     try:
@@ -720,22 +1355,25 @@ def draft_generate(body: DraftIn):
     if len(body.known) > 40 or any(len(k) > 60 for k in body.known):
         raise HTTPException(400, "Too many details")
     if body.save_style:
-        db.set_pref("draft_style", body.style)
+        db.set_user_pref("draft_style", body.style)
     args = body.model_dump(exclude={"consent", "save_style", "doc_type", "forum"})
-    return jobs.submit("draft", lambda p: drafting.generate(doc_type_id=body.doc_type, forum_id=body.forum,
-                                                              progress=p, **args))
+    return jobs.submit("draft", lambda pr: drafting.generate(doc_type_id=body.doc_type, forum_id=body.forum,
+                                                               progress=pr, **args), owner=p.user_id)
 
 
 @app.get("/api/drafts")
-def drafts_list(case_id: str | None = None, kind: str | None = None):
-    return {"drafts": drafting.list_drafts(case_id, kind)}
+def drafts_list(case_id: str | None = None, kind: str | None = None, p: Principal = Depends(need("drafting.use"))):
+    if case_id:
+        authz.require_case(p, case_id, "drafts")
+    return {"drafts": drafting.list_drafts(case_id, kind, user_id=p.user_id, team_cases=authz.team_case_ids(p))}
 
 
 @app.get("/api/drafts/{draft_id}")
-def draft_get(draft_id: str):
+def draft_get(draft_id: str, p: Principal = P):
+    _require_draft(p, draft_id)
     d = drafting.get(draft_id)
     if not d:
-        raise HTTPException(404, "Draft not found")
+        raise authz.NotFound("Draft not found")
     return d
 
 
@@ -745,60 +1383,68 @@ class DraftEditIn(BaseModel):
 
 
 @app.put("/api/drafts/{draft_id}")
-def draft_put(draft_id: str, body: DraftEditIn):
+def draft_put(draft_id: str, body: DraftEditIn, p: Principal = P):
+    _require_draft(p, draft_id)
     d = drafting.update_content(draft_id, body.content, body.title)
     if not d:
-        raise HTTPException(404, "Draft not found")
+        raise authz.NotFound("Draft not found")
     return d
 
 
 @app.get("/api/drafts/{draft_id}/versions/{v}")
-def draft_version(draft_id: str, v: int):
+def draft_version(draft_id: str, v: int, p: Principal = P):
+    _require_draft(p, draft_id)
     d = drafting.version(draft_id, v)
     if not d:
-        raise HTTPException(404, "Version not found")
+        raise authz.NotFound("Version not found")
     return d
 
 
 @app.delete("/api/drafts/{draft_id}")
-def draft_delete(draft_id: str):
+def draft_delete(draft_id: str, p: Principal = P):
+    _require_draft(p, draft_id)
     if not drafting.delete(draft_id):
-        raise HTTPException(404, "Draft not found")
+        raise authz.NotFound("Draft not found")
     return {"ok": True}
 
 
-@app.get("/api/drafts/{draft_id}/export")
-def draft_export(draft_id: str, format: Literal["docx", "pdf"] = "docx"):
+@app.get("/api/drafts/{draft_id}/export", dependencies=[Depends(rate(20, "export"))])
+def draft_export(draft_id: str, format: Literal["docx", "pdf"] = "docx", p: Principal = P):
+    _require_draft(p, draft_id)
     d = drafting.get(draft_id)
     if not d:
-        raise HTTPException(404, "Draft not found")
+        raise authz.NotFound("Draft not found")
     if format == "docx":
         data, mime = export.to_docx(d["title"], d["content"], d["sources"]), security.MIME[".docx"]
     else:
         data, mime = export.to_pdf(d["title"], d["content"], d["sources"]), "application/pdf"
     name = security.safe_filename(f"{d['title'][:80]}_v{d['version']}.{format}")
     db.audit("draft.export", "draft", draft_id, format=format, version=d["version"])
-    return Response(data, media_type=mime, headers={"Content-Disposition": f'attachment; filename="{name}"'})
+    return Response(data, media_type=mime, headers={"Content-Disposition": f'attachment; filename="{name}"',
+                                                    "Cache-Control": "private, no-store"})
 
 
 # ── Applicable provisions ───────────────────────────────────────────────────
 class ProvSuggestIn(BaseModel):
     consent: bool = False
     extra: str = Field("", max_length=6000)
-    doc_ids: list[str] | None = None
+    doc_ids: list[str] | None = Field(None, max_length=20)
 
 
 @app.post("/api/cases/{case_id}/provisions/suggest", dependencies=[Depends(rate(10, "prov"))])
-def provisions_suggest(case_id: str, body: ProvSuggestIn):
+def provisions_suggest(case_id: str, body: ProvSuggestIn, p: Principal = P):
+    authz.require_case(p, case_id, "provisions")
     _need_consent(ConsentIn(consent=body.consent))
     if not cases.get_case(case_id):
-        raise HTTPException(404, "Case not found")
-    return jobs.submit("provisions", lambda p: provisions.suggest(case_id, doc_ids=body.doc_ids, extra=body.extra, progress=p),
-                       key=f"prov:{case_id}")
+        raise authz.NotFound("Case not found")
+    return jobs.submit("provisions", lambda pr: provisions.suggest(case_id, doc_ids=body.doc_ids, extra=body.extra,
+                                                                  progress=pr),
+                       key=f"prov:{case_id}", owner=p.user_id)
 
 
 @app.get("/api/cases/{case_id}/provisions")
-def provisions_list(case_id: str):
+def provisions_list(case_id: str, p: Principal = P):
+    authz.require_case(p, case_id, "provisions")
     return {"provisions": provisions.list_for(case_id)}
 
 
@@ -809,38 +1455,42 @@ class ProvUpdateIn(BaseModel):
 
 
 @app.patch("/api/provisions/{prov_id}")
-def provisions_update(prov_id: str, body: ProvUpdateIn):
-    p = provisions.update(prov_id, status=body.status, note=body.note, ref=body.ref)
-    if not p:
-        raise HTTPException(404, "Not found")
-    return p
+def provisions_update(prov_id: str, body: ProvUpdateIn, p: Principal = P):
+    with db.system():
+        row = db.conn().execute("SELECT case_id FROM case_provisions WHERE id=?", (prov_id,)).fetchone()
+    if not row or not authz.can_case(p, row["case_id"], "provisions"):
+        raise authz.NotFound("Not found")
+    pr = provisions.update(prov_id, status=body.status, note=body.note, ref=body.ref)
+    if not pr:
+        raise authz.NotFound("Not found")
+    return pr
 
 
 @app.get("/api/library/provision")
-def library_provision(act: str, ref: str):
+def library_provision(act: str, ref: str, p: Principal = Depends(need("library.read"))):
     from . import library
     return library.lookup_provision(act[:120], ref[:60])
 
 
 # ── Case information search, imports, integrations ──────────────────────────
 class CaseSearchIn(BaseModel):
-    cnr_number: str | None = None
-    case_number: str | None = None
-    filing_number: str | None = None
-    fir_number: str | None = None
-    court: str | None = None
-    case_type: str | None = None
-    state: str | None = None
-    district: str | None = None
-    police_station: str | None = None
-    filing_year: str | None = None
-    petitioner: str | None = None
-    respondent: str | None = None
+    cnr_number: str | None = Field(None, max_length=30)
+    case_number: str | None = Field(None, max_length=100)
+    filing_number: str | None = Field(None, max_length=100)
+    fir_number: str | None = Field(None, max_length=60)
+    court: str | None = Field(None, max_length=200)
+    case_type: str | None = Field(None, max_length=60)
+    state: str | None = Field(None, max_length=80)
+    district: str | None = Field(None, max_length=80)
+    police_station: str | None = Field(None, max_length=120)
+    filing_year: str | None = Field(None, max_length=4)
+    petitioner: str | None = Field(None, max_length=200)
+    respondent: str | None = Field(None, max_length=200)
 
 
 @app.post("/api/casesearch", dependencies=[Depends(rate(30, "casesearch"))])
-def case_search(body: CaseSearchIn):
-    return casesearch.search(body.model_dump())
+def case_search(body: CaseSearchIn, p: Principal = Depends(need("casesearch.use"))):
+    return casesearch.search(body.model_dump(), principal=p)
 
 
 class OrderIn(BaseModel):
@@ -864,7 +1514,9 @@ class RecordImportIn(CaseSearchIn):
 
 
 @app.post("/api/records/import")
-def record_import(body: RecordImportIn):
+def record_import(body: RecordImportIn, p: Principal = Depends(need("casesearch.use"))):
+    if body.case_id:
+        authz.require_case(p, body.case_id, "records")
     data = body.model_dump(exclude={"source", "case_id"})
     data["orders"] = [o for o in data["orders"]]
     try:
@@ -874,7 +1526,12 @@ def record_import(body: RecordImportIn):
 
 
 @app.post("/api/records/{record_id}/save-case")
-def record_save_case(record_id: str):
+def record_save_case(record_id: str, p: Principal = Depends(need("case.create"))):
+    with db.system():
+        row = db.conn().execute("SELECT created_by, case_id FROM source_records WHERE id=? AND kind='case_record'",
+                                (record_id,)).fetchone()
+    if not row or (row["created_by"] != p.user_id and not (row["case_id"] and authz.can_case(p, row["case_id"], "records"))):
+        raise authz.NotFound("Record not found")
     try:
         return casesearch.save_to_case(record_id)
     except cases.FieldError as exc:
@@ -884,19 +1541,22 @@ def record_save_case(record_id: str):
 
 
 @app.get("/api/cases/{case_id}/records")
-def case_records(case_id: str):
+def case_records(case_id: str, p: Principal = P):
+    authz.require_case(p, case_id, "records")
     return {"records": casesearch.records_for_case(case_id)}
 
 
 @app.get("/api/integrations")
-def integrations_status():
-    return {"integrations": integrations.status(), "scheduler": bool(_scheduler and _scheduler.is_alive())}
+def integrations_status(p: Principal = Depends(need("integrations.read"))):
+    return {"integrations": integrations.status(), "scheduler": bool(_scheduler and _scheduler.is_alive()),
+            "can_manage": p.can("integrations.manage")}
 
 
 @app.post("/api/integrations/{iid}/sync", dependencies=[Depends(rate(6, "sync"))])
-def integrations_sync(iid: str):
+def integrations_sync(iid: str, p: Principal = Depends(need("integrations.manage"))):
     try:
-        return integrations.run_sync(iid, "manual")
+        with db.system():   # public feeds: written as shared records after the administrator check above
+            return integrations.run_sync(iid, "manual")
     except ValueError as exc:
         raise HTTPException(400, str(exc))
 
@@ -906,30 +1566,31 @@ class EnabledIn(BaseModel):
 
 
 @app.post("/api/integrations/{iid}/enabled")
-def integrations_enable(iid: str, body: EnabledIn):
+def integrations_enable(iid: str, body: EnabledIn, p: Principal = Depends(need("integrations.manage"))):
     if iid not in integrations.ADAPTERS:
         raise HTTPException(404, "Unknown integration")
-    integrations.set_enabled(iid, body.enabled)
+    with db.system():
+        integrations.set_enabled(iid, body.enabled)
     return {"ok": True}
 
 
 @app.get("/api/news")
-def news(q: str = "", limit: int = 50):
+def news(q: str = "", limit: int = 50, p: Principal = Depends(need("library.read"))):
     return {"items": integrations.news(max(1, min(limit, 200)), q[:100])}
 
 
 # ── Legal awareness, unified search ─────────────────────────────────────────
 @app.get("/api/awareness")
-def awareness_list(state: str = "MH", subject: str | None = None, q: str = ""):
+def awareness_list(state: str = "MH", subject: str | None = None, q: str = "", p: Principal = Depends(need("library.read"))):
     return awareness.listing(state[:20], subject, q[:100])
 
 
 @app.get("/api/search")
 def unified_search(q: str = "", types: str = "", court: str = "", state: str = "", year: str = "", case_type: str = "",
-                   doc_type: str = "", source: str = ""):
+                   doc_type: str = "", source: str = "", p: Principal = Depends(need("library.read"))):
     t = {x for x in types.split(",") if x} or None
     return search.search(q, types=t, court=court[:100], state=state[:60], year=year[:4], case_type=case_type[:20],
-                         doc_type=doc_type[:20], source=source[:40])
+                         doc_type=doc_type[:20], source=source[:40], principal=p)
 
 
 app.mount("/static", StaticFiles(directory=config.WEB_DIR), name="static")

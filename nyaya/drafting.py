@@ -14,7 +14,7 @@ import json
 import re
 from functools import lru_cache
 
-from . import cases, config, db, docintel, library, llm, prompts, retrieval
+from . import cases, config, db, docintel, guardrails, library, llm, prompts, retrieval
 
 DATA = config.ROOT / "data" / "drafting"   # configuration shipped with the app (not user data)
 FILE_CHARS = 14000          # per supporting file
@@ -62,7 +62,7 @@ def forum(forum_id: str) -> dict:
 
 
 def user_requirements(forum_id: str) -> list[dict]:
-    raw = db.get_pref(f"forum_reqs:{forum_id}")
+    raw = db.get_setting(f"forum_reqs:{forum_id}")   # verified requirements added by the organisation
     try:
         return json.loads(raw) if raw else []
     except ValueError:
@@ -107,7 +107,7 @@ def gather(case: dict | None, doc_ids: list[str], known: dict, instructions: str
     if case:
         docs = [dict(r) for r in db.conn().execute(
             "SELECT id, title, doc_type FROM documents WHERE case_id=? AND status='ready'", (case["id"],))]
-        parts.append("CASE DOSSIER:\n" + cases.dossier(case, docs))
+        parts.append("CASE DOSSIER:\n" + guardrails.neutralise(cases.dossier(case, docs)))
     if known:
         parts.append("USER-SUPPLIED DETAILS:\n" + "\n".join(f"- {k}: {v}" for k, v in known.items() if str(v).strip()))
     if instructions:
@@ -115,17 +115,17 @@ def gather(case: dict | None, doc_ids: list[str], known: dict, instructions: str
     for i, d in enumerate(doc_ids[:6], 1):
         row, text = _file_text(d, case["id"] if case else None)
         files.append({"n": i, "doc_id": d, "title": row["title"]})
-        parts.append(f"<<<FILE D{i}: {row['title']}\n{text}\nFILE D{i}>>>")
+        parts.append(guardrails.wrap_document(f"D{i}: {row['title']}", text))
     return "\n\n".join(parts)[:MATERIAL_CHARS], files
 
 
 def _template_text(template_doc_id: str | None, base_doc_id: str | None, base_text: str | None, case_id: str | None,
                    type_cfg: dict) -> tuple[str, dict | None]:
     if base_text:
-        return base_text[:12000], {"kind": "pasted", "title": "Draft supplied by the user"}
+        return guardrails.neutralise(base_text[:12000]), {"kind": "pasted", "title": "Draft supplied by the user"}
     if base_doc_id:
         row, text = _file_text(base_doc_id, case_id)
-        return text[:12000], {"kind": "uploaded", "title": row["title"], "doc_id": base_doc_id}
+        return guardrails.neutralise(text[:12000]), {"kind": "uploaded", "title": row["title"], "doc_id": base_doc_id}
     tid = template_doc_id
     if not tid:
         drafts = {r["id"] for r in db.conn().execute("SELECT id FROM documents WHERE collection='draft' AND status='ready'")}
@@ -192,7 +192,8 @@ def generate(*, doc_type_id: str, forum_id: str, style: str = "formal", lang: st
                                   "user-supplied requirement" if r["source"] == "user" else "CONFIRM — not verified")
             for r in fprof["requirements"]] + [f"- CONFIRM: {c}" for c in fprof.get("confirm", [])]
     facts_txt = "\n".join(f"{f['id']} [{f['origin']}: {f.get('ref', '')}] {f['text']}" for f in facts) or "(no facts supplied)"
-    law_txt = "\n\n".join(f"[{i}] {h.header}{f' | p. {h.page_start}' if h.page_start else ''}\n{h.text[:2500]}"
+    law_txt = "\n\n".join(guardrails.wrap_source(i, h.collection, f"[{i}] {h.header}"
+                                                 f"{f' | p. {h.page_start}' if h.page_start else ''}", h.text[:2500])
                           for i, h in enumerate(law, 1)) or "(no provisions retrieved)"
     rule = prompts.language_rule(lang, headings=False)
     content = llm.chat([{"role": "user", "content": prompts.DRAFT_FILL.format(
@@ -241,6 +242,7 @@ _JSON = ("facts", "missing", "sources", "inputs")
 
 def save(rec: dict, draft_id: str | None = None, note: str = "") -> dict:
     now = db.now()
+    ident = db.current()
     with db.tx() as c:
         if draft_id and c.execute("SELECT 1 FROM drafts WHERE id=?", (draft_id,)).fetchone():
             v = c.execute("SELECT version FROM drafts WHERE id=?", (draft_id,)).fetchone()[0] + 1
@@ -251,9 +253,11 @@ def save(rec: dict, draft_id: str | None = None, note: str = "") -> dict:
         else:
             draft_id, v = db.new_id("draft_"), 1
             c.execute("INSERT INTO drafts(id, case_id, kind, doc_type, forum, style, lang, title, content, facts, missing, "
-                      "sources, inputs, version, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                      "sources, inputs, version, created_at, updated_at, created_by, org_id) "
+                      "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                       (draft_id, rec.get("case_id"), rec["kind"], rec["doc_type"], rec["forum"], rec["style"], rec["lang"],
-                       rec["title"], rec["content"], *(json.dumps(rec[k], ensure_ascii=False) for k in _JSON), v, now, now))
+                       rec["title"], rec["content"], *(json.dumps(rec[k], ensure_ascii=False) for k in _JSON), v, now, now,
+                       ident.user_id, ident.org_id or db.DEFAULT_ORG))
         c.execute("INSERT INTO draft_versions(draft_id, version, content, note, created_at) VALUES(?,?,?,?,?)",
                   (draft_id, v, rec["content"], note, now))
     db.audit(f"{rec['kind']}.{note or 'save'}", "draft", draft_id, version=v, doc_type=rec["doc_type"])
@@ -285,8 +289,13 @@ def version(draft_id: str, v: int) -> dict | None:
     return dict(r) if r else None
 
 
-def list_drafts(case_id: str | None = None, kind: str | None = None) -> list[dict]:
+def list_drafts(case_id: str | None = None, kind: str | None = None, *, user_id: str | None = None,
+                team_cases: list[str] | None = None) -> list[dict]:
+    """The caller's own drafts plus the drafts of cases where they are on the case team."""
     sql, args = "SELECT id, case_id, kind, doc_type, forum, style, lang, title, version, updated_at FROM drafts WHERE 1=1", []
+    team = list(team_cases or [])
+    sql += " AND ((case_id IS NULL AND created_by = ?)" + (f" OR case_id IN ({','.join('?' * len(team))})" if team else "") + ")"
+    args += [user_id or "", *team]
     if case_id:
         sql += " AND case_id=?"
         args.append(case_id)

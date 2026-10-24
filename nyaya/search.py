@@ -20,18 +20,28 @@ def _snip(text: str, q: str, n: int = 260) -> str:
 
 
 def search(q: str, *, types: set[str] | None = None, court: str = "", state: str = "", year: str = "",
-           case_type: str = "", doc_type: str = "", source: str = "", limit: int = 40) -> dict:
+           case_type: str = "", doc_type: str = "", source: str = "", limit: int = 40, principal=None) -> dict:
+    """Signed-in users search their own cases, documents and drafts plus the public library; guests the library only."""
+    from . import authz
+
     q = (q or "").strip()[:300]
     types = set(types or TYPES) & set(TYPES)
+    mine = authz.accessible_case_ids(principal) if principal is not None else []
+    team = authz.team_case_ids(principal) if principal is not None else []
+    if principal is None or not principal.can("cases.list"):
+        types -= {"case", "document"}
+    if principal is None or not principal.can("drafting.use"):
+        types -= {"draft"}
     results: list[dict] = []
     if not q:
         return {"results": [], "counts": {}}
     like = f"%{q}%"
 
-    if "case" in types:
-        sql = ("SELECT * FROM cases WHERE (title LIKE ? OR client_name LIKE ? OR opposite_party LIKE ? OR case_number LIKE ? "
+    if "case" in types and mine:
+        sql = (f"SELECT * FROM cases WHERE id IN ({','.join('?' * len(mine))}) AND (title LIKE ? OR client_name LIKE ? "
+               "OR opposite_party LIKE ? OR case_number LIKE ? "
                "OR cnr_number LIKE ? OR fir_number LIKE ? OR description LIKE ? OR acts_sections LIKE ?)")
-        args: list = [like] * 8
+        args: list = [*mine, *[like] * 8]
         for col, val in (("court", court), ("state", state), ("case_type", case_type)):
             if val:
                 sql += f" AND {col} LIKE ?"
@@ -53,9 +63,10 @@ def search(q: str, *, types: set[str] | None = None, court: str = "", state: str
             only = {r[0] for r in db.conn().execute("SELECT id FROM documents WHERE collection=? AND status='ready'",
                                                     (next(iter(lib_types)),))} or {"-"}
         ids = retrieval.lexical(q, 60, "library", None, only, exclude=frozenset({"draft"})) if lib_types else []
-        # include every case's documents (the user's own workspace) — lexical() limits case docs to one case
-        if "document" in types:
-            ids += retrieval.keyword_ids(q, "d.collection='case' AND d.status='ready'", [], 30)
+        # documents of every case the caller can access — lexical() limits case docs to one case
+        if "document" in types and mine:
+            ids += retrieval.keyword_ids(q, f"d.collection='case' AND d.status='ready' AND d.case_id IN "
+                                            f"({','.join('?' * len(mine))})", list(mine), 30)
         seen_docs: dict[str, int] = {}
         hits = retrieval.load_hits(list(dict.fromkeys(ids)))
         doc_ids = sorted({h.doc_id for h in hits})
@@ -77,8 +88,10 @@ def search(q: str, *, types: set[str] | None = None, court: str = "", state: str
                             "open": f"#/doc/{h.doc_id}" if kind == "document" else None, "score": 2.0 if h.exact else 1.5})
 
     if "draft" in types:
-        for d in db.conn().execute("SELECT id, title, kind, doc_type, forum, updated_at, content FROM drafts WHERE title LIKE ? "
-                                   "OR content LIKE ? ORDER BY updated_at DESC LIMIT 15", (like, like)):
+        own = "(case_id IS NULL AND created_by = ?)" + (f" OR case_id IN ({','.join('?' * len(team))})" if team else "")
+        for d in db.conn().execute(f"SELECT id, title, kind, doc_type, forum, updated_at, content FROM drafts WHERE ({own}) "
+                                   "AND (title LIKE ? OR content LIKE ?) ORDER BY updated_at DESC LIMIT 15",
+                                   (principal.user_id, *team, like, like)):
             results.append({"type": "draft", "title": d["title"], "source": f"Your {d['kind']} (AI-assisted draft)",
                             "date": d["updated_at"], "jurisdiction": d["forum"], "snippet": _snip(d["content"], q),
                             "url": f"#/drafting?draft={d['id']}", "score": 1.2})

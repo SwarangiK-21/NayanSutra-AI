@@ -15,7 +15,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import chunking, config, db, embeddings, parsing, storage
+from . import chunking, config, db, embeddings, guardrails, parsing, storage
 from .vectorindex import index
 
 log = logging.getLogger(__name__)
@@ -80,11 +80,13 @@ def classify(filename: str, sample: str) -> str:
 def _insert_document(*, doc_id: str, case_id: str | None, collection: str, doc_type: str, title: str,
                      filename: str, path: Path | str, sha: str, meta: dict) -> None:
     stored = path if isinstance(path, str) else config.to_stored(path)
+    ident = db.current()
     with db.tx() as c:
         c.execute(
-            "INSERT INTO documents(id, case_id, collection, doc_type, title, filename, path, sha256, status, meta, created_at)"
-            " VALUES(?,?,?,?,?,?,?,?, 'processing', ?, ?)",
-            (doc_id, case_id, collection, doc_type, title, filename, stored, sha, json.dumps(meta), db.now()),
+            "INSERT INTO documents(id, case_id, collection, doc_type, title, filename, path, sha256, status, meta, created_at,"
+            " uploaded_by) VALUES(?,?,?,?,?,?,?,?, 'processing', ?, ?, ?)",
+            (doc_id, case_id, collection, doc_type, title, filename, stored, sha, json.dumps(meta), db.now(),
+             ident.user_id or ident.actor),
         )
 
 
@@ -135,6 +137,8 @@ def process(doc_id: str) -> dict:
         ]
         meta = {**row["meta"]}
         lang = parsed.meta.get("language") or {}
+        if row["collection"] == "case":   # indirect prompt injection: shown to the user, labelled for the model
+            meta["instruction_like_text"] = bool(guardrails.injection_signals(parsed.text[:500000]))
         meta.update({k: v for k, v in (("lang", lang.get("lang")), ("lang_name", lang.get("lang_name")),
                                        ("script", lang.get("script")), ("lang_confidence", lang.get("confidence")),
                                        ("ocr", parsed.meta.get("ocr")), ("ocr_needed_pages", parsed.meta.get("ocr_needed_pages")))
@@ -157,8 +161,8 @@ def process(doc_id: str) -> dict:
                            json.dumps({"ocr": bool(parsed.meta.get("ocr"))}), db.now()))
         index.remove_doc(doc_id)
         index.add(ids, doc_id, row["case_id"], row["collection"], vecs)
-        log.info("Indexed %s: %d pages, %d chunks in %.1fs", row["filename"], len(parsed.pages), len(chunks),
-                 time.time() - t0)
+        # Ids only: file names often contain client names.
+        log.info("Indexed %s: %d pages, %d chunks in %.1fs", doc_id, len(parsed.pages), len(chunks), time.time() - t0)
         if row["collection"] == "case":
             db.notify("document", f"Document ready: {row['title']}", f"{len(parsed.pages)} page(s), "
                       f"language: {lang.get('lang_name') or 'unknown'}" + (", OCR used" if parsed.meta.get("ocr") else ""),
@@ -166,7 +170,7 @@ def process(doc_id: str) -> dict:
     except (parsing.ParseError, storage.StorageError) as exc:
         _fail(doc_id, str(exc), row)
     except Exception as exc:  # unexpected: log details locally, show a generic message
-        log.exception("Ingestion failed for %s", row["filename"])
+        log.exception("Ingestion failed for %s", doc_id)
         _fail(doc_id, f"Could not process this file ({type(exc).__name__}).", row)
     return db.row_to_dict(db.conn().execute("SELECT * FROM documents WHERE id=?", (doc_id,)).fetchone())
 
@@ -181,7 +185,14 @@ def _fail(doc_id: str, msg: str, row: dict | None = None) -> None:
 
 def index_derived(source: dict, pages: list[str], title: str, kind: str) -> str:
     """Index derived text (e.g. an English translation) as its own searchable document linked to the source,
-    so English questions can retrieve content from Hindi/Marathi files. Returns the derived doc id."""
+    so English questions can retrieve content from Hindi/Marathi files. Returns the derived doc id.
+
+    Internal bookkeeping: the caller was authorised for the source document, so this runs as system work."""
+    with db.system():
+        return _index_derived(source, pages, title, kind)
+
+
+def _index_derived(source: dict, pages: list[str], title: str, kind: str) -> str:
     text = "\n".join(pages)
     sha = hashlib.sha256(f"{kind}:{source['id']}:{text}".encode()).hexdigest()
     old = db.conn().execute("SELECT id FROM documents WHERE COALESCE(case_id,'') = ? AND meta->>'derived_from' = ? "

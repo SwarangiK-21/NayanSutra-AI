@@ -20,7 +20,7 @@ export const store = {
 };
 
 export const state = { csrf: null, status: null, caseId: store.get("caseId", null), chatId: null, scope: store.get("scope", "all"),
-  streaming: false, pollTimer: null, msgSources: new Map(), msgSeq: 0, prefs: {}, ref: null };
+  streaming: false, pollTimer: null, msgSources: new Map(), msgSeq: 0, prefs: {}, ref: null, session: null };
 
 export const TYPE_BADGE = { Civil: "b-civil", Criminal: "b-criminal", Family: "b-family", Revenue: "b-revenue", Consumer: "b-consumer", Writ: "b-writ" };
 export const COLL_LABEL = () => ({ case: t("coll.case"), bare_act: t("coll.bare_act"), judgment: t("coll.judgment"), draft: t("coll.draft") });
@@ -45,7 +45,7 @@ export async function initSession() {
   const r = await fetch("/api/session", { credentials: "same-origin" });
   const s = await r.json();
   state.csrf = s.csrf || null;
-  $("#logoutBtn").classList.toggle("hidden", !s.password_required);
+  state.session = s;
   return s;
 }
 /** JSON API call. Errors carry .status, .code and .field (server validation) so views can translate them. */
@@ -57,7 +57,11 @@ export async function api(path, { method = "GET", body, form, retry = true } = {
   const r = await fetch(path, opt);
   if (r.status === 401 && retry) {
     const s = await initSession();
-    if (!s.authenticated) { onUnauthenticated(); throw new Error(t("err.sign_in")); }
+    if (!s.authenticated) {
+      onUnauthenticated(s);
+      const e = new Error(t("err.sign_in")); e.status = 401; e.handled = true;  // the sign-in view is already shown
+      throw e;
+    }
     return api(path, { method, body, form, retry: false });
   }
   if (!r.ok) {
@@ -181,6 +185,6 @@ export function confirmDialog(title, bodyText, okLabel) {
     d.showModal();
   });
 }
-/** Consent before document text leaves this computer for the configured LLM. */
+/** Consent before document text is sent to the configured LLM (an external service). */
 export const aiConsent = () => confirmDialog(t("consent.title"), t("consent.body"), t("consent.ok"));
 export function download(url) { const a = document.createElement("a"); a.href = url; a.rel = "noopener"; document.body.appendChild(a); a.click(); a.remove(); }

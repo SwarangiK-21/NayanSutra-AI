@@ -25,6 +25,8 @@
         <button type="button" class="u-btn" data-font="1" aria-label="Increase text size" data-i18n-attr="aria-label:a11y.larger">A<sup>+</sup></button>
         <span class="sep" aria-hidden="true"></span>
         <button type="button" class="u-btn" id="contrastBtn" aria-pressed="false" aria-label="Toggle high contrast" data-i18n-attr="aria-label:a11y.contrast">◐ <span data-i18n="a11y.contrast_short">Contrast</span></button>
+        <a href="#/login" class="u-link hidden" id="signinLink" data-i18n="login.title">Sign in</a>
+        <a href="#/account" class="u-link hidden" id="accountLink" data-i18n="auth.account">Account</a>
         <button type="button" class="u-btn hidden" id="logoutBtn" data-i18n="login.signout">Sign out</button>
       </div>
     </div>
@@ -45,7 +47,7 @@
         <button class="btn btn-sm" type="submit" data-i18n="common.search">Search</button>
       </form>
       <div class="mast-right">
-        <a href="#/updates" class="bell" id="bellLink" aria-label="Notifications">🔔<span class="bell-count" id="bellCount" hidden></span></a>
+        <a href="#/updates" class="bell" id="bellLink" data-perm="notifications.read" aria-label="Notifications">🔔<span class="bell-count" id="bellCount" hidden></span></a>
         <div class="mast-status" id="mastStatus" aria-live="polite">
           <span class="chip chip-wait" data-i18n="status.connecting">Connecting…</span>
         </div>
@@ -57,15 +59,16 @@
     <div class="wrap nav-row">
       <button type="button" class="nav-toggle" id="navToggle" aria-expanded="false" aria-controls="navList">☰ <span data-i18n="nav.menu">Menu</span></button>
       <ul id="navList">
-        <li><a href="#/dashboard" data-nav="dashboard" data-i18n="nav.dashboard">Dashboard</a></li>
-        <li><a href="#/cases" data-nav="cases" data-i18n="nav.cases">Case Files</a></li>
-        <li><a href="#/lookup" data-nav="lookup" data-i18n="nav.lookup">Case Search</a></li>
-        <li><a href="#/research" data-nav="research" data-i18n="nav.research">Legal Research</a></li>
-        <li><a href="#/drafting" data-nav="drafting" data-i18n="nav.drafting">Drafting</a></li>
-        <li><a href="#/acts" data-nav="acts" data-i18n="nav.acts">Bare Acts</a></li>
-        <li><a href="#/awareness" data-nav="awareness" data-i18n="nav.awareness">Awareness</a></li>
-        <li><a href="#/updates" data-nav="updates" data-i18n="nav.updates">Updates</a></li>
-        <li><a href="#/tools" data-nav="tools" data-i18n="nav.tools">Tools</a></li>
+        <li data-perm="cases.list"><a href="#/dashboard" data-nav="dashboard" data-i18n="nav.dashboard">Dashboard</a></li>
+        <li data-perm="cases.list"><a href="#/cases" data-nav="cases" data-i18n="nav.cases">Case Files</a></li>
+        <li data-perm="casesearch.use"><a href="#/lookup" data-nav="lookup" data-i18n="nav.lookup">Case Search</a></li>
+        <li data-perm="research.use"><a href="#/research" data-nav="research" data-i18n="nav.research">Legal Research</a></li>
+        <li data-perm="drafting.use"><a href="#/drafting" data-nav="drafting" data-i18n="nav.drafting">Drafting</a></li>
+        <li data-perm="library.read"><a href="#/acts" data-nav="acts" data-i18n="nav.acts">Bare Acts</a></li>
+        <li data-perm="library.read"><a href="#/awareness" data-nav="awareness" data-i18n="nav.awareness">Awareness</a></li>
+        <li data-perm="notifications.read"><a href="#/updates" data-nav="updates" data-i18n="nav.updates">Updates</a></li>
+        <li data-perm="library.read"><a href="#/tools" data-nav="tools" data-i18n="nav.tools">Tools</a></li>
+        <li data-perm="users.manage|audit.read"><a href="#/admin" data-nav="admin" data-i18n="admin.title">Administration</a></li>
       </ul>
       <div class="lang-toggle" id="langToggle" role="group" aria-label="Language / भाषा"></div>
     </div>
@@ -103,7 +106,7 @@
           <li data-i18n="footer.src_ipc">IPC text: eCourts district court portal (Govt. of India)</li>
           <li data-i18n="footer.src_judgments">Judgments: Indian Kanoon</li>
           <li data-i18n="footer.src_news">Legal news headlines: LiveLaw RSS feed (links open on livelaw.in)</li>
-          <li data-i18n="footer.src_cases">Case files: uploaded by you, stored only on this computer</li>
+          <li data-i18n="footer.src_cases">Case files: uploaded by you, visible only to the people on the case</li>
         </ul>
       </div>
       <div>
@@ -113,7 +116,7 @@
       </div>
     </div>
     <div class="footer-bottom">
-      <div class="wrap" data-i18n="footer.bottom">Prototype for demonstration · Not an official Government of India website · All data stays on this device except text sent to the configured LLM</div>
+      <div class="wrap" data-i18n="footer.bottom">Prototype for demonstration · Not an official Government of India website · Data is kept in your workspace's private database and file storage; text goes to the configured LLM only for AI tasks</div>
     </div>
   </footer>
 </body>

@@ -202,6 +202,8 @@ def test_sync_retry_then_success(fresh_db, mock_http):
 
 
 def test_failed_integration_backoff_and_log(fresh_db, mock_http):
+    from nyaya import accounts
+    accounts.ensure_local_operator()        # system notices go to the organisation's administrators
     def boom(req):
         raise httpx.ConnectError("offline")
     mock_http(boom)
@@ -211,7 +213,8 @@ def test_failed_integration_backoff_and_log(fresh_db, mock_http):
     assert st["status"] == "error" and "ConnectError" in st["last_error"] and st["log"][0]["outcome"] == "error"
     assert integrations.run_sync("livelaw")["retry_in_minutes"] == 10      # exponential back-off
     integrations.run_sync("livelaw")
-    assert any("failing" in n["title"] for n in [dict(x) for x in db.conn().execute("SELECT * FROM notifications")])
+    notes = [dict(x) for x in db.conn().execute("SELECT * FROM notifications")]
+    assert any("failing" in n["title"] and n["user_id"] == accounts.LOCAL_USER_ID for n in notes)
     with pytest.raises(ValueError):
         integrations.run_sync("ecourts")                                   # manual sources are never "synced"
     assert next(s for s in integrations.status() if s["id"] == "ecourts")["mode"] == "manual"
@@ -473,7 +476,7 @@ def test_permissions_headers_and_audit(client):
 
 def test_retention_purges_old_chats(fresh_db):
     from nyaya import server
-    db.set_pref("chat_retention_days", "30")
+    db.set_setting("chat_retention_days", "30", org_id=db.DEFAULT_ORG)   # an organisation setting (admins)
     with db.tx() as cx:
         cx.execute("INSERT INTO chats(id, title, created_at, updated_at) VALUES('old','x','2020-01-01','2020-01-01')")
         cx.execute("INSERT INTO chats(id, title, created_at, updated_at) VALUES('new','y',?,?)", (db.now(), db.now()))
