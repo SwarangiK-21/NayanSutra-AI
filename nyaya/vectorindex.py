@@ -31,10 +31,62 @@ class VectorIndex:
         return len(self.ids)
 
     def load(self) -> None:
+        if db.backend() == "postgres":
+            return self._load_remote()
         rows = db.conn().execute(
             "SELECT c.id, c.doc_id, d.case_id, d.collection, c.emb FROM chunks c "
             "JOIN documents d ON d.id = c.doc_id WHERE d.status='ready' AND c.emb IS NOT NULL ORDER BY c.id"
         ).fetchall()
+        self._set(rows)
+
+    # ── Supabase: metadata from Postgres, embeddings from a local cache + incremental download ──
+    CACHE_BATCH = 400   # rows per embedding query: well inside the statement timeout even on slow links
+
+    def _cache_path(self):
+        from . import config, embeddings
+        safe = "".join(ch if ch.isalnum() else "_" for ch in embeddings.model_name())
+        return config.HOME_DIR / f"vector_cache_{safe}.npz"
+
+    def _load_remote(self) -> None:
+        """Chunk ids are never reused (re-indexing inserts new rows), so a cached embedding for an id stays valid;
+        only ids missing from the cache are downloaded. The cache is keyed by embedding model."""
+        meta = db.conn().execute(
+            "SELECT c.id, c.doc_id, d.case_id, d.collection FROM chunks c JOIN documents d ON d.id = c.doc_id "
+            "WHERE d.status='ready' AND c.emb IS NOT NULL ORDER BY c.id").fetchall()
+        cache: dict[int, np.ndarray] = {}
+        path = self._cache_path()
+        try:
+            with np.load(path) as z:
+                cache = dict(zip(z["ids"].tolist(), z["mat"]))
+        except (OSError, ValueError, KeyError):
+            cache = {}
+        missing = [r[0] for r in meta if r[0] not in cache]
+        if missing:
+            log.info("Downloading %d embeddings from Supabase (%d cached)", len(missing), len(cache))
+        for i in range(0, len(missing), self.CACHE_BATCH):
+            part = missing[i:i + self.CACHE_BATCH]
+            rows = db.conn().execute(f"SELECT id, emb FROM chunks WHERE id IN ({','.join('?' * len(part))})", part).fetchall()
+            for r in rows:
+                cache[r[0]] = np.frombuffer(bytes(r[1]), dtype=np.float32)
+        rows = [(r[0], r[1], r[2], r[3], cache[r[0]]) for r in meta if r[0] in cache]
+        self._set(rows, arrays=True)
+        if missing or len(cache) != len(rows):
+            self.save_cache()
+
+    def save_cache(self) -> None:
+        if db.backend() != "postgres":
+            return
+        try:
+            path = self._cache_path()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".tmp.npz")
+            with self._lock:
+                np.savez(tmp, ids=self.ids, mat=self.mat)
+            tmp.replace(path)   # atomic: an interrupted save never leaves a corrupt cache
+        except OSError as exc:
+            log.warning("Could not write the vector cache: %s", exc)
+
+    def _set(self, rows, arrays: bool = False) -> None:
         with self._lock:
             if not rows:
                 self.ids = np.zeros(0, dtype=np.int64)
@@ -47,7 +99,10 @@ class VectorIndex:
             self.case = np.array([r[2] or "" for r in rows], dtype=object)
             self.coll = np.array([r[3] for r in rows], dtype=object)
             # One contiguous buffer instead of thousands of small arrays.
-            self.mat = np.frombuffer(b"".join(r[4] for r in rows), dtype=np.float32).reshape(len(rows), -1).copy()
+            if arrays:
+                self.mat = np.vstack([r[4] for r in rows]).astype(np.float32)
+            else:
+                self.mat = np.frombuffer(b"".join(r[4] for r in rows), dtype=np.float32).reshape(len(rows), -1).copy()
         self._ready.set()
         log.info("Vector index loaded: %d chunks, dim %d", len(rows), self.mat.shape[1])
 
@@ -66,6 +121,7 @@ class VectorIndex:
             self.doc = np.concatenate([self.doc, np.array([doc_id] * n, dtype=object)])
             self.case = np.concatenate([self.case, np.array([case_id or ""] * n, dtype=object)])
             self.coll = np.concatenate([self.coll, np.array([collection] * n, dtype=object)])
+        self.save_cache()   # Supabase mode: the next start does not need to download these embeddings again
 
     def remove_doc(self, doc_id: str) -> None:
         with self._lock:

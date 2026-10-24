@@ -320,12 +320,12 @@ def ni_library(fresh_db, tmp_path):
     (config.BARE_ACTS_DIR / "manifest.json").write_text(json.dumps({"ni_test.txt": {
         "title": "The Negotiable Instruments Act, 1881", "short": "NI Act", "enforcement_date": "1-3-1882",
         "item_url": "https://indiacode.gov.in/items/synthetic"}}), "utf-8")
-    library._manifest.cache_clear()
+    library.clear_cache()
     doc, _ = ingest.register(p, collection="bare_act", case_id=None, doc_type="statute",
                              title="The Negotiable Instruments Act, 1881", filename=p.name, meta={"short": "NI Act"})
     assert ingest.process(doc["id"])["status"] == "ready"
     yield doc
-    library._manifest.cache_clear()
+    library.clear_cache()
 
 
 def test_library_lookup_and_temporal_flags(ni_library):

@@ -12,4 +12,6 @@ python-dateutil==2.9.0.post0
 fpdf2==2.8.9              # PDF export of drafts / notices
 uharfbuzz==0.56.3         # text shaping so Hindi / Marathi render correctly in PDFs
 defusedxml==0.7.1         # safe parsing of external RSS / XML feeds
+psycopg[binary]==3.3.6    # Supabase Postgres (primary database when SUPABASE_DB_URL is set)
+psycopg-pool==3.3.3       # connection pool for the backend
 pytest==9.1.1

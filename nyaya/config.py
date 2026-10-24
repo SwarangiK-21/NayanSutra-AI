@@ -72,6 +72,15 @@ OCR_MAX_PAGES = int(_env("OCR_MAX_PAGES", default="60"))
 # Whole-document translation / summaries send document text to the LLM; the UI asks first.
 DOC_LLM_MAX_CHARS = int(_env("DOC_LLM_MAX_CHARS", default="120000"))
 
+# ── Supabase (primary storage when configured) ──────────────────────────────
+# Postgres connection string for the backend role (session pooler); empty = local SQLite file (offline / tests).
+SUPABASE_DB_URL = _env("SUPABASE_DB_URL")
+DB_POOL_MAX = int(_env("DB_POOL_MAX", default="8"))
+# Storage API (server-side only — never sent to the browser). Secret key 'sb_secret_…' or legacy service_role key.
+SUPABASE_URL = _env("SUPABASE_URL").rstrip("/")
+SUPABASE_SECRET_KEY = _env("SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY")
+SUPABASE_BUCKET = _env("SUPABASE_BUCKET", default="case-files")
+
 # ── Integrations / sync ─────────────────────────────────────────────────────
 SYNC_ENABLED = _bool("SYNC_ENABLED", True)
 SYNC_TICK_SECONDS = int(_env("SYNC_TICK_SECONDS", default="60"))

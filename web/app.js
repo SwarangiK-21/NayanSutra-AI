@@ -771,7 +771,7 @@ async function viewAbout(main) {
         <tr><td>${t("about.embeddings")}</td><td>${s.embed_model} (local)</td></tr><tr><td>${t("about.reranker")}</td><td>${s.reranker || "—"} (local)</td></tr>
         <tr><td>${t("about.ocr")}</td><td>${s.ocr ? `${s.ocr.engine} (${(s.ocr.langs || []).join(", ")})` : t("about.ocr_missing")}</td></tr>
         <tr><td>${t("about.passages")}</td><td>${num(s.indexed_chunks)}</td></tr>
-        <tr><td>${t("about.storage")}</td><td>SQLite (data/nyaysutra.db)</td></tr></tbody></table></div></div>
+        <tr><td>${t("about.storage")}</td><td>${s.database || "—"} · ${s.file_storage || "—"}</td></tr></tbody></table></div></div>
       <div class="card"><div class="card-h"><h2>${t("about.chunking")}</h2></div><div class="card-b md">${markdown(t("about.chunking_md"))}</div></div>
       <div class="card"><div class="card-h"><h2>${t("about.security")}</h2></div><div class="card-b md">${markdown(t("about.security_md"))}</div></div>
     </div>`);

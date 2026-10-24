@@ -196,6 +196,15 @@ def seed_if_empty() -> None:
     """First run: import the existing cases.json (or demo matters) so the app is not empty."""
     if db.conn().execute("SELECT COUNT(*) FROM cases").fetchone()[0]:
         return
+    if db.backend() == "postgres":
+        # Never seed demo data into Supabase: an empty Supabase database usually means the data migration
+        # (scripts/migrate_to_supabase.py) has not been run yet, and seeding would create duplicates of real cases.
+        if config.DB_PATH.exists():
+            import logging
+            logging.getLogger(__name__).warning(
+                "Supabase has no cases but a local database exists at %s — run scripts/migrate_to_supabase.py.",
+                config.DB_PATH)
+        return
     src = config.DATA_DIR / "cases.json"
     items = []
     if src.exists():

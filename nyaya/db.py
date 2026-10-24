@@ -166,6 +166,7 @@ MIGRATIONS: list[str] = [
         read_at TEXT
     );
     CREATE INDEX IF NOT EXISTS ix_notifications_created ON notifications(created_at);
+    CREATE INDEX IF NOT EXISTS ix_notifications_case ON notifications(case_id);
 
     CREATE TABLE IF NOT EXISTS integrations (
         id TEXT PRIMARY KEY,
@@ -279,6 +280,15 @@ _local = threading.local()
 # "database is locked" errors when ingestion and chat run together.
 write_lock = threading.RLock()
 
+# Postgres schema version this code expects (supabase/migrations/*). The app never runs DDL against Postgres:
+# migrations are applied by the project owner (Supabase CLI / dashboard / MCP), and the app checks the version.
+PG_SCHEMA_VERSION = 1
+
+
+def backend() -> str:
+    """'postgres' (Supabase) when SUPABASE_DB_URL is set, otherwise the local SQLite file."""
+    return "postgres" if config.SUPABASE_DB_URL else "sqlite"
+
 
 def now() -> str:
     return datetime.now().isoformat(timespec="seconds")
@@ -288,6 +298,7 @@ def new_id(prefix: str = "") -> str:
     return f"{prefix}{uuid.uuid4().hex[:12]}"
 
 
+# ── SQLite ───────────────────────────────────────────────────────────────────
 def _connect() -> sqlite3.Connection:
     config.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(config.DB_PATH, timeout=30, check_same_thread=False)
@@ -299,7 +310,7 @@ def _connect() -> sqlite3.Connection:
     return conn
 
 
-def conn() -> sqlite3.Connection:
+def _sqlite_conn() -> sqlite3.Connection:
     """Per-thread connection; reconnects if the configured DB path changed."""
     c = getattr(_local, "conn", None)
     if c is None or getattr(_local, "path", None) != config.DB_PATH:
@@ -310,22 +321,175 @@ def conn() -> sqlite3.Connection:
     return c
 
 
+# ── Postgres (Supabase) ──────────────────────────────────────────────────────
+# Application SQL is written once with '?' placeholders and constructs both engines understand
+# (ON CONFLICT, RETURNING, COALESCE, ->> on JSON). Only full-text search differs (see retrieval.lexical).
+_pool = None
+_pool_lock = threading.Lock()
+
+
+class Row(dict):
+    """Row usable like sqlite3.Row: row['col'], row[0] and dict(row)."""
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return list(self.values())[key]
+        return super().__getitem__(key)
+
+
+def _row_factory(cursor):
+    names = [c.name for c in cursor.description or []]
+    return lambda values: Row(zip(names, values))
+
+
+def _to_pg(sql: str) -> str:
+    """'?' placeholders -> '%s' (outside quoted literals); literal '%' escaped for psycopg."""
+    out, quoted = [], False
+    for ch in sql:
+        if ch == "'":
+            quoted = not quoted
+            out.append(ch)
+        elif ch == "%":
+            out.append("%%")
+        elif ch == "?" and not quoted:
+            out.append("%s")
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+class Result:
+    """Materialised result with the cursor API the code uses (fetchone / fetchall / iteration / rowcount)."""
+
+    def __init__(self, rows: list, rowcount: int):
+        self._rows, self.rowcount, self._i = rows, rowcount, 0
+
+    def fetchone(self):
+        if self._i < len(self._rows):
+            self._i += 1
+            return self._rows[self._i - 1]
+        return None
+
+    def fetchall(self):
+        rows, self._i = self._rows[self._i:], len(self._rows)
+        return rows
+
+    def __iter__(self):
+        return iter(self.fetchall())
+
+
+def _run(pgconn, sql: str, params=()) -> Result:
+    # psycopg parses placeholders (and '%') only when parameters are passed.
+    cur = pgconn.execute(_to_pg(sql), tuple(params)) if params else pgconn.execute(sql)
+    rows = cur.fetchall() if cur.description else []
+    return Result(rows, cur.rowcount)
+
+
+class PgSession:
+    """Statement runner bound to one pooled connection (inside tx) or borrowing one per statement (autocommit)."""
+
+    def __init__(self, pgconn=None):
+        self._c = pgconn
+
+    def execute(self, sql: str, params=()) -> Result:
+        if self._c is not None:
+            return _run(self._c, sql, params)
+        import psycopg
+
+        reads = sql.lstrip()[:6].upper() == "SELECT"
+        for attempt in range(2):
+            try:
+                with _get_pool().connection() as c:
+                    return _run(c, sql, params)
+            except psycopg.OperationalError:
+                # A dropped pooled connection is retried once — only for reads, so a write is never applied twice.
+                if attempt or not reads:
+                    raise
+        raise RuntimeError("unreachable")
+
+    def executemany(self, sql: str, seq) -> None:
+        if self._c is None:
+            with tx() as t:
+                return t.executemany(sql, seq)
+        with self._c.cursor() as cur:
+            cur.executemany(_to_pg(sql), [tuple(p) for p in seq])
+
+
+def _configure(pgconn) -> None:
+    from psycopg.types.string import TextLoader
+
+    # JSON columns come back as text, exactly like SQLite, so the existing json.loads() handling is unchanged.
+    pgconn.adapters.register_loader("jsonb", TextLoader)
+    pgconn.adapters.register_loader("json", TextLoader)
+
+
+def _get_pool():
+    global _pool
+    with _pool_lock:
+        if _pool is None:
+            from psycopg_pool import ConnectionPool
+
+            _pool = ConnectionPool(
+                config.SUPABASE_DB_URL, min_size=1, max_size=config.DB_POOL_MAX, timeout=30, open=True,
+                configure=_configure, check=ConnectionPool.check_connection,
+                kwargs={"autocommit": True, "row_factory": _row_factory, "prepare_threshold": None,
+                        "connect_timeout": 15, "application_name": "nyaysutra"})
+        return _pool
+
+
+def close_pool() -> None:
+    global _pool
+    with _pool_lock:
+        if _pool is not None:
+            _pool.close()
+            _pool = None
+
+
+# ── Public API used by every module ──────────────────────────────────────────
+def conn():
+    """Run a statement: SQLite per-thread connection, or Postgres (joins the open transaction on this thread)."""
+    if backend() == "sqlite":
+        return _sqlite_conn()
+    return getattr(_local, "pgtx", None) or PgSession()
+
+
 @contextmanager
-def tx() -> Iterator[sqlite3.Connection]:
-    """Serialised write transaction."""
-    with write_lock:
-        c = conn()
-        try:
-            c.execute("BEGIN IMMEDIATE")
-            yield c
-            c.execute("COMMIT")
-        except BaseException:
-            c.execute("ROLLBACK")
-            raise
+def tx() -> Iterator[Any]:
+    """Write transaction (atomic). SQLite: serialised; Postgres: one pooled connection, nested calls join it."""
+    if backend() == "sqlite":
+        with write_lock:
+            c = _sqlite_conn()
+            try:
+                c.execute("BEGIN IMMEDIATE")
+                yield c
+                c.execute("COMMIT")
+            except BaseException:
+                c.execute("ROLLBACK")
+                raise
+        return
+    current = getattr(_local, "pgtx", None)
+    if current is not None:
+        yield current
+        return
+    with _get_pool().connection() as c:
+        with c.transaction():
+            session = PgSession(c)
+            _local.pgtx = session
+            try:
+                yield session
+            finally:
+                _local.pgtx = None
 
 
 def init() -> None:
     config.ensure_dirs()
+    if backend() == "postgres":
+        row = conn().execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
+        version = int(row["value"]) if row else 0
+        if version < PG_SCHEMA_VERSION:
+            raise RuntimeError(f"Supabase schema version {version} < {PG_SCHEMA_VERSION}: apply supabase/migrations "
+                               "(see docs/SUPABASE_MIGRATION.md) before starting the app.")
+        return
     with write_lock:
         c = conn()
         c.executescript(SCHEMA)
@@ -354,8 +518,9 @@ def notify(kind: str, title: str, body: str = "", link: str = "", case_id: str |
            dedupe_key: str | None = None) -> bool:
     """In-app notification; a repeated dedupe_key is ignored (duplicate prevention). Returns True if created."""
     with tx() as c:
-        cur = c.execute("INSERT OR IGNORE INTO notifications(kind, title, body, link, case_id, dedupe_key, created_at)"
-                        " VALUES(?,?,?,?,?,?,?)", (kind, title[:300], body[:2000], link[:500], case_id, dedupe_key, now()))
+        cur = c.execute("INSERT INTO notifications(kind, title, body, link, case_id, dedupe_key, created_at)"
+                        " VALUES(?,?,?,?,?,?,?) ON CONFLICT DO NOTHING",
+                        (kind, title[:300], body[:2000], link[:500], case_id, dedupe_key, now()))
         return cur.rowcount > 0
 
 
@@ -372,7 +537,7 @@ def set_pref(key: str, value: str) -> None:
 
 
 def reset_connections() -> None:
-    """Drop this thread's cached connection (used by tests that swap DB files)."""
+    """Drop this thread's cached SQLite connection (used by tests that swap DB files)."""
     c = getattr(_local, "conn", None)
     if c is not None:
         c.close()

@@ -223,7 +223,7 @@ def _state(iid: str) -> dict:
         return dict(row)
     a = ADAPTERS[iid]
     with db.tx() as c:
-        c.execute("INSERT OR IGNORE INTO integrations(id, enabled, status, next_due_at) VALUES(?,?,?,?)",
+        c.execute("INSERT INTO integrations(id, enabled, status, next_due_at) VALUES(?,?,?,?) ON CONFLICT DO NOTHING",
                   (iid, 1, "manual" if a.mode == "manual" else "never", _iso(_utcnow())))
     return dict(db.conn().execute("SELECT * FROM integrations WHERE id=?", (iid,)).fetchone())
 
@@ -242,8 +242,8 @@ def run_sync(iid: str, trigger: str = "scheduled") -> dict:
     with _run_lock:
         started = _iso(_utcnow())
         with db.tx() as c:
-            log_id = c.execute("INSERT INTO sync_log(integration_id, trigger, started_at) VALUES(?,?,?)",
-                               (iid, trigger, started)).lastrowid
+            log_id = c.execute("INSERT INTO sync_log(integration_id, trigger, started_at) VALUES(?,?,?) RETURNING id",
+                               (iid, trigger, started)).fetchone()[0]
             c.execute("UPDATE integrations SET last_attempt_at=? WHERE id=?", (started, iid))
         try:
             res = a.sync(st)

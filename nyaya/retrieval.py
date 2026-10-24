@@ -79,25 +79,44 @@ def _collections(scope: str, exclude: frozenset[str] = frozenset()) -> set[str] 
     return base - exclude
 
 
-def fts_query(q: str) -> str:
+def _fts_tokens(q: str) -> list[str]:
     toks = [t for t in re.findall(r"[A-Za-z0-9]+", q.lower()) if t not in _STOP and len(t) > 1]
-    toks = list(dict.fromkeys(toks))[:14]
+    return list(dict.fromkeys(toks))[:14]
+
+
+def fts_query(q: str) -> str:
+    """Keyword query in the active engine's syntax: FTS5 ('"a" OR "b"') or Postgres tsquery ('a | b').
+    Tokens are reduced to [a-z0-9], so user input can never inject query syntax."""
+    toks = _fts_tokens(q)
+    if db.backend() == "postgres":
+        return " | ".join(toks)
     return " OR ".join(f'"{t}"' for t in toks)
+
+
+def _fts_sql(where: str) -> str:
+    """Ranked keyword match; the header is weighted above the body (FTS5 bm25 3:1, Postgres weights A > B)."""
+    if db.backend() == "postgres":
+        return (f"SELECT c.id FROM chunks c JOIN documents d ON d.id=c.doc_id, to_tsquery('english', ?) q "
+                f"WHERE c.fts @@ q AND {where} ORDER BY ts_rank_cd(c.fts, q) DESC LIMIT ?")
+    return (f"SELECT c.id FROM chunks_fts f JOIN chunks c ON c.id=f.rowid JOIN documents d ON d.id=c.doc_id "
+            f"WHERE chunks_fts MATCH ? AND {where} ORDER BY bm25(chunks_fts, 3.0, 1.0) LIMIT ?")
+
+
+def keyword_ids(q: str, where: str, args: list, k: int) -> list[int]:
+    match = fts_query(q)
+    if not match:
+        return []
+    try:
+        return [r[0] for r in db.conn().execute(_fts_sql(where), [match, *args, k])]
+    except Exception as exc:
+        log.warning("Keyword query failed (%s): %s", match, exc)
+        return []
 
 
 def lexical(q: str, k: int, scope: str, case_id: str | None, doc_ids: set[str] | None,
             exclude: frozenset[str] = frozenset()) -> list[int]:
-    match = fts_query(q)
-    if not match:
-        return []
     where, args = _scope_sql(scope, case_id, doc_ids, exclude)
-    sql = (f"SELECT c.id FROM chunks_fts f JOIN chunks c ON c.id=f.rowid JOIN documents d ON d.id=c.doc_id "
-           f"WHERE chunks_fts MATCH ? AND {where} ORDER BY bm25(chunks_fts, 3.0, 1.0) LIMIT ?")
-    try:
-        return [r[0] for r in db.conn().execute(sql, [match, *args, k])]
-    except Exception as exc:
-        log.warning("FTS query failed (%s): %s", match, exc)
-        return []
+    return keyword_ids(q, where, args, k)
 
 
 def exact(refs: list[citations.Ref], scope: str, case_id: str | None, doc_ids: set[str] | None,

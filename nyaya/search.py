@@ -54,18 +54,20 @@ def search(q: str, *, types: set[str] | None = None, court: str = "", state: str
                                                     (next(iter(lib_types)),))} or {"-"}
         ids = retrieval.lexical(q, 60, "library", None, only, exclude=frozenset({"draft"})) if lib_types else []
         # include every case's documents (the user's own workspace) — lexical() limits case docs to one case
-        ids += [r[0] for r in db.conn().execute(
-            "SELECT c.id FROM chunks_fts f JOIN chunks c ON c.id=f.rowid JOIN documents d ON d.id=c.doc_id "
-            "WHERE chunks_fts MATCH ? AND d.collection='case' AND d.status='ready' ORDER BY bm25(chunks_fts) LIMIT 30",
-            (retrieval.fts_query(q) or '""',))] if "document" in types and retrieval.fts_query(q) else []
+        if "document" in types:
+            ids += retrieval.keyword_ids(q, "d.collection='case' AND d.status='ready'", [], 30)
         seen_docs: dict[str, int] = {}
-        for h in retrieval.load_hits(list(dict.fromkeys(ids))):
+        hits = retrieval.load_hits(list(dict.fromkeys(ids)))
+        doc_ids = sorted({h.doc_id for h in hits})
+        metas = {r[0]: json.loads(r[1] or "{}") for r in db.conn().execute(   # one query, not one per result
+            f"SELECT id, meta FROM documents WHERE id IN ({','.join('?' * len(doc_ids))})", doc_ids)} if doc_ids else {}
+        for h in hits:
             if h.collection not in coll_ok or seen_docs.get(h.doc_id, 0) >= 2:
                 continue
             if doc_type and h.doc_type != doc_type:
                 continue
             seen_docs[h.doc_id] = seen_docs.get(h.doc_id, 0) + 1
-            meta = json.loads(db.conn().execute("SELECT meta FROM documents WHERE id=?", (h.doc_id,)).fetchone()[0] or "{}")
+            meta = metas.get(h.doc_id, {})
             kind = "document" if h.collection == "case" else h.collection
             results.append({"type": kind, "title": h.title, "label": h.label, "page": h.page_start,
                             "source": {"bare_act": "India Code (official bare act)", "judgment": meta.get("source") or "Judgment library",
@@ -91,7 +93,7 @@ def search(q: str, *, types: set[str] | None = None, court: str = "", state: str
                             "jurisdiction": r["jurisdiction"], "snippet": "", "url": r["url"], "external": True, "score": 1.0})
 
     if "awareness" in types:
-        for i in awareness.listing(state or "MH", q=q)["items"][:10]:
+        for i in awareness.listing(state or "MH", q=q, resolve=False)["items"][:10]:
             results.append({"type": "awareness", "title": i["title"], "source": "NyaySutra legal awareness (curated, with official links)",
                             "date": i.get("last_verified"), "jurisdiction": i["jurisdiction"], "snippet": _snip(i["summary"], q),
                             "url": f"#/awareness?item={i['id']}", "score": 1.1})

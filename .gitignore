@@ -9,4 +9,8 @@ __pycache__/
 .chroma/
 data/nyaysutra.db*
 data/uploads/
+data/migration_report.json
+supabase/.temp/
+supabase/.branches/
 models/
+data/backups/

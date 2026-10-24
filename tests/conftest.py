@@ -18,8 +18,14 @@ os.environ["NYAYA_DB"] = str(_TMP / "test.db")
 os.environ["NYAYA_HOME"] = str(_TMP / "home")
 os.environ.setdefault("OLLAMA_API_KEY", "test-key")
 os.environ["SYNC_ENABLED"] = "false"  # no background network sync during tests
+# The offline suite must never touch the real Supabase project configured in .env: these empty values take
+# precedence over .env (python-dotenv does not override existing variables). The opt-in live test sets them itself.
+for _k in ("SUPABASE_DB_URL", "SUPABASE_URL", "SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY"):
+    os.environ[_k] = ""
 
 from nyaya import config, db, embeddings, llm  # noqa: E402
+
+assert not config.SUPABASE_DB_URL and not config.SUPABASE_SECRET_KEY, "offline tests must not see Supabase credentials"
 
 config.DATA_DIR = _TMP / "data"
 config.UPLOAD_DIR = config.DATA_DIR / "uploads"
@@ -97,6 +103,8 @@ def fresh_db():
     # A new file per test (Windows cannot delete a SQLite file that another thread still has open).
     config.DB_PATH = _TMP / f"test_{uuid.uuid4().hex[:8]}.db"
     db.init()
+    from nyaya import library
+    library.clear_cache()   # each test has its own library contents
     from nyaya.vectorindex import index
     index.load()
     yield

@@ -19,7 +19,8 @@ def data() -> dict:
     return _load(PATH.stat().st_mtime)
 
 
-def listing(state: str = "MH", subject: str | None = None, q: str = "") -> dict:
+def listing(state: str = "MH", subject: str | None = None, q: str = "", resolve: bool = True) -> dict:
+    """Items for a state; `resolve` attaches the statutory text (not needed for search result lists)."""
     d = data()
     codes = {state, "central"}
     items = [i for i in d["items"] if i["state"] in codes and (not subject or i["subject"] == subject)]
@@ -31,7 +32,8 @@ def listing(state: str = "MH", subject: str | None = None, q: str = "") -> dict:
         item = dict(i)
         item["jurisdiction"] = "Central law — applies in all states" if i["state"] == "central" else \
             next((s["name"] for s in d["states"] if s["code"] == i["state"]), i["state"])
-        item["provisions"] = [library.lookup_provision(act, ref, max_chars=1400) for act, ref in i.get("provisions", [])]
+        item["provisions"] = [library.lookup_provision(act, ref, max_chars=1400) for act, ref in i.get("provisions", [])] \
+            if resolve else []
         out.append(item)
     out.sort(key=lambda x: (x["state"] == "central", x["subject"]))  # state-specific first
     return {"states": d["states"], "subjects": d["subjects"], "items": out,

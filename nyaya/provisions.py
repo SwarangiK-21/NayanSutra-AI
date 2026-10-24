@@ -57,7 +57,7 @@ def _material(case: dict, doc_ids: list[str] | None, extra: str) -> str:
     if extra:
         parts.append(f"ADDITIONAL TEXT:\n{extra[:6000]}")
     rows = db.conn().execute("SELECT id, title, doc_type FROM documents WHERE case_id=? AND status='ready' "
-                             "AND json_extract(meta,'$.derived_from') IS NULL ORDER BY created_at", (case["id"],)).fetchall()
+                             "AND meta->>'derived_from' IS NULL ORDER BY created_at", (case["id"],)).fetchall()
     for r in rows:
         if doc_ids is not None and r["id"] not in doc_ids:
             continue

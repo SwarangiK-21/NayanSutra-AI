@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import json
 import logging
+import tempfile
 import threading
 import time
+from urllib.parse import quote
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from datetime import date, timedelta
@@ -17,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import (agent, awareness, cases, casesearch, citations, config, db, docintel, drafting, embeddings, export,
-               ingest, integrations, jobs, llm, ocr, provisions, reference, retrieval, search, security, tools)
+               ingest, integrations, jobs, llm, ocr, provisions, reference, retrieval, search, security, storage, tools)
 from .vectorindex import index
 
 log = logging.getLogger("nyaya")
@@ -67,6 +69,7 @@ async def lifespan(app: FastAPI):
     if _scheduler:
         _scheduler.stop.set()
     _ingest_pool.shutdown(wait=False, cancel_futures=True)
+    db.close_pool()
 
 
 app = FastAPI(title="NyaySutra AI", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
@@ -189,6 +192,8 @@ def status():
         "models_ready": _state["models_ready"], "indexed_chunks": len(index), "documents": counts,
         "processing": db.conn().execute("SELECT COUNT(*) FROM documents WHERE status='processing'").fetchone()[0],
         "ocr": ocr.status(), "sync_enabled": config.SYNC_ENABLED,
+        "database": "Supabase Postgres" if db.backend() == "postgres" else "Local SQLite",
+        "file_storage": "Supabase Storage (private)" if storage.remote_enabled() else "Local folder",
     }
 
 
@@ -358,7 +363,7 @@ def list_documents(case_id: str | None = None, collection: str | None = None):
     sql, args = f"SELECT {DOC_FIELDS} FROM documents WHERE 1=1", []
     if case_id:
         # Derived documents (English translations) are reached from their source document, not listed.
-        sql += " AND case_id=? AND json_extract(meta,'$.derived_from') IS NULL"
+        sql += " AND case_id=? AND meta->>'derived_from' IS NULL"
         args.append(case_id)
     if collection:
         sql += " AND collection=?"
@@ -377,31 +382,40 @@ def upload(case_id: str, file: UploadFile = File(...), doc_type: str = Form("aut
         raise HTTPException(415, "Accepted: PDF, DOC/DOCX, TXT, MD and images (PNG, JPG, TIFF, WEBP).")
     if doc_type not in ingest.DOC_TYPES and doc_type != "auto":
         doc_type = "auto"
-    folder = config.UPLOAD_DIR / case_id.replace("/", "_")
-    folder.mkdir(parents=True, exist_ok=True)
     doc_id = db.new_id("doc_")
-    dest = folder / f"{doc_id}{ext}"
     limit = config.MAX_UPLOAD_MB * 1024 * 1024
     size = 0
-    try:
-        with open(dest, "wb") as out:
+    # The upload is staged in a private temporary file, validated, then stored (Supabase Storage or the local
+    # upload folder). Nothing is written to permanent storage before validation passes.
+    with tempfile.TemporaryDirectory(prefix="nyaya_up_") as tmp:
+        staged = Path(tmp) / f"upload{ext}"
+        with open(staged, "wb") as out:
             while chunk := file.file.read(1 << 20):
                 size += len(chunk)
                 if size > limit:
                     raise HTTPException(413, f"File is larger than {config.MAX_UPLOAD_MB} MB.")
                 out.write(chunk)
-        if not security.sniff_ok(dest, ext):
+        if not security.sniff_ok(staged, ext):
             raise HTTPException(415, "File content does not match its extension.")
-        doc, created = ingest.register(dest, collection="case", case_id=case_id,
-                                       doc_type=None if doc_type == "auto" else doc_type,
-                                       title=None, filename=name, doc_id=doc_id)
-    except BaseException:
-        dest.unlink(missing_ok=True)
-        raise
-    if not created:
-        dest.unlink(missing_ok=True)
-        if doc["status"] == "failed":  # retry a previously failed file
-            _ingest_pool.submit(ingest.process, doc["id"])
+        sha = ingest.sha256_file(staged)
+        dup = ingest.find_duplicate(case_id, sha)
+        if dup:
+            if dup["status"] == "failed":  # retry a previously failed file
+                _ingest_pool.submit(ingest.process, dup["id"])
+            return {**_public(dup), "duplicate": True}
+        try:
+            ref = storage.put_file(staged, case_id, doc_id, ext, security.MIME.get(ext, "application/octet-stream"))
+        except storage.StorageError as exc:
+            raise HTTPException(502, str(exc))
+        try:
+            doc, created = ingest.register(staged, collection="case", case_id=case_id,
+                                           doc_type=None if doc_type == "auto" else doc_type,
+                                           title=None, filename=name, doc_id=doc_id, stored=ref, sha=sha)
+        except BaseException:
+            storage.delete(ref)  # keep storage and metadata consistent: no file without its record
+            raise
+    if not created:  # lost a race with an identical concurrent upload
+        storage.delete(ref)
         return {**_public(doc), "duplicate": True}
     _ingest_pool.submit(ingest.process, doc["id"])
     db.audit("document.upload", "document", doc["id"], case_id=case_id, ext=ext, bytes=size)
@@ -437,13 +451,23 @@ def document_file(doc_id: str):
     row = db.conn().execute("SELECT path, filename FROM documents WHERE id=?", (doc_id,)).fetchone()
     if not row:
         raise HTTPException(404, "Document not found")
-    path = config.from_stored(row["path"]).resolve()
-    if config.DATA_DIR.resolve() not in path.parents or not path.is_file():
-        raise HTTPException(404, "File missing")
-    ext = path.suffix.lower()
-    disposition = "attachment" if ext == ".docx" else "inline"
-    resp = FileResponse(path, media_type=security.MIME.get(ext, "application/octet-stream"),
-                        filename=row["filename"], content_disposition_type=disposition)
+    ext = Path(row["filename"]).suffix.lower() or Path(row["path"]).suffix.lower()
+    disposition = "attachment" if ext in (".docx", ".doc") else "inline"
+    media = security.MIME.get(ext, "application/octet-stream")
+    if storage.is_remote(row["path"]):
+        # Streamed through the backend: the browser never gets a storage URL or key, and the CSP below applies.
+        try:
+            body = storage.stream(row["path"])
+        except storage.StorageError as exc:
+            raise HTTPException(404, str(exc))
+        resp = StreamingResponse(body, media_type=media, headers={
+            "Content-Disposition": f"{disposition}; filename*=UTF-8''{quote(row['filename'])}"})
+    else:
+        path = config.from_stored(row["path"]).resolve()
+        roots = {config.ROOT.resolve(), config.DATA_DIR.resolve()}   # never serve files outside the app's folders
+        if not any(r in path.parents for r in roots) or not path.is_file():
+            raise HTTPException(404, "File missing")
+        resp = FileResponse(path, media_type=media, filename=row["filename"], content_disposition_type=disposition)
     if ext != ".pdf":  # browsers' PDF viewers do not run under a sandbox CSP
         resp.headers["Content-Security-Policy"] = "sandbox; default-src 'none'; img-src 'self'"
     else:  # the document viewer embeds PDFs; only this origin may frame them

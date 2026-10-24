@@ -28,7 +28,28 @@ def act_meta(doc_title: str) -> dict:
     return {}
 
 
+_found: dict[tuple[str, str, int], dict] = {}
+
+
 def lookup_provision(act: str, ref: str, max_chars: int = 1600) -> dict:
+    """Found provisions are cached per process (the official text does not change while the app runs; the cache is
+    cleared after a library rebuild). "Not found" is never cached, so later additions to the library are seen.
+    Callers always get their own copy."""
+    key = (act, ref, max_chars)
+    hit = _found.get(key)
+    if hit is None:
+        hit = _lookup(act, ref, max_chars)
+        if hit["found"] and len(_found) < 2048:
+            _found[key] = hit
+    return dict(hit)
+
+
+def clear_cache() -> None:
+    _found.clear()
+    _manifest.cache_clear()
+
+
+def _lookup(act: str, ref: str, max_chars: int) -> dict:
     out = {"act": act, "ref": ref, "found": False}
     refs = citations.parse_refs(f"{ref} of the {act}") or citations.parse_refs(f"{ref} {act}")
     refs = [r for r in refs if r.act] or refs

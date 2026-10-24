@@ -15,7 +15,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import chunking, config, db, embeddings, parsing
+from . import chunking, config, db, embeddings, parsing, storage
 from .vectorindex import index
 
 log = logging.getLogger(__name__)
@@ -78,32 +78,37 @@ def classify(filename: str, sample: str) -> str:
 
 
 def _insert_document(*, doc_id: str, case_id: str | None, collection: str, doc_type: str, title: str,
-                     filename: str, path: Path, sha: str, meta: dict) -> None:
+                     filename: str, path: Path | str, sha: str, meta: dict) -> None:
+    stored = path if isinstance(path, str) else config.to_stored(path)
     with db.tx() as c:
         c.execute(
             "INSERT INTO documents(id, case_id, collection, doc_type, title, filename, path, sha256, status, meta, created_at)"
             " VALUES(?,?,?,?,?,?,?,?, 'processing', ?, ?)",
-            (doc_id, case_id, collection, doc_type, title, filename, config.to_stored(path), sha, json.dumps(meta), db.now()),
+            (doc_id, case_id, collection, doc_type, title, filename, stored, sha, json.dumps(meta), db.now()),
         )
 
 
 def find_duplicate(case_id: str | None, sha: str) -> dict | None:
     row = db.conn().execute(
-        "SELECT * FROM documents WHERE IFNULL(case_id,'') = ? AND sha256 = ?", (case_id or "", sha)
+        "SELECT * FROM documents WHERE COALESCE(case_id,'') = ? AND sha256 = ?", (case_id or "", sha)
     ).fetchone()
     return db.row_to_dict(row)
 
 
 def register(path: Path, *, collection: str, case_id: str | None, doc_type: str | None, title: str | None,
-             filename: str, meta: dict | None = None, doc_id: str | None = None) -> tuple[dict, bool]:
-    """Create the document row (status=processing). Returns (doc, created)."""
-    sha = sha256_file(path)
+             filename: str, meta: dict | None = None, doc_id: str | None = None,
+             stored: str | None = None, sha: str | None = None) -> tuple[dict, bool]:
+    """Create the document row (status=processing). Returns (doc, created).
+
+    `stored` is the storage reference when the file lives in Supabase Storage (path is then only used to hash)."""
+    sha = sha or sha256_file(path)
     dup = find_duplicate(case_id, sha)
     if dup:
         return dup, False
     doc_id = doc_id or db.new_id("doc_")
     _insert_document(doc_id=doc_id, case_id=case_id, collection=collection, doc_type=doc_type or "other",
-                     title=title or pretty_title(filename), filename=filename, path=path, sha=sha, meta=meta or {})
+                     title=title or pretty_title(filename), filename=filename, path=stored or path, sha=sha,
+                     meta=meta or {})
     return db.row_to_dict(db.conn().execute("SELECT * FROM documents WHERE id=?", (doc_id,)).fetchone()), True
 
 
@@ -114,7 +119,8 @@ def process(doc_id: str) -> dict:
         return {}
     t0 = time.time()
     try:
-        parsed = parsing.extract(config.from_stored(row["path"]))
+        with storage.local_copy(row["path"]) as local:   # Storage objects are parsed from a temporary download
+            parsed = parsing.extract(local)
         doc_type = row["doc_type"]
         if doc_type in ("other", "auto", ""):
             doc_type = classify(row["filename"], parsed.pages[0] if parsed.pages else "")
@@ -157,7 +163,7 @@ def process(doc_id: str) -> dict:
             db.notify("document", f"Document ready: {row['title']}", f"{len(parsed.pages)} page(s), "
                       f"language: {lang.get('lang_name') or 'unknown'}" + (", OCR used" if parsed.meta.get("ocr") else ""),
                       f"#/doc/{doc_id}", row["case_id"], dedupe_key=f"doc-ready:{doc_id}:{row['sha256'][:12]}")
-    except parsing.ParseError as exc:
+    except (parsing.ParseError, storage.StorageError) as exc:
         _fail(doc_id, str(exc), row)
     except Exception as exc:  # unexpected: log details locally, show a generic message
         log.exception("Ingestion failed for %s", row["filename"])
@@ -178,13 +184,14 @@ def index_derived(source: dict, pages: list[str], title: str, kind: str) -> str:
     so English questions can retrieve content from Hindi/Marathi files. Returns the derived doc id."""
     text = "\n".join(pages)
     sha = hashlib.sha256(f"{kind}:{source['id']}:{text}".encode()).hexdigest()
-    old = db.conn().execute("SELECT id FROM documents WHERE case_id IS ? AND json_extract(meta,'$.derived_from')=? "
-                            "AND json_extract(meta,'$.derived_kind')=?", (source["case_id"], source["id"], kind)).fetchall()
+    old = db.conn().execute("SELECT id FROM documents WHERE COALESCE(case_id,'') = ? AND meta->>'derived_from' = ? "
+                            "AND meta->>'derived_kind' = ?", (source["case_id"] or "", source["id"], kind)).fetchall()
     for r in old:
         delete_document(r["id"])
     doc_id = db.new_id("doc_")
+    # A derived document points at its source's file (never its own copy), so deleting it never deletes the file.
     _insert_document(doc_id=doc_id, case_id=source["case_id"], collection=source["collection"], doc_type=source["doc_type"],
-                     title=title, filename=source["filename"], path=config.from_stored(source["path"]), sha=sha,
+                     title=title, filename=source["filename"], path=source["path"], sha=sha,
                      meta={"derived_from": source["id"], "derived_kind": kind, "lang": "en", "lang_name": "English"})
     chunks = chunking.chunk_document(pages, source["doc_type"], title, "")
     vecs = embeddings.embed_passages([f"{c.header}\n{c.text}"[:EMBED_CHARS] for c in chunks])
@@ -206,16 +213,21 @@ def delete_document(doc_id: str) -> bool:
     if not row:
         return False
     derived = [r["id"] for r in db.conn().execute(
-        "SELECT id FROM documents WHERE json_extract(meta,'$.derived_from')=?", (doc_id,))]
+        "SELECT id FROM documents WHERE meta->>'derived_from' = ?", (doc_id,))]
     with db.tx() as c:
-        c.execute("DELETE FROM documents WHERE id=?", (doc_id,))  # chunks + FTS rows cascade via triggers
+        c.execute("DELETE FROM documents WHERE id=?", (doc_id,))  # chunks + keyword index rows cascade
     index.remove_doc(doc_id)
     for d in derived:
         delete_document(d)
     is_derived = '"derived_from"' in (row["meta"] or "")
-    p = config.from_stored(row["path"]).resolve()
-    if row["collection"] == "case" and not is_derived and config.UPLOAD_DIR.resolve() in p.parents and p.exists():
-        p.unlink()
+    if row["collection"] == "case" and not is_derived:
+        # Metadata first, then the file: a failed file delete leaves a harmless orphan (logged for cleanup),
+        # never a document row that points at a missing file.
+        try:
+            storage.delete(row["path"])
+        except storage.StorageError:
+            log.warning("Stored file for deleted document %s could not be removed: %s", doc_id, row["path"])
+            db.audit("storage.orphan", "document", doc_id, path=row["path"])
     return True
 
 
@@ -278,6 +290,8 @@ def build_library(rebuild: bool = False, progress=print) -> dict:
         progress(f"[{i}/{len(on_disk)}] {'OK ' if ok else 'ERR'} {title[:70]} "
                  f"({res.get('n_chunks', 0)} chunks, {time.time() - t:.1f}s){'' if ok else ' — ' + str(res.get('error'))}")
     db.set_meta("embed_model", embeddings.model_name())
+    from . import library
+    library.clear_cache()
     return {"added": added, "skipped": skipped, "failed": failed, "total": len(on_disk)}
 
 

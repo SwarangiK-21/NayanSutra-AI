@@ -44,10 +44,11 @@ def ensure_chat(chat_id: str | None, case_id: str | None, first_message: str) ->
 
 def save_message(chat_id: str, role: str, content: str, sources: list | None = None, meta: dict | None = None) -> int:
     with db.tx() as c:
-        cur = c.execute("INSERT INTO messages(chat_id, role, content, sources, meta, created_at) VALUES(?,?,?,?,?,?)",
-                        (chat_id, role, content, json.dumps(sources or []), json.dumps(meta or {}), db.now()))
+        mid = c.execute("INSERT INTO messages(chat_id, role, content, sources, meta, created_at) VALUES(?,?,?,?,?,?) "
+                        "RETURNING id", (chat_id, role, content, json.dumps(sources or []), json.dumps(meta or {}),
+                                         db.now())).fetchone()[0]
         c.execute("UPDATE chats SET updated_at=? WHERE id=?", (db.now(), chat_id))
-        return cur.lastrowid
+        return mid
 
 
 def history(chat_id: str, limit: int = 8) -> list[dict]:
