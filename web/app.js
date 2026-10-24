@@ -11,6 +11,7 @@ import { provisionsPanel } from "./js/provisions.js";
 import { refreshBell, viewUpdates } from "./js/updates.js";
 import { viewAwareness } from "./js/awareness.js";
 import { viewSearch } from "./js/search.js";
+import { viewJobs } from "./js/jobs.js";
 import { voiceControls, speakButton, bindSpeak } from "./js/voice.js";
 import { applyNavPermissions, can, membersCard, renderEnroll, renderForgot, renderLogin, renderMfa, renderReset,
   renderSignup, viewAccount, viewAdmin } from "./js/auth.js";
@@ -33,7 +34,7 @@ async function refreshStatus() {
 const routes = { dashboard: viewDashboard, cases: viewCases, research: viewResearch, acts: viewActs,
   drafts: viewDrafts, limitation: viewLimitation, about: viewAbout, lookup: viewCaseSearch, doc: viewDocument,
   upload: viewUpload, drafting: viewDrafting, notice: viewNotice, updates: viewUpdates, awareness: viewAwareness,
-  search: viewSearch, tools: viewTools, account: viewAccount, admin: viewAdmin,
+  search: viewSearch, tools: viewTools, account: viewAccount, admin: viewAdmin, jobs: viewJobs,
   login: (m, r) => renderLogin(route, r.q), signup: (m, r) => renderSignup(route, r.q), forgot: () => renderForgot(),
   "reset-password": () => renderReset() };
 // Pages a signed-out visitor may open (public legal information); everything else asks them to sign in.
@@ -60,7 +61,7 @@ async function route() {
       <div class="card-b stack"><p>${t("auth.no_access_body", { email: s.user?.email || "" })}</p>
       <div class="small muted">${t("auth.public")} <a href="#/acts">${t("nav.acts")}</a> · <a href="#/awareness">${t("nav.awareness")}</a> · <a href="#/limitation">${t("nav.limitation")}</a></div></div></div>`);
   }
-  const navName = { doc: "cases", upload: "cases", notice: "drafting", drafts: "tools", limitation: "tools", about: "tools" }[r.name] || r.name;
+  const navName = { doc: "cases", upload: "cases", notice: "drafting", drafts: "tools", limitation: "tools", about: "tools", jobs: "tools" }[r.name] || r.name;
   $$("[data-nav]").forEach((a) => { const on = a.dataset.nav === navName; a.classList.toggle("active", on); if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   $("#navList").classList.remove("open");
   const main = $("#main");
@@ -332,7 +333,9 @@ async function viewCase(main, r) {
       <div class="doc-main"><div class="doc-title">${d.title}</div>
         <div class="small muted">${types[d.doc_type] || d.doc_type} · ${d.pages ? `${t("case.pages", { n: d.pages })} · ` : ""}${d.n_chunks ? `${t("case.passages", { n: d.n_chunks })} · ` : ""}${d.meta?.lang_name ? `${d.meta.lang_name} · ` : ""}${d.meta?.ocr ? `OCR · ` : ""}${fmtDate(d.created_at)}${d.meta?.instruction_like_text ? html` <span class="chip chip-warn" title="${t("guard.injection_hint")}">${t("guard.injection")}</span>` : ""}</div>
         ${d.status === "processing" ? html`<div class="status-line small"><span class="spinner"></span> ${t("case.indexing")}</div>` : ""}
-        ${d.status === "failed" ? html`<div class="small" style="color:var(--red)">⚠ ${d.error || t("common.failed")}</div>` : ""}
+        ${["failed", "quarantined", "cancelled"].includes(d.status) ? html`<div class="small" style="color:var(--red)">⚠ <strong>${t(`doc.st_${d.status}`)}</strong> — ${d.error || t("common.failed")}
+          ${may["documents.upload"] ? html` <button class="btn btn-ghost btn-sm" data-reprocess="${d.id}">${t("doc.reprocess")}</button>` : ""}</div>` : ""}
+        ${d.meta?.quality?.warnings?.length ? html`<div class="small"><span class="chip chip-warn" title="${d.meta.quality.warnings.join(" · ")}">⚠ ${t("doc.quality_issues", { n: d.meta.quality.warnings.length })}</span></div>` : ""}
         <div class="doc-actions">
           ${d.status === "ready" ? html`
             <a class="btn btn-saffron btn-sm" href="#/doc/${encodeURIComponent(d.id)}">${t("case.open_doc")}</a>
@@ -340,6 +343,10 @@ async function viewCase(main, r) {
             <a class="btn btn-ghost btn-sm" href="#/research?case=${encodeURIComponent(id)}&doc=${encodeURIComponent(d.id)}&task=timeline">${t("case.timeline")}</a>
             <a class="btn btn-ghost btn-sm" href="/api/documents/${encodeURIComponent(d.id)}/file" target="_blank" rel="noopener">${t("case.original")} ↗</a>` : ""}
           ${may["documents.delete"] ? html`<button class="btn btn-danger btn-sm" data-del="${d.id}">${t("common.delete")}</button>` : ""}</div></div></div>`)}` : html`<div class="empty">${t("case.no_docs")}</div>`);
+    $$("[data-reprocess]", $("#docList")).forEach((b) => { b.onclick = async () => {
+      try { await api(`/api/documents/${encodeURIComponent(b.dataset.reprocess)}/reprocess`, { method: "POST" }); toast(t("doc.requeued")); loadDocs(); }
+      catch (e) { toast(e.message, true); }
+    }; });
     $$("[data-del]", $("#docList")).forEach((b) => { b.onclick = async () => {
       if (!confirm(t("case.confirm_delete_doc"))) return;
       try { await api(`/api/documents/${encodeURIComponent(b.dataset.del)}`, { method: "DELETE" }); toast(t("case.doc_deleted")); loadDocs(); } catch (e) { toast(e.message, true); }
@@ -530,15 +537,20 @@ function renderAi(el, content, sources, meta, live = null) {
     ${meta.intent ? html`<span class="chip">${INTENT()[meta.intent] || meta.intent}</span>` : ""}
     ${origin ? html`<span class="chip" title="${t("origin.hint")}">📂 ${t("origin.answered_from", { where: origin })}</span>` : ""}
     ${sources && sources.length ? html`<span class="chip">${t("research.n_sources", { n: sources.length })}</span>` : ""}
+    ${meta.fallback_used ? html`<span class="chip chip-warn" title="${t("trace.fallback_hint")}">${t("trace.fallback")}</span>` : ""}
+    ${meta.partial ? html`<span class="chip chip-err">${t("trace.partial")}</span>` : ""}
+    ${v && v.checked === false ? html`<span class="chip chip-warn" title="${t("trace.audit_code_only_hint")}">${t("trace.audit_code_only")}</span>` : ""}
     ${meta.elapsed ? html`<span>${meta.elapsed}s</span>` : ""}
     ${!live && content ? speakButton(meta.lang) : ""}</div>`;
+  const trace = !live && (meta.trace || []).length ? html`<details class="small trace"><summary>${t("trace.title")}</summary><ol>
+    ${meta.trace.map((s) => html`<li><strong>${t(`trace.step_${s.step}`, {}, s.step)}</strong> — ${t(`trace.st_${s.status}`, {}, s.status)}${s.model ? ` · ${s.model}` : ""}${s.fallback ? ` (${t("trace.fallback")})` : ""}${s.passages !== undefined ? ` · ${t("trace.passages", { n: s.passages })}` : ""}${s.issues ? ` · ${t("trace.issues", { n: s.issues })}` : ""}${s.requested ? ` · ${s.requested} → ${s.used}` : ""}</li>`)}</ol></details>` : "";
   const status = live ? html`<div class="status-line"><span class="spinner"></span><span>${live}</span></div>` : "";
   const verify = v ? (v.grounded
     ? html`<div class="verify verify-ok">✓ ${t("research.audit_ok")}</div>`
     : html`<div class="verify verify-warn">⚠ ${t("research.audit_warn")}${v.unsupported && v.unsupported.length ? html`<ul>${v.unsupported.map((u) => html`<li>${u}</li>`)}</ul>` : ""}</div>`) : "";
   const err = meta.error && meta.error !== "internal" && !content.includes(meta.error) ? html`<div class="notice notice-red">${meta.error}</div>` : "";
   const disclaimer = !live && meta.intent && meta.intent !== "chitchat" ? html`<div class="small muted">${t("research.disclaimer")}</div>` : "";
-  mount(el, html`${metaRow}<div class="md">${markdown(content)}</div>${status}<div class="msg-foot">${err}${verify}${disclaimer}</div>`);
+  mount(el, html`${metaRow}<div class="md">${markdown(content)}</div>${status}<div class="msg-foot">${err}${verify}${disclaimer}${trace}</div>`);
 }
 
 function renderSourcesPanel(sources) {
@@ -641,6 +653,7 @@ async function viewActs(main, r) {
       <h3>${a.title}</h3>
       <div class="row">${a.meta.short ? html`<span class="chip">${a.meta.short}</span>` : ""}${(a.meta.areas || []).map((x) => html`<span class="badge ${TYPE_BADGE[x] || ""}">${t(`cat.${x}`, {}, x)}</span>`)}
         ${a.meta.repealed ? html`<span class="chip chip-warn" title="${a.meta.note || ""}">${t("acts.repealed")}</span>` : ""}
+        ${(a.meta.version || 1) > 1 ? html`<button type="button" class="chip chip-ok" data-versions="${a.id}" title="${t("acts.version_hint")}">${t("acts.version", { v: a.meta.version, date: fmtDate(a.meta.version_date) })}</button>` : ""}
         ${a.status !== "ready" ? html`<span class="chip chip-wait">${a.status}</span>` : ""}</div>
       <div class="small muted">${t("acts.meta", { pages: a.pages || "?", n: a.n_chunks || 0 })}${a.meta.act_number ? ` · Act ${a.meta.act_number} of ${a.meta.year}` : ""}${a.meta.fetched_at ? ` · ${t("acts.fetched", { date: fmtDate(a.meta.fetched_at) })}` : ""}</div>
       <div class="row"><a class="btn btn-ghost btn-sm" href="/api/documents/${encodeURIComponent(a.id)}/file" target="_blank" rel="noopener">${t("acts.open_pdf")} ↗</a>
@@ -683,6 +696,13 @@ async function viewActs(main, r) {
   };
   $("#lookupForm").onsubmit = (e) => { e.preventDefault(); run(); };
   if (r.q.get("q")) run();
+  $$("[data-versions]", main).forEach((b) => { b.onclick = async () => {
+    const { versions } = await api(`/api/documents/${encodeURIComponent(b.dataset.versions)}/versions`);
+    showDrawer(t("acts.versions"));
+    mount($("#drawerBody"), html`<p class="small muted">${t("acts.versions_hint")}</p><ul class="list-plain">${versions.map((v) => html`<li>
+      <strong>v${v.version}</strong> · ${fmtDate(v.created_at)} · <span class="chip ${v.status === "ready" ? "chip-ok" : ""}">${t(`acts.ver_${v.status}`, {}, v.status)}</span>
+      <a href="/api/documents/${encodeURIComponent(v.id)}/text" target="_blank" rel="noopener">${t("acts.ver_text")} ↗</a></li>`)}</ul>`);
+  }; });
 }
 
 // ── Draft templates ──
@@ -762,7 +782,8 @@ async function viewTools(main) {
   const items = [["⏱", t("nav.limitation"), t("tools.limitation"), "#/limitation"], ["📑", t("nav.templates"), t("tools.templates"), "#/drafts"],
     ...(can("integrations.read") ? [["🔌", t("tools.integrations"), t("tools.integrations_hint"), "#/updates?tab=sources"]] : []),
     ...(can("audit.read") ? [["🗒", t("tools.activity"), t("tools.activity_hint"), "#/updates?tab=activity"]] : []),
-    ...(can("account.self") ? [["⚙", t("tools.privacy"), t("tools.privacy_hint"), "#/tools?privacy=1"]] : []), ["ℹ", t("nav.about"), t("tools.about"), "#/about"]];
+    ...(can("account.self") ? [["⏳", t("jobs.title"), t("jobs.hint"), "#/jobs"], ["⚙", t("tools.privacy"), t("tools.privacy_hint"), "#/tools?privacy=1"]] : []),
+    ["ℹ", t("nav.about"), t("tools.about"), "#/about"]];
   mount(main, html`<h1 class="page-title">${t("nav.tools")}</h1><p class="page-lead">${t("tools.lead")}</p>
     <div class="grid g-3">${items.map(([ico, title, hint, href]) => html`<a class="card act-card tool" href="${href}"><h3><span aria-hidden="true">${ico}</span> ${title}</h3><div class="small muted">${hint}</div></a>`)}</div>
     ${can("account.self") ? html`<div class="card" style="margin-top:16px" id="privacyCard"><div class="card-h"><h2>${t("tools.privacy")}</h2></div><form class="card-b stack" id="privForm">

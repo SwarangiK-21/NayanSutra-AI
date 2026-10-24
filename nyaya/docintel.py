@@ -8,6 +8,7 @@ marked unverified when the quoted value cannot be found on the cited page.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 
@@ -121,10 +122,17 @@ def translate(doc_id: str, progress=lambda *a: None) -> dict:
                          f"limit {config.DOC_LLM_MAX_CHARS:,}).")
     src = langdetect.LANG_NAMES.get(lang, "the source language")
     parts = _parts(pages)
-    out = []
+    # Resume after an interruption: parts already translated for exactly this text are kept (checkpoint).
+    sig = hashlib.sha256("".join(parts).encode()).hexdigest()[:16]
+    cp = getattr(progress, "checkpoint", None) or {}
+    out = list(cp.get("parts") or []) if cp.get("sig") == sig else []
     for i, part in enumerate(parts, 1):
-        progress(i - 1, len(parts), f"Translating part {i} of {len(parts)}")
+        progress(i - 1, len(parts), f"Translating part {i} of {len(parts)}" + (" (resumed)" if i <= len(out) else ""))
+        if i <= len(out):
+            continue
         out.append(llm.chat([{"role": "user", "content": prompts.TRANSLATE.format(src=src, text=part)}], temperature=0.0))
+        if hasattr(progress, "save_checkpoint"):
+            progress.save_checkpoint({"sig": sig, "parts": out})
     progress(len(parts), len(parts), "Indexing the translation")
     translated = _split_by_page("\n".join(out), len(pages))
     uncertain = sum(t.count("[uncertain translation]") + t.count("[unclear:") for t in translated)
@@ -182,12 +190,18 @@ def summarize(doc_id: str, lang: str = "en", progress=lambda *a: None) -> dict:
             raise ValueError(f"The document is too long to summarise in one go ({len(body):,} characters).")
         if len(body) > config.DOC_ANALYSIS_MAX_CHARS:
             parts = [body[i:i + 40000] for i in range(0, len(body), 40000)]
-            notes = []
+            sig = hashlib.sha256(body.encode()).hexdigest()[:16]
+            cp = getattr(progress, "checkpoint", None) or {}
+            notes = list(cp.get("notes") or []) if cp.get("sig") == sig else []   # resume after an interruption
             for i, part in enumerate(parts, 1):
                 progress(i - 1, len(parts) + 1, f"Reading part {i} of {len(parts)}")
+                if i <= len(notes):
+                    continue
                 notes.append(llm.chat([{"role": "user", "content": prompts.MAP_NOTES.format(
                     task="facts, parties, dates, case numbers, provisions, relief, deadlines", request="structured summary",
                     i=i, n=len(parts), text=part)}], model=config.FAST_LLM_MODEL))
+                if hasattr(progress, "save_checkpoint"):
+                    progress.save_checkpoint({"sig": sig, "notes": notes})
             body = "\n\n".join(f"NOTES ON PART {i}:\n{n}" for i, n in enumerate(notes, 1))
         progress(0, 2, "Extracting parties, dates, provisions and deadlines")
         facts = llm.chat_json([{"role": "user", "content": prompts.DOC_FACTS.format(title=d["title"], text=body)}],

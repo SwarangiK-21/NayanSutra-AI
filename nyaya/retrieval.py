@@ -177,7 +177,7 @@ def load_hits(ids: list[int]) -> list[Hit]:
     rows = db.conn().execute(
         f"SELECT c.id, c.doc_id, c.header, c.text, c.label, c.section, c.page_start, c.page_end, "
         f"d.title, d.collection, d.doc_type FROM chunks c JOIN documents d ON d.id=c.doc_id "
-        f"WHERE c.id IN ({','.join('?' * len(ids))})", ids).fetchall()
+        f"WHERE c.id IN ({','.join('?' * len(ids))}) AND d.status='ready'", ids).fetchall()   # never superseded text
     by_id = {r["id"]: r for r in rows}
     return [Hit(chunk_id=r["id"], doc_id=r["doc_id"], title=r["title"], collection=r["collection"],
                 doc_type=r["doc_type"], header=r["header"], text=r["text"], label=r["label"], section=r["section"],

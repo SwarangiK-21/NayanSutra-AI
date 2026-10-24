@@ -262,7 +262,7 @@ def test_image_upload_without_ocr_fails_clearly(client, monkeypatch):
     Image.new("RGB", (40, 20), "white").save(buf, "PNG")
     c = _case(client)
     d = _upload(client, c["id"], "scan.png", buf.getvalue(), "image/png")
-    assert d["status"] == "failed" and "OCR" in d["error"]
+    assert d["status"] == "quarantined" and "OCR" in d["error"]   # kept, not indexed, reason shown
     bad = client.post(f"/api/cases/{c['id']}/documents", files={"file": ("x.png", b"not a png", "image/png")})
     assert bad.status_code == 415
 
@@ -416,10 +416,10 @@ def test_draft_rejects_other_cases_documents_and_needs_consent(client, ni_librar
     job = r.json()
     for _ in range(100):
         job = client.get(f"/api/jobs/{job['id']}").json()
-        if job["status"] != "running":
+        if job["status"] not in ("queued", "processing"):
             break
         time.sleep(0.05)
-    assert job["status"] == "done" and job["result"]["inputs"]["files"][0]["doc_id"] == doc["id"]
+    assert job["status"] == "completed" and job["result"]["inputs"]["files"][0]["doc_id"] == doc["id"]
 
 
 def test_forum_requirements_are_sourced(client, ni_library):

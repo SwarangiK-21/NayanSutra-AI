@@ -15,7 +15,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import chunking, config, db, embeddings, guardrails, parsing, storage
+from . import chunking, config, db, embeddings, guardrails, jobs, parsing, quality, storage
 from .vectorindex import index
 
 log = logging.getLogger(__name__)
@@ -114,28 +114,40 @@ def register(path: Path, *, collection: str, case_id: str | None, doc_type: str 
     return db.row_to_dict(db.conn().execute("SELECT * FROM documents WHERE id=?", (doc_id,)).fetchone()), True
 
 
-def process(doc_id: str) -> dict:
-    """Parse, chunk, embed and index a registered document. Never raises."""
+def process(doc_id: str, progress=None, raise_transient: bool = False) -> dict:
+    """Validate → extract → check quality → chunk → embed → index → publish ('ready') one registered document.
+
+    Content problems (unreadable, garbled, needs OCR) quarantine the document: kept, not indexed, shown with the
+    reason. Other errors mark it failed — or, for the background worker (raise_transient=True), are raised so the job
+    is retried with back-off and finally dead-lettered. `progress(done, total, text)` may raise to cancel."""
     row = db.row_to_dict(db.conn().execute("SELECT * FROM documents WHERE id=?", (doc_id,)).fetchone())
     if not row:
         return {}
+    step = progress or (lambda *a: None)
     t0 = time.time()
     try:
+        step(0, 4, "Reading the file")
         with storage.local_copy(row["path"]) as local:   # Storage objects are parsed from a temporary download
             parsed = parsing.extract(local)
+        q = quality.assess(parsed.pages, parsed.meta)
+        if q["verdict"] == "quarantine":
+            raise parsing.ParseError(q["reason"])
         doc_type = row["doc_type"]
         if doc_type in ("other", "auto", ""):
             doc_type = classify(row["filename"], parsed.pages[0] if parsed.pages else "")
+        step(1, 4, "Splitting into passages")
         chunks = chunking.chunk_document(parsed.pages, doc_type, row["title"], row["meta"].get("short", ""))
         if not chunks:
             raise parsing.ParseError("No text could be split into passages.")
+        step(2, 4, "Building the search index")
         vecs = embeddings.embed_passages([f"{c.header}\n{c.text}"[:EMBED_CHARS] for c in chunks])
+        step(3, 4, "Saving")
         rows = [
             (doc_id, i, c.header, c.text, c.page_start, c.page_end, c.label, c.section, c.title, c.chapter,
              vecs[i].tobytes())
             for i, c in enumerate(chunks)
         ]
-        meta = {**row["meta"]}
+        meta = {**row["meta"], "quality": {k: v for k, v in q.items() if k not in ("verdict", "reason")}}
         lang = parsed.meta.get("language") or {}
         if row["collection"] == "case":   # indirect prompt injection: shown to the user, labelled for the model
             meta["instruction_like_text"] = bool(guardrails.injection_signals(parsed.text[:500000]))
@@ -144,6 +156,10 @@ def process(doc_id: str) -> dict:
                                        ("ocr", parsed.meta.get("ocr")), ("ocr_needed_pages", parsed.meta.get("ocr_needed_pages")))
                      if v})
         with db.tx() as c:
+            # Idempotent: a retried or repeated run replaces the passages instead of adding a second copy, and a
+            # document cancelled or deleted meanwhile is left alone.
+            if c.execute("SELECT status FROM documents WHERE id=?", (doc_id,)).fetchone() is None:
+                return {}
             c.execute("DELETE FROM chunks WHERE doc_id=?", (doc_id,))
             c.executemany(
                 "INSERT INTO chunks(doc_id, ord, header, text, page_start, page_end, label, section, title, chapter, emb)"
@@ -167,20 +183,40 @@ def process(doc_id: str) -> dict:
             db.notify("document", f"Document ready: {row['title']}", f"{len(parsed.pages)} page(s), "
                       f"language: {lang.get('lang_name') or 'unknown'}" + (", OCR used" if parsed.meta.get("ocr") else ""),
                       f"#/doc/{doc_id}", row["case_id"], dedupe_key=f"doc-ready:{doc_id}:{row['sha256'][:12]}")
-    except (parsing.ParseError, storage.StorageError) as exc:
+    except parsing.ParseError as exc:   # the content itself is the problem: quarantine, never retry
+        _fail(doc_id, str(exc), row, status="quarantined")
+    except jobs.JobCancelled:
+        raise
+    except storage.StorageError as exc:
+        if raise_transient and jobs.is_transient(exc):
+            raise
         _fail(doc_id, str(exc), row)
     except Exception as exc:  # unexpected: log details locally, show a generic message
+        if raise_transient:
+            raise
         log.exception("Ingestion failed for %s", doc_id)
         _fail(doc_id, f"Could not process this file ({type(exc).__name__}).", row)
     return db.row_to_dict(db.conn().execute("SELECT * FROM documents WHERE id=?", (doc_id,)).fetchone())
 
 
-def _fail(doc_id: str, msg: str, row: dict | None = None) -> None:
+def _fail(doc_id: str, msg: str, row: dict | None = None, status: str = "failed") -> None:
     with db.tx() as c:
-        c.execute("UPDATE documents SET status='failed', error=? WHERE id=?", (msg, doc_id))
+        c.execute("UPDATE documents SET status=?, error=? WHERE id=?", (status, msg, doc_id))
     if row and row.get("collection") == "case":
-        db.notify("document", f"Could not process: {row['title']}", msg, f"#/cases/{row['case_id']}", row["case_id"],
-                  dedupe_key=f"doc-failed:{doc_id}:{msg[:40]}")
+        title = "Quarantined" if status == "quarantined" else "Could not process"
+        db.notify("document", f"{title}: {row['title']}", msg, f"#/cases/{row['case_id']}", row["case_id"],
+                  dedupe_key=f"doc-{status}:{doc_id}:{msg[:40]}")
+
+
+def queue(doc_id: str, owner: str | None, org_id: str | None = None) -> dict:
+    """Queue (or re-queue) a document for background processing. One active job per document."""
+    with db.system():
+        row = db.conn().execute("SELECT case_id, status FROM documents WHERE id=?", (doc_id,)).fetchone()
+        if row and row["status"] != "processing":
+            with db.tx() as c:
+                c.execute("UPDATE documents SET status='processing', error=NULL WHERE id=?", (doc_id,))
+    return jobs.submit("ingest", {"doc_id": doc_id, "case_id": row["case_id"] if row else None},
+                       key=f"ingest:{doc_id}", owner=owner, org_id=org_id, case_id=row["case_id"] if row else None)
 
 
 def index_derived(source: dict, pages: list[str], title: str, kind: str) -> str:
@@ -298,12 +334,51 @@ def build_library(rebuild: bool = False, progress=print) -> dict:
         ok = res.get("status") == "ready"
         added += ok
         failed += not ok
+        if ok:
+            supersede_older(doc["id"], config.to_stored(p), coll)
         progress(f"[{i}/{len(on_disk)}] {'OK ' if ok else 'ERR'} {title[:70]} "
                  f"({res.get('n_chunks', 0)} chunks, {time.time() - t:.1f}s){'' if ok else ' — ' + str(res.get('error'))}")
     db.set_meta("embed_model", embeddings.model_name())
     from . import library
     library.clear_cache()
     return {"added": added, "skipped": skipped, "failed": failed, "total": len(on_disk)}
+
+
+def supersede_older(new_id: str, stored_path: str, collection: str) -> list[str]:
+    """A revised act or judgment (same file, new content) becomes a new version. Earlier versions are kept — their
+    text stays readable for history and for old answers that cited them — but are marked 'superseded' and removed
+    from search, so research only uses the current text."""
+    older = [db.row_to_dict(r) for r in db.conn().execute(
+        "SELECT id, meta, created_at FROM documents WHERE path=? AND collection=? AND id<>? AND status='ready' "
+        "ORDER BY created_at", (stored_path, collection, new_id))]
+    if not older:
+        return []
+    version = max(int((o["meta"] or {}).get("version") or 1) for o in older) + 1
+    now = db.now()
+    with db.tx() as c:
+        for o in older:
+            m = {**(o["meta"] or {}), "superseded_by": new_id, "superseded_at": now}
+            c.execute("UPDATE documents SET status='superseded', meta=? WHERE id=?", (json.dumps(m, ensure_ascii=False), o["id"]))
+        row = c.execute("SELECT meta FROM documents WHERE id=?", (new_id,)).fetchone()
+        m = {**json.loads(row["meta"] or "{}"), "version": version, "supersedes": [o["id"] for o in older],
+             "version_date": now[:10]}
+        c.execute("UPDATE documents SET meta=? WHERE id=?", (json.dumps(m, ensure_ascii=False), new_id))
+    for o in older:
+        index.remove_doc(o["id"])
+    db.audit("library.new_version", "document", new_id, version=version, superseded=[o["id"] for o in older])
+    return [o["id"] for o in older]
+
+
+def versions(doc_id: str) -> list[dict]:
+    """All versions of a library document, newest first."""
+    row = db.conn().execute("SELECT path, collection FROM documents WHERE id=?", (doc_id,)).fetchone()
+    if not row or row["collection"] == "case":
+        return []
+    rows = db.conn().execute("SELECT id, title, status, meta, created_at FROM documents WHERE path=? AND collection=? "
+                             "ORDER BY created_at DESC", (row["path"], row["collection"]))
+    out = [{"id": r["id"], "title": r["title"], "status": r["status"], "created_at": r["created_at"],
+            "version": int((db.row_to_dict(r)["meta"] or {}).get("version") or 1)} for r in rows]
+    return sorted(out, key=lambda v: v["version"], reverse=True)
 
 
 def reembed_all(progress=print) -> None:

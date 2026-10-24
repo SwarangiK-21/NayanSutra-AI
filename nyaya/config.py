@@ -120,6 +120,20 @@ AI_PII_REDACTION = _bool("AI_PII_REDACTION", True)
 # Optional malware scan of uploads with ClamAV (path to clamscan/clamdscan); empty = auto-detect, 'off' = disabled.
 CLAMAV_CMD = _env("CLAMAV_CMD")
 
+# ── Background jobs and bulk upload ─────────────────────────────────────────
+INGEST_WORKERS = int(_env("INGEST_WORKERS", default="1"))   # parse/OCR/embed is CPU-bound: keep it small
+JOB_WORKERS = int(_env("JOB_WORKERS", default="2"))         # translation, summaries, drafts (mostly waiting on the LLM)
+INGEST_MAX_ATTEMPTS = int(_env("INGEST_MAX_ATTEMPTS", default="3"))
+JOB_TIMEOUT_SECONDS = int(_env("JOB_TIMEOUT_SECONDS", default="900"))
+BATCH_MAX_FILES = int(_env("BATCH_MAX_FILES", default="50"))
+BATCH_MAX_TOTAL_MB = int(_env("BATCH_MAX_TOTAL_MB", default="500"))
+
+# ── LLM resilience ──────────────────────────────────────────────────────────
+LLM_RETRIES = int(_env("LLM_RETRIES", default="2"))                     # extra attempts per model, with jittered back-off
+LLM_FALLBACK_MODEL = _env("LLM_FALLBACK_MODEL", default="gpt-oss:20b")  # used (and labelled) when the main model fails
+LLM_BREAKER_FAILURES = int(_env("LLM_BREAKER_FAILURES", default="4"))   # consecutive failures that open the circuit
+LLM_BREAKER_SECONDS = int(_env("LLM_BREAKER_SECONDS", default="60"))    # how long calls to that model are skipped
+
 # ── Server / security ───────────────────────────────────────────────────────
 APP_HOST = _env("APP_HOST", default="127.0.0.1")
 APP_PORT = int(_env("APP_PORT", default="8000"))

@@ -195,6 +195,46 @@ def test_live_auth_mfa_and_vault(live):
             _cleanup([uid], [])
 
 
+def test_live_job_queue_claims_once_and_is_private(live):
+    """Postgres path of the durable queue: FOR UPDATE SKIP LOCKED claim, owner-only visibility under RLS."""
+    from nyaya import jobs
+    owner, other = str(uuid.uuid4()), str(uuid.uuid4())
+    tag = secrets.token_hex(3)
+    ran = []
+
+    @jobs.handler(f"qa_live_{tag}", authorize=None, timeout=60)
+    def qa(params, ctx):
+        ctx(1, 1, "done")
+        ran.append(params["n"])
+        return {"ok": True}
+    with db.system():
+        if db.conn().execute("SELECT COUNT(*) FROM jobs WHERE status='queued'").fetchone()[0]:
+            pytest.skip("real jobs are waiting in the queue; this test must not claim them")
+    try:
+        with db.system():
+            with db.tx() as c:
+                for uid, n in ((owner, 1), (other, 2)):
+                    c.execute("INSERT INTO profiles(user_id, email, display_name, created_at, updated_at) VALUES(?,?,?,?,?)",
+                              (uid, f"qa-job{n}-{tag}@example.com", f"QA {n}", db.now(), db.now()))
+        j = jobs.submit(f"qa_live_{tag}", {"n": 7}, key=f"qa:{tag}", owner=owner)
+        assert jobs.submit(f"qa_live_{tag}", {"n": 7}, key=f"qa:{tag}", owner=owner)["id"] == j["id"]   # deduplicated
+        with _as(other):
+            assert db.conn().execute("SELECT COUNT(*) FROM jobs WHERE id=?", (j["id"],)).fetchone()[0] == 0
+        with _as(owner):
+            assert db.conn().execute("SELECT COUNT(*) FROM jobs WHERE id=?", (j["id"],)).fetchone()[0] == 1
+        row = jobs._claim("ai")
+        assert row and row["id"] == j["id"] and row["status"] == "processing" and row["attempts"] == 1
+        assert jobs._claim("ai") is None                               # already claimed: never handed out twice
+        assert jobs.run_one(row) == "completed" and ran == [7]
+        assert jobs.get(j["id"], owner)["status"] == "completed" and jobs.get(j["id"], other) is None
+    finally:
+        with db.system():
+            with db.tx() as c:
+                c.execute("DELETE FROM jobs WHERE dedupe_key=?", (f"qa:{tag}",))
+                c.execute("DELETE FROM profiles WHERE user_id IN (?, ?)", (owner, other))
+        jobs.HANDLERS.pop(f"qa_live_{tag}", None)
+
+
 def app_module():
     from nyaya import server
     return server

@@ -54,7 +54,7 @@ const defaultForum = (c) => {
   if (/bombay|high court/i.test(c.court || "")) return "bombay_hc";
   return { Criminal: "criminal_district", Family: "family", Consumer: "consumer_district", Revenue: "revenue_mh" }[c.case_type] || "district";
 };
-const recentList = (list) => list.length ? html`<ul class="list-plain">${list.slice(0, 8).map((d) => html`<li><a href="#/drafting?draft=${encodeURIComponent(d.id)}">${d.title}</a><br><span class="small muted">${d.kind === "notice" ? t("drafting.notice") : t("drafting.draft")} · v${d.version} · ${fmtDateTime(d.updated_at)}</span></li>`)}</ul>` : html`<div class="empty">${t("drafting.none")}</div>`;
+const recentList = (list) => list.length ? html`<ul class="list-plain">${list.slice(0, 8).map((d) => html`<li><a href="#/drafting?draft=${encodeURIComponent(d.id)}">${d.title}</a><br><span class="small muted">${d.kind === "notice" ? t("drafting.notice") : t("drafting.draft")} · v${d.version} · ${fmtDateTime(d.updated_at)}</span> ${reviewChip(d)}</li>`)}</ul>` : html`<div class="empty">${t("drafting.none")}</div>`;
 
 function bindStudio({ kind }) {
   const form = $("#dForm");
@@ -166,6 +166,12 @@ export async function viewNotice(main, r) {
   bindStudio({ kind: "notice" });
 }
 
+/** Review state of a draft: only an approved version is exported without the DRAFT label. */
+const reviewChip = (d) => d.review_status === "approved" && d.approved_version === d.version
+  ? html`<span class="chip chip-ok">${t("review.approved_v", { v: d.approved_version })}</span>`
+  : d.review_status === "changes_requested" ? html`<span class="chip chip-err">${t("review.changes_requested")}</span>`
+    : html`<span class="chip chip-warn">${t("drafting.needs_review")}</span>`;
+
 // ── Editor (side-by-side) ──
 async function viewEditor(main, id) {
   const d = await api(`/api/drafts/${encodeURIComponent(id)}`);
@@ -173,7 +179,7 @@ async function viewEditor(main, id) {
   const facts = Object.fromEntries((d.facts || []).map((f) => [f.id, f]));
   const ck = d.inputs?.checks || {};
   mount(main, html`
-    <div class="row"><h1 class="page-title">${d.title}</h1><span class="chip">v${d.version}</span><span class="chip chip-warn">${t("drafting.needs_review")}</span><span class="spacer"></span>
+    <div class="row"><h1 class="page-title">${d.title}</h1><span class="chip">v${d.version}</span>${reviewChip(d)}<span class="spacer"></span>
       <button class="btn" id="saveBtn">💾 ${t("common.save")}</button>
       <button class="btn btn-ghost" id="dlDocx">⬇ Word (.docx)</button><button class="btn btn-ghost" id="dlPdf">⬇ PDF</button>
       <button class="btn btn-ghost" id="regenBtn">↻ ${t("drafting.regenerate")}</button><button class="btn btn-danger" id="delBtn">${t("common.delete")}</button></div>
@@ -200,6 +206,14 @@ async function viewEditor(main, id) {
           ${(d.facts || []).length ? "" : html`<div class="empty">${t("drafting.no_facts")}</div>`}</div></div>
       </div>
       <div class="stack">
+        <div class="card"><div class="card-h"><h2>${t("review.title")}</h2>${reviewChip(d)}</div><div class="card-b stack">
+          <p class="small muted">${t("review.hint")}</p>
+          ${d.review_note ? html`<div class="notice small">${t("review.note")}: ${d.review_note}</div>` : ""}
+          <textarea id="revNote" rows="2" maxlength="1000" placeholder="${t("review.note_ph")}" aria-label="${t("review.note")}"></textarea>
+          <div class="row">${d.review_status === "approved" && d.approved_version === d.version
+            ? html`<button class="btn btn-ghost btn-sm" data-review="reopen">${t("review.reopen")}</button>`
+            : html`<button class="btn btn-sm" data-review="approve">✓ ${t("review.approve", { v: d.version })}</button>
+                   <button class="btn btn-ghost btn-sm" data-review="request_changes">${t("review.request_changes")}</button>`}</div></div></div>
         <div class="card"><div class="card-h"><h2>${t("drafting.sources")}</h2></div><div class="card-b">${(d.sources || []).length ? html`<ol class="small">${d.sources.map((s) => html`<li>${s.citation} — <a href="/api/documents/${encodeURIComponent(s.doc_id)}/file#page=${s.page || 1}" target="_blank" rel="noopener">${t("acts.open_pdf")} ↗</a></li>`)}</ol>` : html`<div class="empty">${t("drafting.no_sources")}</div>`}</div></div>
         <div class="card"><div class="card-h"><h2>${t("drafting.confirm")}</h2></div><div class="card-b small">
           ${(d.inputs?.forum_confirm || []).map((c) => html`<div class="notice" style="margin-bottom:6px">⚠ ${c}</div>`)}
@@ -227,6 +241,11 @@ async function viewEditor(main, id) {
   $("#saveBtn").onclick = async () => { try { await save(); viewEditor(main, id); } catch (e) { toast(e.message, true); } };
   const dl = async (fmt) => { try { if (dirty) await save(); download(`/api/drafts/${encodeURIComponent(id)}/export?format=${fmt}`); } catch (e) { toast(e.message, true); } };
   $("#dlDocx").onclick = () => dl("docx"); $("#dlPdf").onclick = () => dl("pdf");
+  $$("[data-review]").forEach((b) => { b.onclick = async () => {
+    if (dirty) { toast(t("review.save_first"), true); return; }
+    try { await api(`/api/drafts/${encodeURIComponent(id)}/review`, { method: "POST", body: { action: b.dataset.review, note: $("#revNote").value.trim() } });
+      toast(t(`review.done_${b.dataset.review}`)); viewEditor(main, id); } catch (e) { toast(e.message, true); }
+  }; });
   $("#delBtn").onclick = async () => { if (await confirmDialog(t("drafting.delete_title"), t("drafting.delete_body"), t("common.delete"))) { await api(`/api/drafts/${encodeURIComponent(id)}`, { method: "DELETE" }); location.hash = "#/drafting"; } };
   $$("[data-ver]").forEach((b) => { b.onclick = async () => { const v = await api(`/api/drafts/${encodeURIComponent(id)}/versions/${b.dataset.ver}`); $("#edText").value = v.content; dirty = true; prev(); toast(t("drafting.version_loaded", { v: v.version })); }; });
   const regenerate = async (extraKnown, box) => {

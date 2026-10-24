@@ -13,7 +13,6 @@ import tempfile
 import threading
 import time
 from urllib.parse import quote
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from datetime import date, timedelta
 from pathlib import Path
@@ -27,14 +26,13 @@ from pydantic import BaseModel, Field
 
 from . import (accounts, agent, authz, awareness, cases, casesearch, citations, config, db, docintel, drafting,
                embeddings, export, filescan, ingest, integrations, jobs, llm, ocr, privacy, provisions, reference,
-               retrieval, search, security, sessions, storage, tools)
+               retrieval, search, security, sessions, storage, tasks, tools)
 from . import supabase_auth as sb
 from .authz import Principal
 from .vectorindex import index
 
 log = logging.getLogger("nyaya")
 
-_ingest_pool: ThreadPoolExecutor | None = None  # created per app lifespan
 _state = {"models_ready": False, "llm": None, "llm_checked": 0.0}
 _scheduler: integrations.Scheduler | None = None
 PRE_COOKIE = "nyaya_pre"     # random value that anchors the CSRF token before anyone has signed in
@@ -48,14 +46,24 @@ def _warm():
     _state["models_ready"] = True
 
 
-def _process(doc_id: str) -> None:
-    """Ingestion runs as internal work: authorization happened when the file was uploaded."""
-    with db.system():
-        ingest.process(doc_id)
+def _submit_ingest(doc_id: str, p: Principal | None = None) -> dict:
+    """Queue background processing (durable job; authorization happened when the file was uploaded)."""
+    return ingest.queue(doc_id, owner=p.user_id if p else None, org_id=p.org_id if p else None)
 
 
-def _submit_ingest(doc_id: str) -> None:
-    _ingest_pool.submit(_process, doc_id)
+def _sweep_temp_files(max_age_hours: int = 6) -> int:
+    """Upload staging folders are deleted after each request; this removes any left by a crash."""
+    import shutil
+    root, n = Path(tempfile.gettempdir()), 0
+    cutoff = time.time() - max_age_hours * 3600
+    for d in root.glob("nyaya_up_*"):
+        try:
+            if d.is_dir() and d.stat().st_mtime < cutoff:
+                shutil.rmtree(d, ignore_errors=True)
+                n += 1
+        except OSError:
+            pass
+    return n
 
 
 def _apply_retention() -> None:
@@ -72,13 +80,19 @@ def _apply_retention() -> None:
             if n:
                 db.audit("retention.purge_chats", "chat", None, deleted=n, older_than_days=int(r["value"]))
         sessions.purge_expired()
+        # Finished jobs keep their parameters (which may include typed facts) for 30 days, then go.
+        cutoff = (date.today() - timedelta(days=30)).isoformat()
+        with db.tx() as c:
+            c.execute("DELETE FROM jobs WHERE status NOT IN ('queued','processing') AND COALESCE(finished_at, updated_at) < ?",
+                      (cutoff,))
+            c.execute("DELETE FROM upload_batches WHERE updated_at < ?", (cutoff,))
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _ingest_pool, _scheduler
+    global _scheduler
     privacy.install_log_filter()
-    _ingest_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ingest")
+    _sweep_temp_files()
     with db.system():
         db.init()
         cases.seed_if_empty()
@@ -89,9 +103,14 @@ async def lifespan(app: FastAPI):
         if stored and stored != embeddings.model_name():
             log.warning("Index was built with %s but EMBED_MODEL is %s — run: python -m nyaya.ingest reembed",
                         stored, embeddings.model_name())
-        # Re-queue uploads interrupted by a restart.
-        for r in db.conn().execute("SELECT id FROM documents WHERE status='processing'").fetchall():
-            _submit_ingest(r["id"])
+        # Documents left 'processing' without a job (e.g. queued by an older version) get one; jobs themselves are
+        # durable and resume on their own.
+        for r in db.conn().execute(
+                "SELECT d.id, d.uploaded_by FROM documents d WHERE d.status='processing' AND NOT EXISTS "
+                "(SELECT 1 FROM jobs j WHERE j.dedupe_key = 'ingest:' || d.id AND j.status IN ('queued','processing'))"
+        ).fetchall():
+            ingest.queue(r["id"], owner=r["uploaded_by"])
+    jobs.start_workers()
     threading.Thread(target=_warm, daemon=True).start()
     if config.SYNC_ENABLED:
         _scheduler = integrations.Scheduler()
@@ -99,7 +118,7 @@ async def lifespan(app: FastAPI):
     yield
     if _scheduler:
         _scheduler.stop.set()
-    _ingest_pool.shutdown(wait=False, cancel_futures=True)
+    jobs.stop_workers()
     db.close_pool()
 
 
@@ -641,6 +660,8 @@ def status(p: Principal = P):
         "file_storage": "Supabase Storage (private)" if storage.remote_enabled() else "Local folder",
         "accounts": "Supabase Auth" if accounts.mode() == "supabase" else "Local single user",
         "malware_scan": filescan.malware_scan_status(), "pii_redaction": config.AI_PII_REDACTION,
+        "fallback_model": config.LLM_FALLBACK_MODEL or None, "llm_circuit": llm.breaker_state(),
+        "jobs": jobs.stats() if p.signed_in else None,
     }
 
 
@@ -936,9 +957,23 @@ def list_documents(case_id: str | None = None, collection: str | None = None, p:
     return {"documents": [db.row_to_dict(r) for r in db.conn().execute(sql, args)], "types": ingest.DOC_TYPES}
 
 
-@app.post("/api/cases/{case_id}/documents", dependencies=[Depends(rate(30, "upload"))])
-def upload(case_id: str, file: UploadFile = File(...), doc_type: str = Form("auto"), p: Principal = P):
+@app.post("/api/cases/{case_id}/documents", dependencies=[Depends(rate(60, "upload"))])
+def upload(case_id: str, file: UploadFile = File(...), doc_type: str = Form("auto"), batch_item: str = Form(""),
+           p: Principal = P):
     authz.require_case(p, case_id, "documents.upload")
+    item = _batch_item_for_upload(batch_item, case_id, p, file.filename) if batch_item else None
+    try:
+        doc = _store_upload(case_id, file, doc_type, p)
+    except HTTPException as exc:
+        if item:
+            _set_item(item["id"], "rejected", reason=str(exc.detail))
+        raise
+    if item:
+        _set_item(item["id"], "duplicate" if doc.get("duplicate") else "stored", doc_id=doc["id"])
+    return doc
+
+
+def _store_upload(case_id: str, file: UploadFile, doc_type: str, p: Principal) -> dict:
     name = security.safe_filename(file.filename or "document")
     ext = Path(name).suffix.lower()
     if ext not in security.ALLOWED_EXT:
@@ -948,8 +983,8 @@ def upload(case_id: str, file: UploadFile = File(...), doc_type: str = Form("aut
     doc_id = db.new_id("doc_")
     limit = config.MAX_UPLOAD_MB * 1024 * 1024
     size = 0
-    # The upload is staged in a private temporary file, validated, then stored (Supabase Storage or the local
-    # upload folder). Nothing is written to permanent storage before validation passes.
+    # The upload is streamed to a private temporary file in 1 MB pieces (never held in memory), validated, then
+    # stored (Supabase Storage or the local upload folder). Nothing reaches permanent storage before validation.
     with tempfile.TemporaryDirectory(prefix="nyaya_up_") as tmp:
         staged = Path(tmp) / f"upload{ext}"
         with open(staged, "wb") as out:
@@ -958,6 +993,8 @@ def upload(case_id: str, file: UploadFile = File(...), doc_type: str = Form("aut
                 if size > limit:
                     raise HTTPException(413, f"File is larger than {config.MAX_UPLOAD_MB} MB.")
                 out.write(chunk)
+        if not size:
+            raise HTTPException(422, "The file is empty.")
         if not security.sniff_ok(staged, ext):
             raise HTTPException(415, "File content does not match its extension.")
         try:
@@ -966,10 +1003,10 @@ def upload(case_id: str, file: UploadFile = File(...), doc_type: str = Form("aut
             db.audit("document.rejected", "case", case_id, outcome="rejected", ext=ext, reason=str(exc)[:120])
             raise HTTPException(422, str(exc)) from None
         sha = ingest.sha256_file(staged)
-        dup = ingest.find_duplicate(case_id, sha)
+        dup = ingest.find_duplicate(case_id, sha)   # idempotent: the same file twice is one document
         if dup:
-            if dup["status"] == "failed":  # retry a previously failed file
-                _submit_ingest(dup["id"])
+            if dup["status"] in ("failed", "cancelled"):  # retry a previously failed or cancelled file
+                _submit_ingest(dup["id"], p)
             return {**_public(dup), "duplicate": True}
         try:
             ref = storage.put_file(staged, case_id, doc_id, ext, security.MIME.get(ext, "application/octet-stream"))
@@ -985,9 +1022,163 @@ def upload(case_id: str, file: UploadFile = File(...), doc_type: str = Form("aut
     if not created:  # lost a race with an identical concurrent upload
         storage.delete(ref)
         return {**_public(doc), "duplicate": True}
-    _submit_ingest(doc["id"])
+    job = _submit_ingest(doc["id"], p)
     db.audit("document.upload", "document", doc["id"], case_id=case_id, ext=ext, bytes=size)
-    return _public(doc)
+    return {**_public(doc), "job_id": job["id"]}
+
+
+# ── Bulk upload (batches) ────────────────────────────────────────────────────
+class BatchFileIn(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    size: int = Field(ge=0)
+
+
+class BatchIn(BaseModel):
+    files: list[BatchFileIn] = Field(min_length=1, max_length=500)
+
+
+def _batch_row(batch_id: str, p: Principal) -> dict:
+    with db.system():
+        b = db.conn().execute("SELECT * FROM upload_batches WHERE id=?", (batch_id,)).fetchone()
+    if not b or b["owner_id"] != p.user_id:
+        raise authz.NotFound("Upload batch not found")
+    return dict(b)
+
+
+def _batch_item_for_upload(item_id: str, case_id: str, p: Principal, filename: str | None) -> dict:
+    """The client names the batch item it is uploading; the server checks it really is the caller's, for this case,
+    still waiting, and for this file — a client-supplied id is never trusted on its own."""
+    with db.system():
+        r = db.conn().execute("SELECT i.*, b.owner_id, b.case_id, b.cancel_requested FROM batch_items i "
+                              "JOIN upload_batches b ON b.id = i.batch_id WHERE i.id=?", (item_id[:40],)).fetchone()
+    if not r or r["owner_id"] != p.user_id or r["case_id"] != case_id:
+        raise authz.NotFound("Upload batch not found")
+    if r["cancel_requested"]:
+        raise HTTPException(409, "This upload batch was cancelled.")
+    if r["status"] != "waiting":
+        raise HTTPException(409, "This file of the batch was already handled.")
+    if security.safe_filename(filename or "document") != r["filename"]:
+        raise HTTPException(409, "The file does not match the batch entry.")
+    return dict(r)
+
+
+def _set_item(item_id: str, status: str, reason: str = "", doc_id: str | None = None) -> None:
+    with db.system():
+        with db.tx() as c:
+            c.execute("UPDATE batch_items SET status=?, reason=?, doc_id=COALESCE(?, doc_id), updated_at=? WHERE id=?",
+                      (status, reason[:300], doc_id, db.now(), item_id))
+
+
+def _batch_view(b: dict) -> dict:
+    with db.system():
+        items = [dict(r) for r in db.conn().execute(
+            "SELECT i.id, i.seq, i.filename, i.bytes, i.status, i.reason, i.doc_id, d.status AS doc_status, d.error "
+            "FROM batch_items i LEFT JOIN documents d ON d.id = i.doc_id WHERE i.batch_id=? ORDER BY i.seq", (b["id"],))]
+    counts = {"waiting": 0, "processing": 0, "ready": 0, "failed": 0, "rejected": 0, "cancelled": 0}
+    for it in items:
+        if it["status"] in ("rejected", "cancelled"):
+            state = it["status"]
+        elif it["status"] == "waiting":
+            state = "waiting"
+        else:
+            state = {"ready": "ready", "processing": "processing", "cancelled": "cancelled"}.get(it["doc_status"], "failed")
+            if state == "failed":
+                it["reason"] = it["error"] or it["reason"] or "Processing failed"
+        it["state"] = state
+        counts[state] += 1
+    active = counts["waiting"] + counts["processing"]
+    good, bad = counts["ready"], counts["failed"] + counts["rejected"]
+    if b["cancel_requested"]:
+        status = "cancelling" if counts["processing"] else "cancelled"
+    elif active:
+        status = "queued" if counts["waiting"] == len(items) else "processing"
+    elif good and (bad or counts["cancelled"]):
+        status = "partial"
+    elif good:
+        status = "completed"
+    else:
+        status = "failed"
+    return {"id": b["id"], "case_id": b["case_id"], "created_at": b["created_at"], "status": status,
+            "total": len(items), "counts": counts, "items": items}
+
+
+@app.post("/api/cases/{case_id}/batches")
+def create_batch(case_id: str, body: BatchIn, p: Principal = P):
+    """Register a bulk upload before sending the files: limits are checked up front, each file gets a slot."""
+    authz.require_case(p, case_id, "documents.upload")
+    if len(body.files) > config.BATCH_MAX_FILES:
+        raise HTTPException(413, f"At most {config.BATCH_MAX_FILES} files per batch.")
+    total = sum(f.size for f in body.files)
+    if total > config.BATCH_MAX_TOTAL_MB * 1024 * 1024:
+        raise HTTPException(413, f"The batch is larger than {config.BATCH_MAX_TOTAL_MB} MB in total.")
+    now, batch_id = db.now(), db.new_id("batch_")
+    with db.tx() as c:   # RLS: the caller's own batch, for a case they can upload to
+        c.execute("INSERT INTO upload_batches(id, owner_id, org_id, case_id, total, total_bytes, created_at, updated_at) "
+                  "VALUES(?,?,?,?,?,?,?,?)", (batch_id, p.user_id, p.org_id, case_id, len(body.files), total, now, now))
+        for i, f in enumerate(body.files, 1):
+            name = security.safe_filename(f.name)
+            ext = Path(name).suffix.lower()
+            reason = ("File type not accepted." if ext not in security.ALLOWED_EXT else
+                      f"Larger than {config.MAX_UPLOAD_MB} MB." if f.size > config.MAX_UPLOAD_MB * 1024 * 1024 else
+                      "Empty file." if f.size == 0 else "")
+            c.execute("INSERT INTO batch_items(id, batch_id, seq, filename, bytes, status, reason, updated_at) "
+                      "VALUES(?,?,?,?,?,?,?,?)", (db.new_id("bi_"), batch_id, i, name, f.size,
+                                                  "rejected" if reason else "waiting", reason, now))
+    db.audit("batch.create", "case", case_id, batch=batch_id, files=len(body.files), bytes=total)
+    return _batch_view(_batch_row(batch_id, p))
+
+
+@app.get("/api/batches")
+def list_batches(p: Principal = Depends(need("account.self"))):
+    with db.system():
+        rows = db.conn().execute("SELECT * FROM upload_batches WHERE owner_id=? ORDER BY created_at DESC LIMIT 20",
+                                 (p.user_id,)).fetchall()
+    return {"batches": [{k: v for k, v in _batch_view(dict(r)).items() if k != "items"} for r in rows]}
+
+
+@app.get("/api/batches/{batch_id}")
+def get_batch(batch_id: str, p: Principal = Depends(need("account.self"))):
+    return _batch_view(_batch_row(batch_id, p))
+
+
+@app.post("/api/batches/{batch_id}/cancel")
+def cancel_batch(batch_id: str, p: Principal = Depends(need("account.self"))):
+    b = _batch_row(batch_id, p)
+    with db.system():
+        with db.tx() as c:
+            c.execute("UPDATE upload_batches SET cancel_requested=1, updated_at=? WHERE id=?", (db.now(), batch_id))
+            c.execute("UPDATE batch_items SET status='cancelled', reason='Cancelled before upload', updated_at=? "
+                      "WHERE batch_id=? AND status='waiting'", (db.now(), batch_id))
+        docs = [r["doc_id"] for r in db.conn().execute(
+            "SELECT doc_id FROM batch_items WHERE batch_id=? AND doc_id IS NOT NULL", (batch_id,))]
+        running = [r["id"] for r in db.conn().execute(
+            f"SELECT id FROM jobs WHERE status IN ('queued','processing') AND dedupe_key IN "
+            f"({','.join('?' * len(docs))})", [f"ingest:{d}" for d in docs])] if docs else []
+    for job_id in running:   # files already stored stop processing; finished ones are kept
+        jobs.cancel(job_id, p.user_id)
+    db.audit("batch.cancel", "case", b["case_id"], batch=batch_id, stopped=len(running))
+    return _batch_view(_batch_row(batch_id, p))
+
+
+@app.get("/api/batches/{batch_id}/report.csv")
+def batch_report(batch_id: str, p: Principal = Depends(need("account.self"))):
+    """Per-file outcome for the person who uploaded: names and reasons only — never document contents."""
+    import csv
+    import io
+    view = _batch_view(_batch_row(batch_id, p))
+
+    def cell(v) -> str:   # spreadsheet formula injection: a cell may not start with = + - @
+        v = str(v if v is not None else "")
+        return "'" + v if v[:1] in ("=", "+", "-", "@", "\t", "\r") else v
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["#", "file", "outcome", "reason", "document_id"])
+    for it in view["items"]:
+        w.writerow([it["seq"], cell(it["filename"]), it["state"], cell(it["reason"] or ""), it["doc_id"] or ""])
+    db.audit("batch.report", "case", view["case_id"], batch=batch_id)
+    return Response(buf.getvalue().encode("utf-8-sig"), media_type="text/csv; charset=utf-8", headers={
+        "Content-Disposition": f'attachment; filename="upload-report-{batch_id}.csv"', "Cache-Control": "private, no-store"})
 
 
 def _public(doc: dict) -> dict:
@@ -1079,7 +1270,7 @@ def chunk(chunk_id: int, p: Principal = P):
 def library(p: Principal = Depends(need("library.read"))):
     out: dict[str, list] = {"bare_act": [], "draft": [], "judgment": []}
     for r in db.conn().execute(f"SELECT {DOC_FIELDS} FROM documents WHERE collection IN ('bare_act','draft','judgment') "
-                               "ORDER BY title"):
+                               "AND status <> 'superseded' ORDER BY title"):   # current versions only
         d = db.row_to_dict(r)
         out[d["collection"]].append(d)
     return out
@@ -1200,13 +1391,39 @@ def chat(body: ChatIn, p: Principal = Depends(need("research.use"))):
                              headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
 
-# ── Background jobs ──────────────────────────────────────────────────────────
+# ── Background jobs (only the owner can see, cancel or retry a job) ─────────
+@app.get("/api/jobs")
+def jobs_list(kind: str | None = None, limit: int = 50, p: Principal = Depends(need("account.self"))):
+    return {"jobs": jobs.list_for(p.user_id, limit=limit, kind=kind[:20] if kind else None)}
+
+
 @app.get("/api/jobs/{job_id}")
 def job_status(job_id: str, p: Principal = Depends(need("account.self"))):
     j = jobs.get(job_id, owner=p.user_id)
     if not j:
-        raise authz.NotFound("Job not found (the server may have restarted)")
-    return {k: v for k, v in j.items() if k not in ("key", "owner")}
+        raise authz.NotFound("Job not found")
+    return j
+
+
+@app.post("/api/jobs/{job_id}/cancel")
+def job_cancel(job_id: str, p: Principal = Depends(need("account.self"))):
+    j = jobs.cancel(job_id, p.user_id)
+    if not j:
+        raise authz.NotFound("Job not found")
+    db.audit("job.cancel", "job", job_id)
+    return j
+
+
+@app.post("/api/jobs/{job_id}/retry", dependencies=[Depends(rate(10, "jobretry"))])
+def job_retry(job_id: str, p: Principal = Depends(need("account.self"))):
+    try:
+        j = jobs.retry(job_id, p.user_id)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
+    if not j:
+        raise authz.NotFound("Job not found")
+    db.audit("job.retry", "job", job_id)
+    return j
 
 
 class ConsentIn(BaseModel):
@@ -1230,10 +1447,28 @@ def document_intel(doc_id: str, p: Principal = P):
         raise HTTPException(404, str(exc))
 
 
-def _doc_ai(p: Principal, doc_id: str) -> None:
-    collection, _ = authz.require_document(p, doc_id, "documents.ai")
-    if collection != "case":
-        raise authz.Denied("Translation and summaries are for case documents.")
+def _doc_ai(p: Principal, doc_id: str) -> str | None:
+    tasks.authorize_doc_ai(p, {"doc_id": doc_id})   # the worker repeats this check before running
+    return authz.document_case(doc_id)[1]
+
+
+@app.post("/api/documents/{doc_id}/reprocess", dependencies=[Depends(rate(10, "reprocess"))])
+def document_reprocess(doc_id: str, p: Principal = P):
+    """Run extraction again for a failed, quarantined or cancelled document."""
+    collection, _ = authz.require_document(p, doc_id, "documents.upload")
+    with db.system():
+        row = db.conn().execute("SELECT status FROM documents WHERE id=?", (doc_id,)).fetchone()
+    if collection != "case" or row["status"] not in ("failed", "quarantined", "cancelled"):
+        raise HTTPException(409, "Only failed, quarantined or cancelled documents can be processed again.")
+    db.audit("document.reprocess", "document", doc_id)
+    return _submit_ingest(doc_id, p)
+
+
+@app.get("/api/documents/{doc_id}/versions")
+def document_versions(doc_id: str, p: Principal = P):
+    """Versions of a library act or judgment (newest first); superseded texts stay readable for history."""
+    authz.require_document(p, doc_id)
+    return {"versions": ingest.versions(doc_id)}
 
 
 @app.post("/api/documents/{doc_id}/translate", dependencies=[Depends(rate(10, "docai"))])
@@ -1244,8 +1479,8 @@ def document_translate(doc_id: str, body: ConsentIn, p: Principal = P):
         docintel._doc(doc_id)
     except ValueError as exc:
         raise HTTPException(400, str(exc))
-    return jobs.submit("translate", lambda pr: docintel.translate(doc_id, pr), key=f"translate:{doc_id}",
-                       owner=p.user_id)
+    return jobs.submit("translate", {"doc_id": doc_id}, key=f"translate:{doc_id}", owner=p.user_id, org_id=p.org_id,
+                       case_id=authz.document_case(doc_id)[1])
 
 
 @app.post("/api/documents/{doc_id}/summarize", dependencies=[Depends(rate(10, "docai"))])
@@ -1256,8 +1491,8 @@ def document_summarize(doc_id: str, body: ConsentIn, p: Principal = P):
         docintel._doc(doc_id)
     except ValueError as exc:
         raise HTTPException(400, str(exc))
-    return jobs.submit("summarize", lambda pr: docintel.summarize(doc_id, body.lang, pr),
-                       key=f"summarize:{doc_id}:{body.lang}", owner=p.user_id)
+    return jobs.submit("summarize", {"doc_id": doc_id, "lang": body.lang}, key=f"summarize:{doc_id}:{body.lang}",
+                       owner=p.user_id, org_id=p.org_id, case_id=authz.document_case(doc_id)[1])
 
 
 # ── Drafting, notices, forums ────────────────────────────────────────────────
@@ -1333,18 +1568,8 @@ def _require_draft(p: Principal, draft_id: str) -> dict:
 
 @app.post("/api/drafts/generate", dependencies=[Depends(rate(10, "draft"))])
 def draft_generate(body: DraftIn, p: Principal = Depends(need("drafting.use"))):
-    if body.case_id:
-        authz.require_case(p, body.case_id, "drafts")
-    for d in [*body.doc_ids, *([body.base_doc_id] if body.base_doc_id else [])]:
-        collection, doc_case = authz.require_document(p, d, "documents.ai")
-        if collection != "case" or doc_case != body.case_id:
-            raise authz.NotFound("A supporting document was not found in this case")
-    if body.template_doc_id and (authz.document_case(body.template_doc_id) or ("", None))[0] != "draft":
-        raise authz.NotFound("Template not found")
-    if body.draft_id:
-        existing = _require_draft(p, body.draft_id)
-        if existing["case_id"] != body.case_id:
-            raise authz.NotFound("Draft not found")
+    args = body.model_dump(exclude={"consent", "save_style"})
+    tasks.authorize_draft(p, args)   # same check the worker repeats before running
     if body.doc_ids or body.base_doc_id:
         _need_consent(ConsentIn(consent=body.consent))
     try:
@@ -1356,9 +1581,7 @@ def draft_generate(body: DraftIn, p: Principal = Depends(need("drafting.use"))):
         raise HTTPException(400, "Too many details")
     if body.save_style:
         db.set_user_pref("draft_style", body.style)
-    args = body.model_dump(exclude={"consent", "save_style", "doc_type", "forum"})
-    return jobs.submit("draft", lambda pr: drafting.generate(doc_type_id=body.doc_type, forum_id=body.forum,
-                                                               progress=pr, **args), owner=p.user_id)
+    return jobs.submit("draft", args, owner=p.user_id, org_id=p.org_id, case_id=body.case_id)
 
 
 @app.get("/api/drafts")
@@ -1414,14 +1637,30 @@ def draft_export(draft_id: str, format: Literal["docx", "pdf"] = "docx", p: Prin
     d = drafting.get(draft_id)
     if not d:
         raise authz.NotFound("Draft not found")
+    approval = drafting.approval(d)   # only the approved version is exported without the DRAFT label
     if format == "docx":
-        data, mime = export.to_docx(d["title"], d["content"], d["sources"]), security.MIME[".docx"]
+        data, mime = export.to_docx(d["title"], d["content"], d["sources"], approval), security.MIME[".docx"]
     else:
-        data, mime = export.to_pdf(d["title"], d["content"], d["sources"]), "application/pdf"
+        data, mime = export.to_pdf(d["title"], d["content"], d["sources"], approval), "application/pdf"
     name = security.safe_filename(f"{d['title'][:80]}_v{d['version']}.{format}")
-    db.audit("draft.export", "draft", draft_id, format=format, version=d["version"])
+    db.audit("draft.export", "draft", draft_id, format=format, version=d["version"], approved=bool(approval))
     return Response(data, media_type=mime, headers={"Content-Disposition": f'attachment; filename="{name}"',
                                                     "Cache-Control": "private, no-store"})
+
+
+class ReviewIn(BaseModel):
+    action: Literal["approve", "request_changes", "reopen"]
+    note: str = Field("", max_length=1000)
+
+
+@app.post("/api/drafts/{draft_id}/review")
+def draft_review(draft_id: str, body: ReviewIn, p: Principal = P):
+    """Human review of AI-generated drafts: approval is recorded per version, by a named advocate."""
+    _require_draft(p, draft_id)
+    try:
+        return drafting.review(draft_id, body.action, body.note, reviewer=p.user_id)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
 
 
 # ── Applicable provisions ───────────────────────────────────────────────────
@@ -1437,9 +1676,12 @@ def provisions_suggest(case_id: str, body: ProvSuggestIn, p: Principal = P):
     _need_consent(ConsentIn(consent=body.consent))
     if not cases.get_case(case_id):
         raise authz.NotFound("Case not found")
-    return jobs.submit("provisions", lambda pr: provisions.suggest(case_id, doc_ids=body.doc_ids, extra=body.extra,
-                                                                  progress=pr),
-                       key=f"prov:{case_id}", owner=p.user_id)
+    if body.doc_ids:
+        for d in body.doc_ids:
+            if (authz.document_case(d) or ("", None))[1] != case_id:
+                raise authz.NotFound("A selected document was not found in this case")
+    return jobs.submit("provisions", {"case_id": case_id, "doc_ids": body.doc_ids, "extra": body.extra},
+                       key=f"prov:{case_id}", owner=p.user_id, org_id=p.org_id, case_id=case_id)
 
 
 @app.get("/api/cases/{case_id}/provisions")

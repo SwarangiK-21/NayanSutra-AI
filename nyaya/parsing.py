@@ -114,6 +114,8 @@ def _pdf(path: Path) -> Parsed:
             meta.update(_ocr_pdf_pages(doc, scanned, raw, all_scanned=len(scanned) == len(raw)))
     finally:
         doc.close()
+    from .quality import printed_numbers
+    meta["printed_page_numbers"] = printed_numbers(raw)   # read before cleaning removes page-number lines
     pages = clean_pages(raw)
     total = sum(len(p) for p in pages)
     if total < max(200, 25 * len(pages)) and not meta.get("ocr"):

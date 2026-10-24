@@ -97,7 +97,7 @@ def _prior_turns(hist: list[dict], n: int = 4) -> list[dict]:
     return [{"role": m["role"], "content": m["content"][:1500]} for m in hist[-n:]]
 
 
-def plan(message: str, hist: list[dict], docs: list[dict]) -> dict:
+def plan(message: str, hist: list[dict], docs: list[dict], info: dict | None = None) -> dict:
     doc_list = "; ".join(f"[D{i}] {guardrails.neutralise(d['title'])} ({d['doc_type']})"
                          for i, d in enumerate(docs, 1)) or "(none uploaded)"
     raw = llm.chat_json(
@@ -106,11 +106,21 @@ def plan(message: str, hist: list[dict], docs: list[dict]) -> dict:
             history=_hist_text(hist), message=message)}],
         model=config.FAST_LLM_MODEL,
         default={"intent": "research", "query": message},
+        info=info,
     )
     p = guardrails.validate_plan(raw, message)   # allow-listed tool + schema-checked arguments only
     if p["doc_ref"] is not None and p["doc_ref"] > len(docs):
         p["doc_ref"] = None
     return p
+
+
+def _step(meta: dict, name: str, status: str = "ok", **info) -> None:
+    """Workflow trace: which step ran, how it ended, which model answered — never any document text."""
+    meta.setdefault("trace", []).append({"step": name, "status": status, **{k: v for k, v in info.items() if v is not None}})
+
+
+def _model_info(info: dict) -> dict:
+    return {"model": info.get("model"), "fallback": bool(info.get("fallback")) or None}
 
 
 _ALT_CITE = re.compile(r"【\s*(\d{1,2})(?:†[^】]*)?】")
@@ -121,10 +131,20 @@ def normalise_citations(text: str) -> str:
     return _ALT_CITE.sub(lambda m: f"[{m.group(1)}]", text)
 
 
-def _stream_llm(messages: list[dict], parts: list[str], model: str | None = None) -> Iterator[dict]:
-    for tok in llm.stream(messages, model=model):
-        parts.append(tok)
-        yield {"type": "token", "text": tok}
+def _stream_llm(messages: list[dict], parts: list[str], model: str | None = None, meta: dict | None = None,
+                step: str = "generate") -> Iterator[dict]:
+    info: dict = {}
+    try:
+        for tok in llm.stream(messages, model=model, info=info):
+            parts.append(tok)
+            yield {"type": "token", "text": tok}
+    except llm.LLMError:
+        if meta is not None:
+            _step(meta, step, "partial" if parts else "failed", **_model_info(info))
+            meta["partial"] = bool(parts)
+        raise
+    if meta is not None:
+        _step(meta, step, "fallback" if info.get("fallback") else "ok", **_model_info(info))
 
 
 # ── Main entry ───────────────────────────────────────────────────────────────
@@ -148,8 +168,11 @@ def run(*, message: str, chat_id: str | None = None, case_id: str | None = None,
     answer: list[str] = []
     sources: list[dict] = []
     meta: dict = {"scope": scope, "lang": lang}
+    # The server authorised the case, document and chat before this generator was created.
+    _step(meta, "authorize", case=bool(case_id), documents=len(docs))
     try:
         blocked = guardrails.screen_request(message)
+        _step(meta, "screen", "blocked" if blocked else "ok", category=blocked[0] if blocked else None)
         if blocked:   # decided by code, before any model call
             meta.update(intent="blocked", blocked=blocked[0])
             db.audit("ai.request_blocked", "chat", chat_id, outcome="blocked", category=blocked[0])
@@ -161,10 +184,15 @@ def run(*, message: str, chat_id: str | None = None, case_id: str | None = None,
             p = {"intent": "analyze_document", "analysis": task, "query": message, "calc": {}, "alt_queries": []}
         else:
             yield {"type": "status", "step": "plan", "text": "Understanding the question…"}
-            p = plan(message, hist, docs)
+            info: dict = {}
+            p = plan(message, hist, docs, info)
+            _step(meta, "classify", "ok" if info.get("ok") else "default", intent=p["intent"], **_model_info(info))
         if p is not None:
             if principal is not None:
-                p["intent"] = guardrails.allowed_intent(principal, p["intent"], case_id)
+                allowed = guardrails.allowed_intent(principal, p["intent"], case_id)
+                if allowed != p["intent"]:
+                    _step(meta, "tool_policy", "downgraded", requested=p["intent"], used=allowed)
+                p["intent"] = allowed
             meta["intent"] = p["intent"]
             yield {"type": "meta", "intent": p["intent"], "query": p.get("query")}
 
@@ -173,10 +201,11 @@ def run(*, message: str, chat_id: str | None = None, case_id: str | None = None,
         elif p["intent"] == "chitchat":
             msgs = [{"role": "system", "content": prompts.CHAT_SYSTEM + rule}, *_prior_turns(hist, 2),
                     {"role": "user", "content": message}]
-            yield from _stream_llm(msgs, answer, model=config.FAST_LLM_MODEL)
+            yield from _stream_llm(msgs, answer, model=config.FAST_LLM_MODEL, meta=meta)
 
         elif p["intent"] == "calculation":
             text = _calculation(p.get("calc") or {})
+            _step(meta, "calculate", tool="limitation")
             answer.append(text)
             yield {"type": "token", "text": text}
 
@@ -192,6 +221,10 @@ def run(*, message: str, chat_id: str | None = None, case_id: str | None = None,
         yield {"type": "error", "text": err}
         if not answer:
             answer.append(f"⚠️ {err}")
+        elif meta.get("partial"):   # never present a cut-off answer as complete
+            note = "\n\n*⚠️ This answer is incomplete: the language model stopped before finishing. It was not verified.*"
+            answer.append(note)
+            yield {"type": "token", "text": note}
     except Exception:  # never leak internals to the browser
         log.exception("Agent failure")
         meta["error"] = "internal"
@@ -202,6 +235,8 @@ def run(*, message: str, chat_id: str | None = None, case_id: str | None = None,
     meta["elapsed"] = round(time.time() - t0, 2)
     raw_text = normalise_citations("".join(answer))
     final, findings = guardrails.scan_output(raw_text)   # never store or show secrets / internal instructions
+    _step(meta, "output_check", "filtered" if findings else "ok")
+    meta["fallback_used"] = any(s.get("fallback") for s in meta.get("trace", []))
     if findings:
         meta["output_filtered"] = findings
         db.audit("ai.output_filtered", "chat", chat_id, outcome="filtered", findings=findings)
@@ -280,6 +315,7 @@ def _analyze(message: str, p: dict, docs: list[dict], doc_id: str | None, case_i
 
         with ThreadPoolExecutor(max_workers=3) as ex:
             notes = list(ex.map(note, enumerate(parts, 1)))
+        _step(meta, "read_parts", parts=len(parts))
         body = "\n\n".join(f"NOTES ON PART {i}:\n{n}" for i, n in enumerate(notes, 1))
     yield {"type": "status", "step": "generate", "text": f"Analysing “{doc['title']}”…"}
     if guardrails.is_suspicious(body):
@@ -288,7 +324,7 @@ def _analyze(message: str, p: dict, docs: list[dict], doc_id: str | None, case_i
     msgs = [{"role": "system", "content": prompts.ANALYZE_SYSTEM + rule},
             {"role": "user", "content": f"TASK: {task}\nUSER REQUEST: {message}\n\n"
                                         f"{guardrails.wrap_document(doc['title'], body)}"}]
-    yield from _stream_llm(msgs, answer)
+    yield from _stream_llm(msgs, answer, meta=meta)
 
 
 def _research(message: str, p: dict, case: dict | None, docs: list[dict], scope: str, hist: list[dict],
@@ -303,10 +339,16 @@ def _research(message: str, p: dict, case: dict | None, docs: list[dict], scope:
     hits, diag = retrieval.search(query, scope=scope, case_id=case_id, extra_queries=p["alt_queries"], hint=message,
                                   context=ctx)
     weak = diag.get("confidence") is not None and diag["confidence"] < config.RELEVANCE_FLOOR and not diag["exact_hits"]
+    _step(meta, "retrieve", "weak" if (not hits or weak) else "ok", passages=len(hits), scope=scope)
     if (not hits or weak) and not drafting:
         yield {"type": "status", "step": "rewrite", "text": "Weak matches — refining the search…"}
-        q2 = llm.chat([{"role": "user", "content": prompts.REWRITE.format(q=query)}],
-                      model=config.FAST_LLM_MODEL, max_tokens=120).strip().strip('"')[:300]
+        info: dict = {}
+        try:
+            q2 = llm.chat([{"role": "user", "content": prompts.REWRITE.format(q=query)}],
+                          model=config.FAST_LLM_MODEL, max_tokens=120, info=info).strip().strip('"')[:300]
+        except llm.LLMError:   # optional step: continue with the original search instead of failing the answer
+            q2 = ""
+        _step(meta, "rewrite_query", "ok" if q2 else "skipped", **_model_info(info))
         if q2:
             hits2, diag2 = retrieval.search(q2, scope=scope, case_id=case_id, extra_queries=[query], hint=message,
                                             context=ctx)
@@ -360,7 +402,7 @@ def _research(message: str, p: dict, case: dict | None, docs: list[dict], scope:
             f"{'DRAFTING REQUEST' if drafting else 'QUESTION'}: {message}")
     msgs = [{"role": "system", "content": (prompts.DRAFT_SYSTEM if drafting else prompts.ANSWER_SYSTEM) + rule},
             *_prior_turns(hist), {"role": "user", "content": user}]
-    yield from _stream_llm(msgs, answer)
+    yield from _stream_llm(msgs, answer, meta=meta)
 
     if drafting:
         return
@@ -369,8 +411,9 @@ def _research(message: str, p: dict, case: dict | None, docs: list[dict], scope:
     cited = {int(n) for n in re.findall(r"\[(\d{1,2})\]", text)}
     invalid = sorted(n for n in cited if n < 1 or n > len(hits))
     yield {"type": "status", "step": "verify", "text": "Checking citations against sources…"}
+    info = {}
     v = llm.chat_json([{"role": "user", "content": prompts.VERIFY.format(sources=_context(hits)[:24000], answer=text)}],
-                      model=config.FAST_LLM_MODEL, default={"grounded": None, "unsupported": []})
+                      model=config.FAST_LLM_MODEL, default={"grounded": None, "unsupported": []}, info=info)
     unsupported = [str(u)[:300] for u in (v.get("unsupported") or [])][:6]
     if invalid:
         unsupported.append(f"Cites source numbers that do not exist: {invalid}")
@@ -384,4 +427,8 @@ def _research(message: str, p: dict, case: dict | None, docs: list[dict], scope:
         grounded, unsupported = False, unsupported or ["The answer contains no citations."]
     meta["verify"] = {"grounded": grounded, "unsupported": unsupported, "checked": v.get("grounded") is not None,
                       "citation_check": "deterministic", "unverified_citations": len(fabricated)}
+    # The model-based audit can fail (provider down); the deterministic check always runs. Never report "verified"
+    # when the model audit did not happen.
+    _step(meta, "verify_citations", "ok" if grounded else "issues" if meta["verify"]["checked"] else "partial",
+          issues=len(unsupported), model_check=meta["verify"]["checked"], **_model_info(info))
     yield {"type": "verify", **meta["verify"]}

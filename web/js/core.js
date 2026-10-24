@@ -163,8 +163,11 @@ export async function pollJob(job, onProgress = () => {}) {
   let j = job;
   for (;;) {
     onProgress(j);
-    if (j.status === "done") return j.result;
-    if (j.status === "error") throw new Error(j.error || t("common.failed"));
+    if (j.status === "completed" || j.status === "partial") return j.result;
+    if (["failed", "dead", "cancelled"].includes(j.status)) {
+      const e = new Error(j.status === "cancelled" ? t("jobs.cancelled_msg") : j.error || t("common.failed"));
+      e.job = j; throw e;
+    }
     await new Promise((r) => setTimeout(r, 1200));
     j = await api(`/api/jobs/${encodeURIComponent(j.id)}`);
   }

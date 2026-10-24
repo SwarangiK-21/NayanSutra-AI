@@ -120,7 +120,7 @@ def test_security_helpers(tmp_path: Path):
     from nyaya import sessions
     csrf = sessions.csrf_for("token-a")
     assert sessions.csrf_ok("token-a", csrf) and not sessions.csrf_ok("token-b", csrf) and not sessions.csrf_ok(None, csrf)
-    assert not sessions.csrf_ok("token-a", None) and not sessions.csrf_ok("token-a", csrf[:-1] + "0")
+    assert not sessions.csrf_ok("token-a", None) and not sessions.csrf_ok("token-a", csrf[:-1] + ("1" if csrf[-1] == "0" else "0"))
     assert security.host_allowed("127.0.0.1:8000") and security.host_allowed("localhost")
     assert not security.host_allowed("evil.example.com") and not security.host_allowed(None)
     assert security.origin_allowed("http://127.0.0.1:8000", "127.0.0.1:8000")

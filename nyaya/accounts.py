@@ -225,6 +225,22 @@ def create_invitation(org_id: str, email: str, role: str, invited_by: str, claim
     return {k: v for k, v in inv.items() if k != "meta"}
 
 
+def principal_for_user(user_id: str | None) -> authz.Principal | None:
+    """The user's current principal (as a background job sees it: active profile, current role), or None."""
+    if not user_id:
+        return None
+    with db.system():
+        r = db.conn().execute(
+            "SELECT p.user_id, p.email, p.display_name, p.status, p.mfa_enabled, m.org_id, m.role FROM profiles p "
+            "LEFT JOIN memberships m ON m.user_id = p.user_id WHERE p.user_id=? ORDER BY m.created_at LIMIT 1",
+            (user_id,)).fetchone()
+    if not r or r["status"] != "active" or not r["role"]:
+        return None
+    return authz.Principal(user_id=r["user_id"], email=r["email"], display_name=r["display_name"] or "",
+                           org_id=r["org_id"], role=r["role"], session_state="active",
+                           mfa_enabled=bool(r["mfa_enabled"]), local=r["user_id"] == LOCAL_USER_ID)
+
+
 # ── Sessions → principal ─────────────────────────────────────────────────────
 def principal_from_row(row: dict | None, ip: str | None = None) -> authz.Principal:
     if not row:

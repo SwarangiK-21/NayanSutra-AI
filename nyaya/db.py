@@ -423,6 +423,69 @@ MIGRATIONS: list[str] = [
         VALUES (new.id, new.created_by, 'owner', new.created_by, new.created_at);
     END;
     """,
+    # 3 — durable jobs, upload batches, draft review (mirrors supabase/migrations/…06)
+    """
+    CREATE TABLE IF NOT EXISTS jobs (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        lane TEXT NOT NULL DEFAULT 'ai',            -- ingest | ai
+        owner_id TEXT,
+        org_id TEXT,
+        case_id TEXT,
+        dedupe_key TEXT,
+        status TEXT NOT NULL DEFAULT 'queued',      -- queued | processing | partial | completed | failed | cancelled | dead
+        params TEXT DEFAULT '{}',
+        progress_done INTEGER NOT NULL DEFAULT 0,
+        progress_total INTEGER NOT NULL DEFAULT 0,
+        message TEXT DEFAULT '',
+        result TEXT,
+        error TEXT,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        max_attempts INTEGER NOT NULL DEFAULT 3,
+        next_run_at TEXT NOT NULL,
+        locked_by TEXT,
+        locked_until TEXT,
+        cancel_requested INTEGER NOT NULL DEFAULT 0,
+        checkpoint TEXT DEFAULT '{}',
+        created_at TEXT NOT NULL,
+        started_at TEXT,
+        finished_at TEXT,
+        updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS ix_jobs_queue ON jobs(lane, status, next_run_at);
+    CREATE INDEX IF NOT EXISTS ix_jobs_owner ON jobs(owner_id, created_at);
+    CREATE INDEX IF NOT EXISTS ix_jobs_dedupe ON jobs(dedupe_key);
+
+    CREATE TABLE IF NOT EXISTS upload_batches (
+        id TEXT PRIMARY KEY,
+        owner_id TEXT NOT NULL,
+        org_id TEXT,
+        case_id TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+        total INTEGER NOT NULL,
+        total_bytes INTEGER NOT NULL DEFAULT 0,
+        cancel_requested INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS batch_items (
+        id TEXT PRIMARY KEY,
+        batch_id TEXT NOT NULL REFERENCES upload_batches(id) ON DELETE CASCADE,
+        seq INTEGER NOT NULL,
+        filename TEXT NOT NULL,
+        bytes INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'waiting',     -- waiting | stored | duplicate | rejected | cancelled
+        reason TEXT DEFAULT '',
+        doc_id TEXT,
+        updated_at TEXT NOT NULL,
+        UNIQUE(batch_id, seq)
+    );
+
+    ALTER TABLE drafts ADD COLUMN review_status TEXT NOT NULL DEFAULT 'draft';   -- draft | changes_requested | approved
+    ALTER TABLE drafts ADD COLUMN reviewed_by TEXT;
+    ALTER TABLE drafts ADD COLUMN reviewed_at TEXT;
+    ALTER TABLE drafts ADD COLUMN approved_version INTEGER;
+    ALTER TABLE drafts ADD COLUMN review_note TEXT DEFAULT '';
+    """,
 ]
 
 _local = threading.local()
@@ -432,7 +495,7 @@ write_lock = threading.RLock()
 
 # Postgres schema version this code expects (supabase/migrations/*). The app never runs DDL against Postgres:
 # migrations are applied by the project owner (Supabase CLI / dashboard / MCP), and the app checks the version.
-PG_SCHEMA_VERSION = 2
+PG_SCHEMA_VERSION = 3
 DEFAULT_ORG = "org_default"
 
 

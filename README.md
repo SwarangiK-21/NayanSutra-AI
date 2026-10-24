@@ -76,7 +76,9 @@ Back up `data/nyaysutra.db` before upgrading.
 ## Scheduled jobs
 A background thread (`nyaya/integrations.py`, `SYNC_ENABLED=true`) checks every `SYNC_TICK_SECONDS` which sources are
 due. Failures back off 5 → 10 → 20 min (capped at the source interval), are logged in `sync_log`, and notify after 3
-failures. Long AI tasks (translation, summaries, drafting, provisions) run as in-process jobs polled at `/api/jobs/{id}`.
+failures. Document processing and long AI tasks (translation, summaries, drafting, provisions) are durable jobs in the
+database: they survive restarts, retry temporary failures a bounded number of times, can be cancelled, and are listed
+on the **Jobs** page. Details: [docs/RELIABILITY.md](docs/RELIABILITY.md).
 
 ## Known limitations
 * Security limits and open items are listed in [docs/SECURITY.md](docs/SECURITY.md) (section "Remaining risks").

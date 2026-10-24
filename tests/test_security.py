@@ -225,7 +225,7 @@ def test_other_users_cannot_reach_a_case_by_id(fake, monkeypatch):
     job = a.post("/api/drafts/generate", json={"doc_type": "notice_ni_138", "forum": "none", "case_id": case_id}).json()
     for _ in range(100):
         j = a.get(f"/api/jobs/{job['id']}").json()
-        if j["status"] != "running":
+        if j["status"] not in ("queued", "processing"):
             break
         time.sleep(0.05)
     draft_id = j["result"]["id"]

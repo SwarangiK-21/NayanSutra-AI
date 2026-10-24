@@ -68,7 +68,7 @@ class FakeLLM:
     def __init__(self):
         self.calls = []
 
-    def chat_json(self, messages, model=None, default=None):
+    def chat_json(self, messages, model=None, default=None, **kw):
         text = messages[-1]["content"]
         self.calls.append(("json", text[:60]))
         if "audit" in text.lower():

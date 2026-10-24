@@ -26,7 +26,8 @@ export async function viewDocument(main, r) {
       ${data.ocr_needed_pages?.length ? html`<span class="chip chip-err">${t("doc.ocr_needed", { pages: data.ocr_needed_pages.join(", ") })}</span>` : ""}
       ${d.status !== "ready" ? html`<span class="chip chip-wait">${d.status}</span>` : ""}
     </div>
-    ${d.status === "failed" ? html`<div class="notice notice-red">${d.error}</div>` : ""}
+    ${["failed", "quarantined", "cancelled"].includes(d.status) ? html`<div class="notice notice-red"><strong>${t(`doc.st_${d.status}`)}</strong> — ${d.error}</div>` : ""}
+    ${d.meta?.quality?.warnings?.length ? html`<div class="notice" style="margin-bottom:12px"><strong>${t("doc.quality_title")}</strong><ul>${d.meta.quality.warnings.map((w) => html`<li>${w}</li>`)}</ul></div>` : ""}
     <div class="card"><div class="card-h"><h2>${t("doc.ai_tools")}</h2><span class="small muted">${t("doc.ai_note")}</span></div><div class="card-b">
       <div class="row">
         ${!isEnglish ? html`<button class="btn" id="trBtn" ${d.status !== "ready" ? raw("disabled") : ""}>${der.translation_en ? t("doc.retranslate") : t("doc.translate")}</button>` : ""}
@@ -113,20 +114,38 @@ export async function viewUpload(main, r) {
         <strong>${t("case.drop")}</strong><br><span class="small muted">${t("upload.formats")}</span></label>
       <div class="small muted">${t("upload.privacy")}</div></div></div>
     <div class="card" style="margin-top:16px"><div class="card-h"><h2>${t("upload.progress")}</h2></div><div class="card-b" id="upList"><div class="empty">${t("upload.none")}</div></div></div>`);
-  const items = [];
-  const render = () => mount($("#upList"), items.length ? html`${items.map((x) => html`<div class="doc-item"><span class="doc-ico">${x.ext}</span><div class="doc-main">
-    <div class="doc-title">${x.name}</div>
-    <div class="small">${x.state === "uploading" ? html`<span class="spinner"></span> ${t("upload.uploading")}` : x.state === "processing" ? html`<span class="spinner"></span> ${t("case.indexing")}`
-      : x.state === "ready" ? html`<span class="chip chip-ok">${t("upload.ready")}</span> ${x.lang ? html`<span class="chip">${x.lang}</span>` : ""} <a class="btn btn-saffron btn-sm" href="#/doc/${encodeURIComponent(x.id)}">${t("upload.open_summarise")}</a>`
-      : html`<span class="chip chip-err">${t("common.failed")}</span> ${x.error || ""}`}</div></div></div>`)}` : html`<div class="empty">${t("upload.none")}</div>`);
+  // Bulk upload = one batch: limits are checked by the server before any file is sent, each file has a slot,
+  // and the batch reports per-file outcomes, progress, cancellation and a downloadable report (no file contents).
+  let batch = null, cancelled = false;
+  const STATE_CHIP = { ready: "chip-ok", processing: "chip-wait", waiting: "chip-wait", failed: "chip-err", rejected: "chip-err", cancelled: "" };
+  const render = () => {
+    if (!batch) { mount($("#upList"), html`<div class="empty">${t("upload.none")}</div>`); return; }
+    const c = batch.counts, finished = c.ready + c.failed + c.rejected + c.cancelled;
+    mount($("#upList"), html`<div class="row" style="margin-bottom:8px"><span class="chip ${STATE_CHIP[batch.status] || (batch.status === "completed" ? "chip-ok" : batch.status === "partial" ? "chip-warn" : "chip-wait")}">${t(`batch.st_${batch.status}`, {}, batch.status)}</span>
+        <span class="small muted">${t("batch.counts", { ready: c.ready, processing: c.processing + c.waiting, failed: c.failed + c.rejected, cancelled: c.cancelled, total: batch.total })}</span>
+        <span class="spacer"></span>
+        ${["queued", "processing"].includes(batch.status) ? html`<button class="btn btn-ghost btn-sm" id="bCancel">${t("batch.cancel")}</button>` : ""}
+        <a class="btn btn-ghost btn-sm" href="/api/batches/${encodeURIComponent(batch.id)}/report.csv" download>⬇ ${t("batch.report")}</a></div>
+      ${progressBar({ done: finished, total: batch.total, message: t(`batch.st_${batch.status}`, {}, batch.status) })}
+      ${batch.items.map((x) => html`<div class="doc-item"><span class="doc-ico">${(x.filename.split(".").pop() || "").toUpperCase()}</span><div class="doc-main">
+        <div class="doc-title">${x.filename}</div>
+        <div class="small"><span class="chip ${STATE_CHIP[x.state] || ""}">${t(`batch.item_${x.state}`, {}, x.state)}</span>
+          ${x.state === "processing" || x.state === "waiting" ? html`<span class="spinner"></span>` : ""}
+          ${x.reason && x.state !== "ready" ? html` <span class="err-text">${x.reason}</span>` : ""}
+          ${x.state === "ready" && x.doc_id ? html` <a class="btn btn-saffron btn-sm" href="#/doc/${encodeURIComponent(x.doc_id)}">${t("upload.open_summarise")}</a>` : ""}
+          ${x.state === "failed" && x.doc_id ? html` <button class="btn btn-ghost btn-sm" data-reprocess="${x.doc_id}">${t("doc.reprocess")}</button>` : ""}</div></div></div>`)}`);
+    $("#bCancel")?.addEventListener("click", async () => {
+      cancelled = true;
+      try { batch = await api(`/api/batches/${encodeURIComponent(batch.id)}/cancel`, { method: "POST" }); render(); toast(t("batch.cancelled")); } catch (e) { toast(e.message, true); }
+    });
+    $$("[data-reprocess]", $("#upList")).forEach((b) => { b.onclick = async () => {
+      try { await api(`/api/documents/${encodeURIComponent(b.dataset.reprocess)}/reprocess`, { method: "POST" }); poll(); } catch (e) { toast(e.message, true); } }; });
+  };
   const poll = async () => {
-    const pending = items.filter((x) => x.state === "processing");
-    for (const x of pending) {
-      try { const d = await api(`/api/documents/${encodeURIComponent(x.id)}`); if (d.status !== "processing") { x.state = d.status === "ready" ? "ready" : "failed"; x.error = d.error; x.lang = d.meta?.lang_name; } } catch { /* retry */ }
-    }
-    render();
     clearInterval(state.pollTimer);
-    if (items.some((x) => x.state === "processing")) state.pollTimer = setInterval(poll, 2000);
+    try { batch = await api(`/api/batches/${encodeURIComponent(batch.id)}`); } catch { /* retry */ }
+    render();
+    if (["queued", "processing", "cancelling"].includes(batch.status)) state.pollTimer = setInterval(poll, 2000);
   };
   const upload = async (files) => {
     let caseId = $("#upCase").value;
@@ -137,12 +156,18 @@ export async function viewUpload(main, r) {
         const o = document.createElement("option"); o.value = c.id; o.textContent = c.title; $("#upCase").appendChild(o); $("#upCase").value = c.id;
       } catch (e) { toast(e.message, true); return; }
     }
-    for (const f of files) {
-      const x = { name: f.name, ext: (f.name.split(".").pop() || "").toUpperCase(), state: "uploading" }; items.unshift(x); render();
-      const fd = new FormData(); fd.append("file", f); fd.append("doc_type", "auto");
-      try { const d = await api(`/api/cases/${encodeURIComponent(caseId)}/documents`, { method: "POST", form: fd }); x.id = d.id; x.state = d.status === "ready" ? "ready" : d.status === "failed" ? "failed" : "processing"; x.error = d.error; }
-      catch (e) { x.state = "failed"; x.error = e.message; }
-      render();
+    try {
+      batch = await api(`/api/cases/${encodeURIComponent(caseId)}/batches`, { method: "POST", body: { files: files.map((f) => ({ name: f.name, size: f.size })) } });
+    } catch (e) { toast(e.message, true); return; }
+    cancelled = false; render();
+    // One file at a time: the browser never holds more than one upload open, and the server queues processing.
+    for (let i = 0; i < files.length && !cancelled; i++) {
+      const slot = batch.items[i];
+      if (!slot || slot.status !== "waiting") continue;
+      const fd = new FormData(); fd.append("file", files[i]); fd.append("doc_type", "auto"); fd.append("batch_item", slot.id);
+      try { await api(`/api/cases/${encodeURIComponent(caseId)}/documents`, { method: "POST", form: fd }); }
+      catch { /* the outcome (and its reason) is recorded on the batch */ }
+      try { batch = await api(`/api/batches/${encodeURIComponent(batch.id)}`); render(); } catch { /* keep going */ }
     }
     poll();
   };

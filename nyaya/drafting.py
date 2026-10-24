@@ -246,8 +246,9 @@ def save(rec: dict, draft_id: str | None = None, note: str = "") -> dict:
     with db.tx() as c:
         if draft_id and c.execute("SELECT 1 FROM drafts WHERE id=?", (draft_id,)).fetchone():
             v = c.execute("SELECT version FROM drafts WHERE id=?", (draft_id,)).fetchone()[0] + 1
+            # Any new version needs its own review: an approval applies to one version only.
             c.execute("UPDATE drafts SET kind=?, doc_type=?, forum=?, style=?, lang=?, title=?, content=?, facts=?, missing=?, "
-                      "sources=?, inputs=?, version=?, updated_at=? WHERE id=?",
+                      "sources=?, inputs=?, version=?, updated_at=?, review_status='draft', approved_version=NULL WHERE id=?",
                       (rec["kind"], rec["doc_type"], rec["forum"], rec["style"], rec["lang"], rec["title"], rec["content"],
                        *(json.dumps(rec[k], ensure_ascii=False) for k in _JSON), v, now, draft_id))
         else:
@@ -292,7 +293,8 @@ def version(draft_id: str, v: int) -> dict | None:
 def list_drafts(case_id: str | None = None, kind: str | None = None, *, user_id: str | None = None,
                 team_cases: list[str] | None = None) -> list[dict]:
     """The caller's own drafts plus the drafts of cases where they are on the case team."""
-    sql, args = "SELECT id, case_id, kind, doc_type, forum, style, lang, title, version, updated_at FROM drafts WHERE 1=1", []
+    sql, args = ("SELECT id, case_id, kind, doc_type, forum, style, lang, title, version, updated_at, review_status, "
+                 "approved_version FROM drafts WHERE 1=1"), []
     team = list(team_cases or [])
     sql += " AND ((case_id IS NULL AND created_by = ?)" + (f" OR case_id IN ({','.join('?' * len(team))})" if team else "") + ")"
     args += [user_id or "", *team]
@@ -303,6 +305,53 @@ def list_drafts(case_id: str | None = None, kind: str | None = None, *, user_id:
         sql += " AND kind=?"
         args.append(kind)
     return [dict(r) for r in db.conn().execute(sql + " ORDER BY updated_at DESC LIMIT 200", args)]
+
+
+REVIEW_ACTIONS = ("approve", "request_changes", "reopen")
+
+
+def review_blockers(d: dict) -> list[str]:
+    """What must be fixed before a draft can be approved (re-checked on the current text)."""
+    checks = check_draft(d["content"], d.get("facts") or [], len(d.get("sources") or []))
+    out = []
+    if checks["placeholders"]:
+        out.append(f"{len(checks['placeholders'])} placeholder(s) [●] still to fill")
+    if checks["invalid_citations"]:
+        out.append(f"citations to sources that do not exist: {checks['invalid_citations']}")
+    if checks["unknown_fact_tags"]:
+        out.append(f"fact tags without a fact: {checks['unknown_fact_tags']}")
+    return out
+
+
+def review(draft_id: str, action: str, note: str = "", reviewer: str | None = None) -> dict:
+    """Human review: a generated document stays a draft until an advocate approves a specific version."""
+    d = get(draft_id)
+    if not d:
+        raise ValueError("Draft not found")
+    if action not in REVIEW_ACTIONS:
+        raise ValueError("Unknown review action")
+    if action == "approve":
+        blockers = review_blockers(d)
+        if blockers:
+            raise ValueError("This draft cannot be approved yet: " + "; ".join(blockers) + ".")
+        status, version = "approved", d["version"]
+    else:
+        status, version = ("changes_requested" if action == "request_changes" else "draft"), None
+    with db.tx() as c:
+        c.execute("UPDATE drafts SET review_status=?, approved_version=?, reviewed_by=?, reviewed_at=?, review_note=? "
+                  "WHERE id=?", (status, version, reviewer, db.now(), (note or "")[:1000], draft_id))
+    db.audit(f"draft.{action}", "draft", draft_id, version=d["version"])
+    return get(draft_id)
+
+
+def approval(d: dict) -> dict | None:
+    """Approval details for export, only when the current version is the approved one."""
+    if d.get("review_status") != "approved" or d.get("approved_version") != d.get("version"):
+        return None
+    with db.system():
+        r = db.conn().execute("SELECT display_name FROM profiles WHERE user_id=?", (d.get("reviewed_by"),)).fetchone()
+    return {"by": (r["display_name"] if r else "") or "reviewer", "at": (d.get("reviewed_at") or "")[:10],
+            "version": d["version"]}
 
 
 def delete(draft_id: str) -> bool:

@@ -74,7 +74,14 @@ def _prepare(content: str) -> str:
 
 
 # ── DOCX ─────────────────────────────────────────────────────────────────────
-def to_docx(title: str, content: str, sources: list[dict]) -> bytes:
+def header_label(approval: dict | None) -> str:
+    """Unapproved drafts always carry the review label; an approved version says who approved it and when."""
+    if not approval:
+        return REVIEW_LABEL
+    return f"Approved by {approval['by']} on {approval['at']} (version {approval['version']}) — verify before filing"
+
+
+def to_docx(title: str, content: str, sources: list[dict], approval: dict | None = None) -> bytes:
     import docx
     from docx.enum.text import WD_COLOR_INDEX, WD_ALIGN_PARAGRAPH
     from docx.shared import Pt, RGBColor
@@ -84,9 +91,9 @@ def to_docx(title: str, content: str, sources: list[dict]) -> bytes:
     st.font.name = "Nirmala UI"
     st.font.size = Pt(12)
     p = d.add_paragraph()
-    r = p.add_run(REVIEW_LABEL)
+    r = p.add_run(header_label(approval))
     r.bold = True
-    r.font.color.rgb = RGBColor(0xB4, 0x23, 0x18)
+    r.font.color.rgb = RGBColor(0x1F, 0x6F, 0x3A) if approval else RGBColor(0xB4, 0x23, 0x18)
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     def fill(par, text):
@@ -121,7 +128,7 @@ def to_docx(title: str, content: str, sources: list[dict]) -> bytes:
         for s in sources:
             d.add_paragraph(f"[{s['n']}] {s.get('citation') or s.get('title')}", style="List Bullet")
     d.core_properties.title = title[:200]
-    d.core_properties.comments = REVIEW_LABEL
+    d.core_properties.comments = header_label(approval)
     buf = io.BytesIO()
     d.save(buf)
     return buf.getvalue()
@@ -142,7 +149,7 @@ def _font_paths() -> tuple[str | None, int, str | None, int]:
     return None, 0, None, 0
 
 
-def to_pdf(title: str, content: str, sources: list[dict]) -> bytes:
+def to_pdf(title: str, content: str, sources: list[dict], approval: dict | None = None) -> bytes:
     from fpdf import FPDF
 
     pdf = FPDF(format="A4")
@@ -159,11 +166,11 @@ def to_pdf(title: str, content: str, sources: list[dict]) -> bytes:
     else:  # no Unicode font available: core font (Latin only)
         family = "Helvetica"
     pdf.set_title(title[:200])
-    pdf.set_subject(REVIEW_LABEL)
+    pdf.set_subject(header_label(approval))
     pdf.add_page()
     pdf.set_font(family, "B", 11)
-    pdf.set_text_color(180, 35, 24)
-    pdf.cell(0, 8, REVIEW_LABEL, align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(*((31, 111, 58) if approval else (180, 35, 24)))
+    pdf.cell(0, 8, header_label(approval), align="C", new_x="LMARGIN", new_y="NEXT")
     pdf.set_text_color(0, 0, 0)
     pdf.ln(2)
 
