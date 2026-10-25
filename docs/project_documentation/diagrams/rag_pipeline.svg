@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 470" font-family="Segoe UI, Noto Sans, Arial, sans-serif" font-size="13">
+  <title>RAG pipeline as implemented in NyaySutra</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6577"/>
+    </marker>
+    <style>
+      .b{fill:#fff;stroke:#0b2c5f;stroke-width:1.5}
+      .q{fill:#fff8ee;stroke:#d9750f;stroke-width:1.5}
+      .g{fill:#eef7ec;stroke:#138808;stroke-width:1.5}
+      .h{font-weight:700;fill:#0b2c5f;font-size:13.5px}
+      .s{fill:#5a6577;font-size:11.5px}
+      .z{font-weight:700;fill:#5a6577;font-size:12px;letter-spacing:.04em}
+      .ln{stroke:#5a6577;stroke-width:1.4;fill:none;marker-end:url(#a)}
+    </style>
+  </defs>
+  <text class="z" x="20" y="26">A. PREPARING DOCUMENTS (once, in the background, when a file is added)</text>
+  <rect class="b" x="20" y="40" width="150" height="96" rx="8"/>
+  <text class="h" x="32" y="62">1. Add a file</text>
+  <text class="s" x="32" y="82">upload to a case, or</text>
+  <text class="s" x="32" y="98">official act from</text>
+  <text class="s" x="32" y="114">India Code</text>
+  <rect class="b" x="190" y="40" width="150" height="96" rx="8"/>
+  <text class="h" x="202" y="62">2. Safety checks</text>
+  <text class="s" x="202" y="82">type, content signature,</text>
+  <text class="s" x="202" y="98">macros / scripts,</text>
+  <text class="s" x="202" y="114">size, duplicates</text>
+  <rect class="b" x="360" y="40" width="150" height="96" rx="8"/>
+  <text class="h" x="372" y="62">3. Read text</text>
+  <text class="s" x="372" y="82">PDF, Word, Excel, CSV…</text>
+  <text class="s" x="372" y="98">OCR for scanned pages</text>
+  <text class="s" x="372" y="114">language detected</text>
+  <rect class="b" x="530" y="40" width="150" height="96" rx="8"/>
+  <text class="h" x="542" y="62">4. Split (chunk)</text>
+  <text class="s" x="542" y="82">acts: one section each</text>
+  <text class="s" x="542" y="98">judgments: paragraphs</text>
+  <text class="s" x="542" y="114">contracts: clauses</text>
+  <rect class="b" x="700" y="40" width="130" height="96" rx="8"/>
+  <text class="h" x="712" y="62">5. Embed</text>
+  <text class="s" x="712" y="82">each passage →</text>
+  <text class="s" x="712" y="98">384 numbers</text>
+  <text class="s" x="712" y="114">(local model)</text>
+  <rect class="g" x="850" y="40" width="130" height="96" rx="8"/>
+  <text class="h" x="862" y="62">6. Store</text>
+  <text class="s" x="862" y="82">Supabase: text,</text>
+  <text class="s" x="862" y="98">numbers, keyword</text>
+  <text class="s" x="862" y="114">index, file</text>
+  <path class="ln" d="M170,88 L186,88"/><path class="ln" d="M340,88 L356,88"/><path class="ln" d="M510,88 L526,88"/>
+  <path class="ln" d="M680,88 L696,88"/><path class="ln" d="M830,88 L846,88"/>
+
+  <text class="z" x="20" y="186">B. ANSWERING A QUESTION (every time a user asks)</text>
+  <rect class="q" x="20" y="200" width="150" height="110" rx="8"/>
+  <text class="h" x="32" y="222">1. Question</text>
+  <text class="s" x="32" y="242">"Can my client get</text>
+  <text class="s" x="32" y="258">the deposit back?"</text>
+  <text class="s" x="32" y="278">+ chosen case, scope,</text>
+  <text class="s" x="32" y="294">jurisdiction</text>
+  <rect class="b" x="190" y="200" width="150" height="110" rx="8"/>
+  <text class="h" x="202" y="222">2. Check + plan</text>
+  <text class="s" x="202" y="242">screen harmful or</text>
+  <text class="s" x="202" y="258">trick requests; decide</text>
+  <text class="s" x="202" y="274">which tool to use</text>
+  <text class="s" x="202" y="294">(gpt-oss:20b)</text>
+  <rect class="b" x="360" y="200" width="150" height="110" rx="8"/>
+  <text class="h" x="372" y="222">3. Search</text>
+  <text class="s" x="372" y="242">exact section match</text>
+  <text class="s" x="372" y="258">+ keywords</text>
+  <text class="s" x="372" y="274">+ meaning (vectors)</text>
+  <text class="s" x="372" y="294">only authorised files</text>
+  <rect class="b" x="530" y="200" width="150" height="110" rx="8"/>
+  <text class="h" x="542" y="222">4. Re-rank</text>
+  <text class="s" x="542" y="242">a second model reads</text>
+  <text class="s" x="542" y="258">question + passage;</text>
+  <text class="s" x="542" y="274">best ~8 kept; weak →</text>
+  <text class="s" x="542" y="294">rewrite or abstain</text>
+  <rect class="b" x="700" y="200" width="130" height="110" rx="8"/>
+  <text class="h" x="712" y="222">5. Write</text>
+  <text class="s" x="712" y="242">numbered sources</text>
+  <text class="s" x="712" y="258">sent to gpt-oss:120b</text>
+  <text class="s" x="712" y="274">"use ONLY these";</text>
+  <text class="s" x="712" y="294">streamed live</text>
+  <rect class="g" x="850" y="200" width="130" height="110" rx="8"/>
+  <text class="h" x="862" y="222">6. Verify</text>
+  <text class="s" x="862" y="242">every [n] must exist;</text>
+  <text class="s" x="862" y="258">unsupported claims</text>
+  <text class="s" x="862" y="274">flagged; secrets</text>
+  <text class="s" x="862" y="294">filtered</text>
+  <path class="ln" d="M170,255 L186,255"/><path class="ln" d="M340,255 L356,255"/><path class="ln" d="M510,255 L526,255"/>
+  <path class="ln" d="M680,255 L696,255"/><path class="ln" d="M830,255 L846,255"/>
+  <path class="ln" d="M915,136 C915,170 435,160 435,196"/>
+  <text class="s" x="560" y="172">search reads what step A stored</text>
+
+  <rect class="b" x="20" y="340" width="960" height="110" rx="8"/>
+  <text class="h" x="34" y="364">What the user sees</text>
+  <text class="s" x="34" y="386">• The answer with numbered citations [1] [2] — clicking one opens the exact passage and the original PDF page.</text>
+  <text class="s" x="34" y="404">• A Sources panel listing every passage used (with "Central law" or the state's name for statutes).</text>
+  <text class="s" x="34" y="422">• A citation-audit box: green when every point is supported, amber with a list when something is not found in the sources.</text>
+  <text class="s" x="34" y="440">• "How this answer was produced": each step above, which model ran it, and whether a backup model had to be used.</text>
+</svg>

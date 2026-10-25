@@ -1,0 +1,1392 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>NyaySutra: Complete Project Documentation — Features, Technology Stack, Architecture, Data Sources and Workflow</title><style>
+@page { size: A4; margin: 18mm 16mm 20mm 16mm;
+  @bottom-left { content: "NyaySutra — Project Documentation (prototype)"; font: 8pt 'Segoe UI', Arial, sans-serif; color: #6b7686; }
+  @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 8pt 'Segoe UI', Arial, sans-serif; color: #6b7686; }
+  @top-right { content: "Draft for mentor review · 25 October 2026"; font: 7.5pt 'Segoe UI', Arial, sans-serif; color: #9aa4b2; }
+}
+@page :first { margin: 0; @bottom-left { content: none } @bottom-right { content: none } @top-right { content: none } }
+:root { --navy: #0b2c5f; --saffron: #ff9933; --saffron-d: #d9750f; --green: #138808; --muted: #5a6577; --line: #d5dbe5; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: 'Segoe UI', 'Noto Sans', 'Nirmala UI', Arial, sans-serif; font-size: 10pt; line-height: 1.5; color: #1a2230; margin: 0; }
+h1 { break-before: page; font-size: 19pt; color: var(--navy); margin: 0 0 10pt; padding: 0 0 6pt 10pt; border-left: 5px solid var(--saffron);
+     border-bottom: 1px solid var(--line); line-height: 1.25; }
+h2 { font-size: 12.5pt; color: var(--navy); margin: 16pt 0 6pt; break-after: avoid; }
+h3 { font-size: 11pt; color: var(--navy); margin: 12pt 0 4pt; break-after: avoid; }
+p { margin: 0 0 7pt; } ul, ol { margin: 0 0 8pt; padding-left: 18pt; } li { margin: 2pt 0; }
+a { color: #0a4fb4; text-decoration: none; }
+code { font-family: Consolas, 'Courier New', monospace; font-size: 8.8pt; background: #f1f4f8; padding: 0 3px; border-radius: 3px; }
+strong { color: #0e1a2b; }
+table { width: 100%; border-collapse: collapse; margin: 6pt 0 12pt; font-size: 8.8pt; }
+th { background: var(--navy); color: #fff; text-align: left; padding: 5pt 6pt; font-weight: 600; vertical-align: bottom; }
+td { padding: 4.5pt 6pt; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+tr { break-inside: avoid; } thead { display: table-header-group; }
+tr:nth-child(even) td { background: #f8fafc; }
+table.wide { font-size: 7.9pt; table-layout: fixed; } table.wide td, table.wide th { padding: 3.5pt 4.5pt; }
+table.wide th:nth-child(1) { width: 19%; } table.wide th:nth-child(2) { width: 13%; } table.wide th:nth-child(3) { width: 18%; }
+table.wide th:nth-child(4) { width: 17%; } table.wide th:nth-child(5) { width: 19%; } table.wide th:nth-child(6) { width: 14%; }
+table.numbered td:first-child, table.numbered th:first-child { width: 20pt; white-space: nowrap; }
+figure { margin: 8pt 0 12pt; break-inside: avoid; text-align: center; }
+figure img { width: 100%; border: 1px solid var(--line); border-radius: 4px; }
+figcaption { font-size: 8.5pt; color: var(--muted); margin-top: 4pt; }
+p > img { display: block; max-width: 66%; margin: 6pt auto 2pt; border: 1px solid var(--line); border-radius: 4px; break-inside: avoid; }
+p.shot { text-align: center; font-size: 8.5pt; color: var(--muted); break-inside: avoid; margin-bottom: 12pt; }
+.st { display: inline-block; font-size: 7.6pt; font-weight: 700; padding: 1pt 6pt; border-radius: 9pt; border: 1px solid; vertical-align: middle;
+      letter-spacing: .02em; white-space: nowrap; line-height: 1.4; }
+.st.ok { background: #e7f4e4; border-color: #9fd193; color: #0c5a05; }
+.st.part { background: #fff4e0; border-color: #f0c98a; color: #8a4b00; }
+.st.plan { background: #eaf1fb; border-color: #b9cdee; color: #0b2c5f; }
+.st.ver { background: #fdecea; border-color: #f1b0a9; color: #a1170c; }
+h2 .st { font-size: 7.4pt; margin-left: 4pt; }
+/* cover */
+.cover { height: 297mm; padding: 30mm 22mm 20mm; position: relative; background: #fff; }
+.cover-band { position: absolute; top: 0; left: 0; right: 0; height: 12mm;
+  background: linear-gradient(to bottom, var(--saffron) 0 33%, #fff 33% 66%, var(--green) 66% 100%); }
+.cover-kicker { margin-top: 18mm; text-transform: uppercase; letter-spacing: .12em; font-size: 9pt; color: var(--saffron-d); font-weight: 700; }
+.cover-title { break-before: auto; border: 0; padding: 0; font-size: 30pt; color: var(--navy); margin: 4mm 0 2mm; line-height: 1.15; }
+.cover-sub { font-size: 14pt; color: var(--navy); margin-bottom: 10mm; }
+.cover-tag { font-size: 11pt; color: #33405a; border-left: 4px solid var(--saffron); padding-left: 10pt; margin-bottom: 12mm; max-width: 150mm; }
+table.cover-meta { font-size: 9.5pt; max-width: 165mm; } table.cover-meta td { background: #fff !important; padding: 6pt 8pt; }
+table.cover-meta td:first-child { width: 42mm; color: var(--muted); font-weight: 600; }
+td.fill { color: #a1170c; font-style: italic; }
+.legend { position: absolute; left: 22mm; right: 22mm; bottom: 22mm; border: 1px solid var(--line); border-radius: 6px; padding: 8pt 12pt; font-size: 8.8pt; }
+.legend-h { font-weight: 700; color: var(--navy); margin-bottom: 4pt; }
+/* table of contents */
+.toc { break-before: page; }
+.toc h1 { break-before: avoid; }
+.toc ol { list-style: none; padding: 0; margin: 0; }
+.toc li { display: flex; align-items: baseline; gap: 6pt; padding: 3.4pt 0; border-bottom: 1px dotted #c9d2e0; font-size: 10.2pt; }
+.toc li .t { flex: 1; } .toc li .n { min-width: 22pt; text-align: right; color: var(--navy); font-weight: 600; }
+.toc li.sub { padding-left: 16pt; font-size: 9pt; color: #33405a; border-bottom-style: none; }
+</style></head><body><div class="cover">
+<div class="cover-band"></div>
+<p class="cover-kicker">Project documentation · prototype review</p>
+<h1 class="cover-title">NyaySutra: Complete Project Documentation</h1>
+<p class="cover-sub">Features, Technology Stack, Architecture, Data Sources and Workflow</p>
+<p class="cover-tag">An AI-assisted legal research workspace for Indian advocates — answers grounded in official bare acts and the lawyer's own case files, with numbered citations that can be checked.</p>
+<table class="cover-meta">
+<tr><td>Document purpose</td><td>Explain the project, in plain English, to mentors and reviewers who are not software or AI specialists.</td></tr>
+<tr><td>Prototype status</td><td>Working prototype, run on a single computer (127.0.0.1) and connected to a Supabase cloud project in the Mumbai region. Not deployed for public use.</td></tr>
+<tr><td>Based on</td><td>The code in the repository <em>SwarangiK-21/NyaySutra-AI</em> (branch <em>main</em>, commit 8e63731 plus one uncommitted dashboard fix), the live Supabase project and the running application, inspected on 25 October 2026.</td></tr>
+<tr><td>Student / team</td><td class="fill">[ To be filled in — not recorded in the repository ]</td></tr>
+<tr><td>Mentor</td><td class="fill">[ To be filled in ]</td></tr>
+<tr><td>Institution / course</td><td class="fill">[ To be filled in ]</td></tr>
+</table>
+<div class="legend">
+<p class="legend-h">How to read the status labels in this document</p>
+<p><span class="st ok">Implemented</span> found in the code and seen working &nbsp; <span class="st part">Partial</span> works with clear limits &nbsp; <span class="st plan">Planned</span> not built yet &nbsp; <span class="st ver">Needs verification</span> could not be confirmed</p>
+</div>
+</div>
+
+<div class="toc"><h1 id="contents">Contents</h1><ol><li><span class="t"><a href="#1-executive-summary">1. Executive Summary</a></span><span class="n">4</span></li><li><span class="t"><a href="#2-problem-statement">2. Problem Statement</a></span><span class="n">5</span></li><li><span class="t"><a href="#3-project-objectives-and-scope">3. Project Objectives and Scope</a></span><span class="n">6</span></li><li><span class="t"><a href="#4-complete-feature-by-feature-explanation">4. Complete Feature-by-Feature Explanation</a></span><span class="n">7</span></li><li class="sub"><span class="t"><a href="#4-1-accounts-sign-in-and-two-step-verification-implemented">4.1 Accounts, sign-in and two-step verification</a></span><span class="n">7</span></li><li class="sub"><span class="t"><a href="#4-2-case-files-matters-implemented">4.2 Case files (matters)</a></span><span class="n">7</span></li><li class="sub"><span class="t"><a href="#4-3-document-upload-and-reading-including-ocr-implemented">4.3 Document upload and reading (including OCR)</a></span><span class="n">8</span></li><li class="sub"><span class="t"><a href="#4-4-legal-research-chat-implemented">4.4 Legal research chat</a></span><span class="n">8</span></li><li class="sub"><span class="t"><a href="#4-5-source-citations-and-citation-checking-implemented">4.5 Source citations and citation checking</a></span><span class="n">9</span></li><li class="sub"><span class="t"><a href="#4-6-recent-history-implemented">4.6 Recent History</a></span><span class="n">10</span></li><li class="sub"><span class="t"><a href="#4-7-law-library-bare-acts-judgments-and-the-all-india-catalo">4.7 Law library: bare acts, judgments and the All-India catalogue</a></span><span class="n">10</span></li><li class="sub"><span class="t"><a href="#4-8-document-analysis-translation-and-summaries-implemented">4.8 Document analysis, translation and summaries</a></span><span class="n">11</span></li><li class="sub"><span class="t"><a href="#4-9-drafting-studio-and-legal-notices-implemented">4.9 Drafting studio and legal notices</a></span><span class="n">11</span></li><li class="sub"><span class="t"><a href="#4-10-applicable-provisions-implemented">4.10 Applicable provisions</a></span><span class="n">12</span></li><li class="sub"><span class="t"><a href="#4-11-calendar-hearings-and-reminders-implemented-e-mail-not-">4.11 Calendar, hearings and reminders</a></span><span class="n">12</span></li><li class="sub"><span class="t"><a href="#4-12-dashboard-unified-search-and-updates-implemented">4.12 Dashboard, unified search and updates</a></span><span class="n">13</span></li><li class="sub"><span class="t"><a href="#4-13-case-information-search-partial">4.13 Case-information search</a></span><span class="n">14</span></li><li class="sub"><span class="t"><a href="#4-14-limitation-calculator-implemented">4.14 Limitation calculator</a></span><span class="n">14</span></li><li class="sub"><span class="t"><a href="#4-15-state-wise-legal-awareness-partial-coverage">4.15 State-wise legal awareness</a></span><span class="n">14</span></li><li class="sub"><span class="t"><a href="#4-16-voice-input-and-read-aloud-implemented">4.16 Voice input and read-aloud</a></span><span class="n">14</span></li><li class="sub"><span class="t"><a href="#4-17-administration-implemented">4.17 Administration</a></span><span class="n">14</span></li><li class="sub"><span class="t"><a href="#4-18-ai-reliability-and-fallback-implemented">4.18 AI reliability and fallback</a></span><span class="n">14</span></li><li class="sub"><span class="t"><a href="#4-19-features-not-present">4.19 Features NOT present</a></span><span class="n">14</span></li><li><span class="t"><a href="#5-user-journey-and-end-to-end-workflow">5. User Journey and End-to-End Workflow</a></span><span class="n">15</span></li><li><span class="t"><a href="#6-complete-technology-stack-and-platforms-used">6. Complete Technology Stack and Platforms Used</a></span><span class="n">16</span></li><li><span class="t"><a href="#7-data-sources-and-legal-information-collection">7. Data Sources and Legal Information Collection</a></span><span class="n">18</span></li><li><span class="t"><a href="#8-rag-explained-in-simple-language">8. RAG Explained in Simple Language</a></span><span class="n">19</span></li><li><span class="t"><a href="#9-ai-agents-and-architecture-of-the-assistant">9. AI Agents and Architecture of the Assistant</a></span><span class="n">21</span></li><li><span class="t"><a href="#10-system-architecture">10. System Architecture</a></span><span class="n">23</span></li><li><span class="t"><a href="#11-database-and-storage-design">11. Database and Storage Design</a></span><span class="n">24</span></li><li><span class="t"><a href="#12-security-privacy-and-ai-guardrails">12. Security, Privacy and AI Guardrails</a></span><span class="n">25</span></li><li><span class="t"><a href="#13-legal-safety-and-responsible-ai">13. Legal Safety and Responsible AI</a></span><span class="n">26</span></li><li><span class="t"><a href="#14-user-interface-and-pages">14. User Interface and Pages</a></span><span class="n">27</span></li><li><span class="t"><a href="#15-api-and-integration-inventory">15. API and Integration Inventory</a></span><span class="n">28</span></li><li><span class="t"><a href="#16-testing-and-validation">16. Testing and Validation</a></span><span class="n">29</span></li><li><span class="t"><a href="#17-current-progress-and-remaining-work">17. Current Progress and Remaining Work</a></span><span class="n">30</span></li><li><span class="t"><a href="#18-known-limitations-and-risks">18. Known Limitations and Risks</a></span><span class="n">31</span></li><li><span class="t"><a href="#19-mentor-demonstration-guide-about-8-minutes">19. Mentor Demonstration Guide (about 8 minutes)</a></span><span class="n">32</span></li><li><span class="t"><a href="#20-likely-mentor-questions-and-suggested-answers">20. Likely Mentor Questions and Suggested Answers</a></span><span class="n">33</span></li><li><span class="t"><a href="#21-glossary">21. Glossary</a></span><span class="n">34</span></li><li><span class="t"><a href="#22-conclusion">22. Conclusion</a></span><span class="n">35</span></li><li><span class="t"><a href="#23-sources-references-and-questions-for-the-team">23. Sources, References and Questions for the Team</a></span><span class="n">36</span></li></ol></div>
+
+<h1 id="1-executive-summary">1. Executive Summary</h1>
+<p><strong>NyaySutra</strong> (from <em>nyaya</em>, justice, and <em>sutra</em>, a thread or formula) is a prototype <strong>legal research assistant for Indian advocates</strong>. A lawyer can keep each matter (case) in one place, upload the case papers, and ask questions in plain language. NyaySutra searches the lawyer's own documents and a library of <strong>official bare acts</strong> (the exact text of Indian laws, downloaded from the Government's <em>India Code</em> website), and then writes an answer in which <strong>every statement points to a numbered source</strong> that the lawyer can open and check.</p>
+<p><strong>The problem it addresses.</strong> Legal research means finding the right section of the right Act, reading long judgments and case papers, and connecting the facts of a matter to the law. This takes time, legal language is hard for juniors and clients, and an ordinary AI chatbot can invent sections or case names that do not exist. NyaySutra's design goal is the opposite: <em>answer only from sources that can be shown</em>, and say clearly when the sources do not cover the question.</p>
+<p><strong>Who may benefit.</strong> Practising advocates and junior lawyers (the main persona, called <strong>Lawyer</strong> in the app), law firms or chambers (an <strong>Administrator</strong> manages people and settings), and — for the public awareness pages only — members of the public.</p>
+<p><strong>What the current prototype can do</strong> (all verified in the running application):</p>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>What a user can do today</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Legal research chat</td>
+<td>Ask questions in English, Hindi or Marathi (typed, or spoken through the browser); get a cited answer with a Sources panel and an automatic citation check.</td>
+</tr>
+<tr>
+<td>Case files</td>
+<td>Create a matter, upload papers (PDF including scanned PDFs, Word, Excel, CSV, PowerPoint, OpenDocument, RTF, text, photos), and have them read, indexed and summarised.</td>
+</tr>
+<tr>
+<td>Law library</td>
+<td>31 bare acts are indexed (29 central, 1 Maharashtra, 1 Karnataka), plus 3 sample judgments and 22 drafting templates; any further central or state act can be searched on India Code and added in one click.</td>
+</tr>
+<tr>
+<td>Drafting</td>
+<td>Generate drafts (plaint, written statement, bail applications, legal notices, Section 138 NI Act demand notice and others) that keep unknown facts as placeholders; review, approve and export to Word or PDF.</td>
+</tr>
+<tr>
+<td>Planning</td>
+<td>A calendar for hearings, deadlines and tasks, with reminders sent by the server even when the app is closed.</td>
+</tr>
+<tr>
+<td>Tools</td>
+<td>Limitation-period calculator, case-number lookup helpers, legal-news headlines, state-wise legal awareness pages.</td>
+</tr>
+<tr>
+<td>Accounts &amp; security</td>
+<td>Public sign-up (always as a Lawyer), e-mail verification, two-step verification, roles, per-case access, database-level row security, audit log.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Honest summary of maturity.</strong> This is a <strong>working prototype</strong>, not a production service. It runs on one computer, the law library covers a curated set of acts rather than all of Indian law, the AI can still make mistakes (which the citation check tries to catch, not guarantee), and several protections that a production legal service needs — independent security testing, malware scanning, hosting, backups and monitoring — are not in place yet. Chapter 17 lists what is done, partial and planned.</p>
+<h1 id="2-problem-statement">2. Problem Statement</h1>
+<p>Indian legal research has a few practical difficulties that this project tries to address. These are general observations, not measured claims about the legal system.</p>
+<ol>
+<li><strong>Finding the right provision.</strong> Laws are long and are frequently amended; criminal law in particular moved from the IPC, CrPC and Evidence Act to the BNS, BNSS and BSA on 1 July 2024, so a lawyer often has to check both regimes. Each State also has its own Acts (for example rent control, land revenue or police Acts), so the "right" law depends on where the matter is.</li>
+<li><strong>Understanding legal language.</strong> Bare acts and judgments are written in technical English. Juniors, clients and non-specialist readers need help to understand what a provision means for a particular set of facts.</li>
+<li><strong>Locating related judgments.</strong> Judgments are long, and the relevant reasoning is usually a few paragraphs inside a document of many pages.</li>
+<li><strong>Reviewing many documents for one matter.</strong> A single case can have agreements, notices, FIRs, orders and correspondence — sometimes scanned, sometimes in Hindi or Marathi — and the lawyer has to keep the facts straight across all of them.</li>
+<li><strong>The risk of general AI chatbots.</strong> A general chatbot answers from its memory of the internet. It can be outdated, can mix up jurisdictions, and can confidently invent section numbers or case names ("hallucinations"). For legal work an invented citation is worse than no answer.</li>
+</ol>
+<p>NyaySutra's response is to (a) keep the lawyer's matter and documents together, (b) answer only from retrieved, numbered sources, (c) check those citations automatically, and (d) make it easy to open the original text.</p>
+<h1 id="3-project-objectives-and-scope">3. Project Objectives and Scope</h1>
+<h2 id="3-1-objectives">3.1 Objectives</h2>
+<ul>
+<li>Give lawyers <strong>cited, checkable answers</strong> grounded in official statute text and their own case papers.</li>
+<li>Make long and multilingual documents (including scanned ones) <strong>searchable and summarisable</strong>.</li>
+<li>Help with <strong>first drafts</strong> of routine legal documents without inventing facts.</li>
+<li>Help lawyers <strong>track hearings and deadlines</strong> across matters.</li>
+<li>Protect confidential client material with <strong>accounts, roles, per-case access and database-level security</strong>.</li>
+</ul>
+<h2 id="3-2-intended-users">3.2 Intended users</h2>
+<table>
+<thead>
+<tr>
+<th>Persona</th>
+<th>What they can do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Lawyer</strong> (anyone who registers and verifies their e-mail)</td>
+<td>Create and work on their own matters, research, draft, use the calendar and history, add official acts to the library.</td>
+</tr>
+<tr>
+<td><strong>Administrator</strong> (appointed by another administrator, never self-chosen)</td>
+<td>Everything a lawyer can do, plus manage users and roles, invitations, organisation settings, integrations and the activity (audit) log. Sees the organisation's list of matters but not their contents unless added to the case.</td>
+</tr>
+<tr>
+<td><strong>Visitor</strong> (not signed in)</td>
+<td>Read the bare acts, the India Code catalogue, legal-awareness pages and the limitation calculator.</td>
+</tr>
+</tbody>
+</table>
+<p>Earlier versions had <em>Client</em> and <em>Security auditor</em> roles; they were removed in October 2026 (database migration 07).</p>
+<h2 id="3-3-current-scope">3.3 Current scope</h2>
+<ul>
+<li><strong>Implemented:</strong> everything described in Chapter 4 with an <span class="st ok">Implemented</span> label.</li>
+<li><strong>Geography:</strong> the bare-act library is mainly <strong>central law</strong> plus one Maharashtra and one Karnataka act; any of the 36 States/Union Territories' acts can be <strong>looked up</strong> on India Code and added, but they are not pre-loaded. Court-specific helpers (case search links, drafting forum rules) are written for the <strong>Supreme Court, Bombay High Court, Maharashtra district courts and Maharashtra police</strong> only. Legal-awareness content covers central law and Maharashtra.</li>
+<li><strong>Languages:</strong> interface in English and Hindi; answers in English, Hindi or Marathi; OCR reads English, Hindi and Marathi.</li>
+<li><strong>Deployment:</strong> runs on one computer; not hosted on the internet.</li>
+</ul>
+<h2 id="3-4-out-of-scope-planned-not-built">3.4 Out of scope / planned (not built)</h2>
+<ul>
+<li>Public hosting, backups, monitoring and a formal security audit (Chapter 17).</li>
+<li>Automatic access to court case-status systems (they require CAPTCHA and offer no public API — the app opens the official page instead).</li>
+<li>A licensed case-law database (Indian Kanoon or others) — only three sample judgments are included.</li>
+<li>Mobile apps; payments; client-facing portal.</li>
+</ul>
+<h1 id="4-complete-feature-by-feature-explanation">4. Complete Feature-by-Feature Explanation</h1>
+<p>Each feature below follows the same pattern: <em>what it does → why it is needed → how a user uses it → what happens behind the scenes → technology and data → an example → status</em>.</p>
+<h2 id="4-1-accounts-sign-in-and-two-step-verification-implemented">4.1 Accounts, sign-in and two-step verification <span class="st ok">Implemented</span></h2>
+<ul>
+<li><strong>What:</strong> Personal accounts with e-mail verification, password rules, password reset, two-step verification (a 6-digit code from an authenticator app such as Google Authenticator), one-time recovery codes, and a list of signed-in devices that can be signed out.</li>
+<li><strong>Why:</strong> Case papers are confidential; each lawyer must see only their own matters.</li>
+<li><strong>How to use:</strong> <em>Create an account</em> → open the verification e-mail → sign in → scan the QR code with an authenticator app → type the 6-digit code → save the recovery codes.</li>
+<li><strong>Behind the scenes:</strong> Passwords and e-mail links are handled by <strong>Supabase Auth</strong>. The NyaySutra server keeps the sign-in tokens itself (encrypted in Supabase Vault) and gives the browser only an opaque cookie that scripts cannot read (<em>HttpOnly</em>). Sessions expire after 60 minutes of inactivity or 12 hours in total. After 5 wrong passwords the account is locked for 15 minutes. New accounts are always <strong>Lawyer</strong>; only an administrator can make someone an administrator.</li>
+<li><strong>Example:</strong> A junior advocate registers with her chamber e-mail, verifies it and is asked for an authenticator code before she can see any case data.</li>
+<li><strong>Note:</strong> Two-step verification is mandatory for both personas. Supabase's "leaked password protection" option is currently switched off (see Chapter 12).</li>
+</ul>
+<h2 id="4-2-case-files-matters-implemented">4.2 Case files (matters) <span class="st ok">Implemented</span></h2>
+<ul>
+<li><strong>What:</strong> A record per matter: parties and their roles, case type, court, State/district, case, filing, CNR and FIR numbers, filing date, next hearing date, status, Acts relied on and a facts summary. Tabs: <em>Overview, Documents, Provisions, Notes &amp; orders, People</em>.</li>
+<li><strong>Why:</strong> Research is more accurate when the assistant knows the facts and papers of the matter.</li>
+<li><strong>How to use:</strong> <em>Case Files → + New case</em> → fill the form (fields adapt: e.g. police-station appears for criminal matters) → <em>Create</em> (or <em>Save as draft</em>). Add colleagues under <em>People</em>.</li>
+<li><strong>Behind the scenes:</strong> The creator becomes the case <strong>owner</strong>. Access is stored in <code>case_members</code>; the server checks it on every request and the database enforces it again with row-level security.</li>
+<li><strong>Example:</strong> "Asha Rao v. Ramesh Kumar" — civil, Pune, next hearing 3 November.</li>
+</ul>
+<p class="shot"><img alt="Case page — documents tab (synthetic sample data)" src="screenshots/03_case_documents.jpg" /><br>Case page — documents tab (synthetic sample data)</p>
+<h2 id="4-3-document-upload-and-reading-including-ocr-implemented">4.3 Document upload and reading (including OCR) <span class="st ok">Implemented</span></h2>
+<ul>
+<li><strong>What:</strong> Upload one or many files to a case. Accepted: PDF (including <strong>scanned PDFs</strong>), Word (DOC/DOCX), Excel (XLSX/XLS), CSV/TSV, PowerPoint (PPTX), OpenDocument (ODT/ODS), RTF, text/Markdown and images (PNG, JPG, TIFF, WEBP, BMP, GIF), up to 40 MB each.</li>
+<li><strong>Why:</strong> Case papers come in every format; many are scans or phone photos.</li>
+<li><strong>How to use:</strong> Case → <em>Documents</em> → drag files onto the box (or <em>Upload &amp; summarise</em> for several at once with progress).</li>
+<li><strong>Behind the scenes:</strong> (1) safety checks — the file's content must match its type (a renamed program is refused), PDFs with JavaScript or embedded files and Office files with macros, embedded objects or external links are refused; (2) the file is stored in a <strong>private Supabase Storage bucket</strong>; (3) a background worker extracts the text — scanned pages are read with <strong>OCR</strong> (optical character recognition: turning a picture of text into text) using RapidOCR, which reads English and, with a second model, Hindi and Marathi; (4) the text is split into passages, indexed and becomes searchable. Uncertain OCR words are marked <code>[?word]</code> rather than guessed. A quality check warns about blank pages, garbled text or missing page numbers.</li>
+<li><strong>Example:</strong> A 36-page scanned PDF uploaded during testing was read in about 9½ minutes (average OCR confidence 76%), after which its contents were searchable.</li>
+<li><strong>Limits:</strong> OCR runs on the computer's processor (roughly 5–20 seconds per scanned page); at most 60 scanned pages per file by default; handwriting and faint scans give poorer results. Legacy <code>.doc</code> files need an extra tool (<em>antiword</em>) that is not installed.</li>
+</ul>
+<h2 id="4-4-legal-research-chat-implemented">4.4 Legal research chat <span class="st ok">Implemented</span></h2>
+<ul>
+<li><strong>What:</strong> The main feature. Ask a legal question about a matter or about the law in general; receive an answer with numbered citations.</li>
+<li><strong>Why:</strong> To get to the relevant law and facts quickly, with proof.</li>
+<li><strong>How to use:</strong> <em>Legal Research</em> → (optional) open <strong>☰ Matters</strong> to choose the matter, the search scope (<em>Case + Library</em>, <em>Case files only</em>, <em>Law library only</em>) and the <strong>jurisdiction</strong> (central law plus one State) → type or speak the question → <em>Send</em>. Open <strong>Sources</strong> to see every passage used; click a [1]-style citation to open the passage and the original PDF page.</li>
+<li><strong>Behind the scenes:</strong> the "research agent" described in Chapter 8: screening → planning → search (exact section lookup + keyword + meaning search, filtered by jurisdiction and access) → re-ranking → answer by the large language model using <em>only</em> the numbered passages → citation audit → output check. Progress is streamed live, so the user sees "Searching…", then the answer as it is written.</li>
+<li><strong>Example (seen in testing):</strong> <em>"Can my client recover the security deposit, and within what time must she file a suit?"</em> — the answer cited the Limitation Act, 1963 (Schedule, Article 70) and CPC Order XIV Rule 1 from the official library; the citation audit flagged one point ("Article 70 of the Constitution") that was not in the sources — the kind of slip the audit exists to catch.</li>
+</ul>
+<p class="shot"><img alt="Research answer with Sources panel (synthetic matter)" src="screenshots/04_research_answer.jpg" /><br>Research answer with Sources panel (synthetic matter)</p>
+<p class="shot"><img alt="Citation audit flagging an unsupported reference" src="screenshots/05_research_citation_audit.jpg" /><br>Citation audit flagging an unsupported reference</p>
+<h2 id="4-5-source-citations-and-citation-checking-implemented">4.5 Source citations and citation checking <span class="st ok">Implemented</span></h2>
+<ul>
+<li><strong>What:</strong> Every answer lists its sources; each claim carries a [n] marker linked to a passage; an automatic <strong>citation audit</strong> reports whether the answer is fully supported.</li>
+<li><strong>How it works:</strong> The model is instructed to use only the numbered sources. After it answers, code checks that every [n] exists, looks for section numbers, case names and dates that do not appear in the sources, and asks a smaller model to double-check support. Unsupported points are listed in an amber box; fully supported answers show a green tick. Statutes are labelled <em>Central law</em> or with the State's name.</li>
+<li><strong>Limit:</strong> The audit reduces but does not eliminate errors: it can miss a subtle misreading of a correct source, and it cannot tell whether a source is outdated (Chapter 13).</li>
+</ul>
+<h2 id="4-6-recent-history-implemented">4.6 Recent History <span class="st ok">Implemented</span></h2>
+<ul>
+<li><strong>What:</strong> A drawer on the Legal Research page listing the user's own past <strong>conversations</strong> (from every matter) and <strong>searches</strong>; one click reopens them. Hidden by default so the chat has the full width.</li>
+<li><strong>Behind the scenes:</strong> Chats and searches are stored per user (<code>chats</code>, <code>messages</code>, <code>search_history</code>) and protected so that only their owner can read them. An administrator can set a retention period after which old conversations and searches are deleted.</li>
+</ul>
+<p class="shot"><img alt="Recent History drawer" src="screenshots/06_recent_history.jpg" /><br>Recent History drawer</p>
+<h2 id="4-7-law-library-bare-acts-judgments-and-the-all-india-catalo">4.7 Law library: bare acts, judgments and the All-India catalogue <span class="st ok">Implemented</span> <span class="st part">Partial coverage</span></h2>
+<ul>
+<li><strong>What:</strong> (a) The indexed library — 31 bare acts, 3 sample judgments, 22 drafting templates; an instant section lookup ("Section 138 NI Act") without AI; (b) the <strong>All-India catalogue</strong> — a live search of India Code for Central Acts and for any of the 36 States/UTs, with <em>Add to research library</em>.</li>
+<li><strong>How to use:</strong> <em>Bare Acts</em> → <em>Bare Acts</em> tab to look up a section; <em>All-India catalogue</em> tab → choose a State → optional words → <em>Search</em> → <em>Add to research library</em> on the act you need. It becomes searchable after indexing (about a minute).</li>
+<li><strong>Behind the scenes:</strong> The catalogue calls India Code's public REST interface (an API — a door through which programs can ask another system for data). Imported acts are downloaded only from indiacode.gov.in, checked to be real PDFs, tagged with their jurisdiction and indexed. A daily check notices when India Code updates the record of an act already in the library.</li>
+<li><strong>Coverage, honestly:</strong> 29 central acts (e.g. BNS, BNSS, BSA, CPC, Contract Act, Limitation Act, NI Act, Constitution, Consumer Protection Act, Hindu Marriage Act, POCSO, IT Act, Motor Vehicles Act), the repealed IPC (kept for pending matters), the Maharashtra Land Revenue Code and the Karnataka Rent Act. The old CrPC and Evidence Act are <em>not</em> included (no current official consolidation was found). Judgments: only three Supreme Court judgments downloaded manually from Indian Kanoon as samples.</li>
+</ul>
+<p class="shot"><img alt="All-India catalogue (live India Code results)" src="screenshots/08_india_code_catalogue.jpg" /><br>All-India catalogue (live India Code results)</p>
+<h2 id="4-8-document-analysis-translation-and-summaries-implemented">4.8 Document analysis, translation and summaries <span class="st ok">Implemented</span></h2>
+<ul>
+<li><strong>What:</strong> For any case document: view original and extracted text, translate it into English, and produce structured summaries (English, Hindi, Marathi); in chat, ask for a summary, timeline, issues, parties or arguments of one document.</li>
+<li><strong>Behind the scenes:</strong> These run as background jobs. The user is asked for consent before document text is sent to the language model. Very long documents are read in parts and combined.</li>
+</ul>
+<h2 id="4-9-drafting-studio-and-legal-notices-implemented">4.9 Drafting studio and legal notices <span class="st ok">Implemented</span></h2>
+<ul>
+<li><strong>What:</strong> 14 document types (plaint, written statement, general petition, interlocutory application, regular and anticipatory bail, reply, affidavit, written submissions, representation, consumer complaint, general legal notice, Section 138 NI Act demand notice, Section 80 CPC notice) and 9 forum settings (Supreme Court, Bombay High Court, district civil and criminal courts, Family Court, District and State Consumer Commissions, Maharashtra revenue authorities, and "not filed").</li>
+<li><strong>How to use:</strong> <em>Drafting</em> → choose case, type, forum, style and language → (optional) template, base draft, supporting documents, known facts, instructions → <em>Generate</em>. The editor shows the draft beside a preview, with tabs for <em>Information needed</em>, <em>Facts used</em>, <em>Law sources</em>, <em>Requirements to confirm</em>, <em>Versions</em> and <em>Review</em>.</li>
+<li><strong>Behind the scenes:</strong> Facts are extracted from the chosen documents with their origin marked (file, user, case). Anything unknown stays as a <strong>[●] placeholder</strong> — nothing is invented. A draft cannot be approved while placeholders remain; only an approved version is exported without the "DRAFT" label.</li>
+</ul>
+<p class="shot"><img alt="Drafting studio" src="screenshots/09_drafting_studio.jpg" /><br>Drafting studio</p>
+<h2 id="4-10-applicable-provisions-implemented">4.10 Applicable provisions <span class="st ok">Implemented</span></h2>
+<p>Suggests acts and sections that may apply to a matter; each suggestion is <strong>checked against the library</strong> ("verified in library" or "not found") and the lawyer accepts, rejects or edits it.</p>
+<h2 id="4-11-calendar-hearings-and-reminders-implemented-e-mail-not-">4.11 Calendar, hearings and reminders <span class="st ok">Implemented</span> <span class="st part">E-mail not configured</span></h2>
+<ul>
+<li><strong>What:</strong> Month / week / day views; entries for court hearings, deadlines, follow-ups, document submissions, meetings and tasks, each with notes, linked matter, date, time, priority and reminders (at the time, 1 hour, on the day, 1 day or 7 days before). Complete, reopen, reschedule, cancel, delete. Next-hearing dates from case files appear automatically.</li>
+<li><strong>Behind the scenes:</strong> Reminder times are calculated in the entry's own time zone and stored in UTC. A <strong>background dispatcher on the server</strong> sends due reminders every 30 seconds to the in-app notification bell — whether or not anyone has the page open. Each lawyer's entries are private, also to administrators. Optional desktop pop-ups are asked for only when the user turns them on.</li>
+<li><strong>Verified:</strong> a live test reminder arrived 8 seconds after it was due. <strong>E-mail reminders</strong> are built but need an SMTP mail server to be configured; until then the app says so instead of pretending.</li>
+</ul>
+<p class="shot"><img alt="Calendar (synthetic entries)" src="screenshots/07_calendar.jpg" /><br>Calendar (synthetic entries)</p>
+<h2 id="4-12-dashboard-unified-search-and-updates-implemented">4.12 Dashboard, unified search and updates <span class="st ok">Implemented</span></h2>
+<ul>
+<li><strong>Dashboard:</strong> upcoming hearings, deadlines and tasks; counts of cases, documents and library items; recent updates.</li>
+<li><strong>Unified search:</strong> one search box across cases, documents, bare acts, judgments, drafts, news and awareness items — retrieval only, no AI text mixed in.</li>
+<li><strong>Updates:</strong> notifications, source status, LiveLaw headlines (from its official RSS feed, refreshed hourly) and, for administrators, the activity log.</li>
+</ul>
+<p class="shot"><img alt="Dashboard (synthetic data)" src="screenshots/02_dashboard.jpg" /><br>Dashboard (synthetic data)</p>
+<h2 id="4-13-case-information-search-partial">4.13 Case-information search <span class="st part">Partial</span></h2>
+<ul>
+<li><strong>What:</strong> Enter any combination of CNR, case, filing or FIR number, court, State, district, parties. The app validates the identifiers, shows the matching cases already in the workspace, and gives the <strong>official portal link</strong> (eCourts, Supreme Court, Bombay High Court, Maharashtra Police) to look the case up there.</li>
+<li><strong>Why partial:</strong> those portals require a CAPTCHA and offer no public API, so NyaySutra <strong>does not fetch</strong> case status automatically and never bypasses CAPTCHAs. The user can paste or import what they find.</li>
+</ul>
+<h2 id="4-14-limitation-calculator-implemented">4.14 Limitation calculator <span class="st ok">Implemented</span></h2>
+<p>24 categories of proceedings from the Limitation Act's schedule; the last date is computed by ordinary code (not by AI), with the legal basis and a caveat. Available without signing in.</p>
+<h2 id="4-15-state-wise-legal-awareness-partial-coverage">4.15 State-wise legal awareness <span class="st part">Partial coverage</span></h2>
+<p>8 curated items (5 central, 3 Maharashtra) with official links and FAQs; statute text shown is pulled from the library. Other States are not yet covered by curated content.</p>
+<h2 id="4-16-voice-input-and-read-aloud-implemented">4.16 Voice input and read-aloud <span class="st ok">Implemented</span></h2>
+<p>The browser's own speech service turns speech into text in English, Hindi or Marathi; nothing is sent until the user presses <em>Send</em>. NyaySutra never receives audio. <em>Note:</em> some browsers (for example Chrome) process speech on the browser maker's servers — <span class="st ver">Needs verification</span> per browser before recommending it for confidential dictation.</p>
+<h2 id="4-17-administration-implemented">4.17 Administration <span class="st ok">Implemented</span></h2>
+<p>Administrators see users, change roles (Lawyer / Administrator), disable accounts, send invitations, withdraw pending invitations, read the audit log, manage integrations and set the chat-retention period. Administrators can see the list of matters but not their contents unless they add themselves to the case (which is logged).</p>
+<h2 id="4-18-ai-reliability-and-fallback-implemented">4.18 AI reliability and fallback <span class="st ok">Implemented</span></h2>
+<p>If the language model service is slow or failing, NyaySutra retries with increasing waits, stops calling a failing model for a minute ("circuit breaker"), and switches to an approved backup model (gpt-oss:20b); answers produced this way are labelled <em>fallback model</em>. An answer cut off mid-way is marked incomplete and not verified. Long tasks are <strong>durable background jobs</strong> that survive restarts, can be cancelled and are retried a bounded number of times.</p>
+<h2 id="4-19-features-not-present">4.19 Features NOT present</h2>
+<p>A <strong>FAQ page</strong> as a separate feature does not exist (FAQs appear inside awareness items). There is <strong>no</strong> payment, client portal, mobile app, automatic court-data fetching, licensed case-law database or public hosting.</p>
+<h1 id="5-user-journey-and-end-to-end-workflow">5. User Journey and End-to-End Workflow</h1>
+<p>The diagram shows the typical path through the application, matched to the real screens.</p>
+<figure><img src="diagrams/user_journey.svg" alt="User journey"><figcaption>Figure 1 — Typical user journey (all steps exist in the prototype).</figcaption></figure>
+
+<p><strong>Step by step:</strong></p>
+<ol>
+<li><strong>Open and sign in.</strong> Visitors can already read bare acts, awareness pages and the limitation tool. To work on cases the user signs in (e-mail + password + 6-digit code).</li>
+<li><strong>Dashboard.</strong> Shows upcoming hearings, deadlines and tasks, counts and recent updates.</li>
+<li><strong>Create a matter and upload papers.</strong> Files are checked, stored privately and read in the background; progress appears on the page.</li>
+<li><strong>Research.</strong> On <em>Legal Research</em> the user chooses the matter, scope and jurisdiction, then asks. The answer streams in with citations.</li>
+<li><strong>Review sources.</strong> The <em>Sources</em> panel lists each passage (with <em>Central law</em> or the State). Clicking a citation opens the exact passage and the original page.</li>
+<li><strong>Draft.</strong> From the case or the <em>Drafting</em> page, generate a draft, fill missing facts, review and export.</li>
+<li><strong>Plan.</strong> Add hearings and deadlines to the <em>Calendar</em>; reminders arrive in the bell.</li>
+<li><strong>Return later.</strong> <em>Recent History</em> reopens previous conversations and searches.</li>
+</ol>
+<p class="shot"><img alt="Sign-in page" src="screenshots/01_sign_in.jpg" /><br>Sign-in page</p>
+<h1 id="6-complete-technology-stack-and-platforms-used">6. Complete Technology Stack and Platforms Used</h1>
+<p>All entries below were confirmed in the code, configuration and running system. Versions come from <code>requirements.txt</code> unless noted.</p>
+<table class="wide">
+<thead>
+<tr>
+<th>Technology / platform</th>
+<th>What it is</th>
+<th>Why we use it</th>
+<th>Where in NyaySutra</th>
+<th>Data passing through it</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Python 3</strong></td>
+<td>Programming language</td>
+<td>Mature AI and document libraries</td>
+<td>Whole server (<code>nyaya/</code>)</td>
+<td>All</td>
+<td><span class="st ok">Implemented</span></td>
+</tr>
+<tr>
+<td><strong>FastAPI 0.143 + Uvicorn</strong></td>
+<td>Web framework and web server</td>
+<td>Fast, typed APIs; streaming answers</td>
+<td><code>nyaya/server.py</code> (~114 routes)</td>
+<td>Every request</td>
+<td><span class="st ok">Implemented</span></td>
+</tr>
+<tr>
+<td><strong>Plain JavaScript, HTML, CSS</strong></td>
+<td>Browser front end, no framework</td>
+<td>Small, strict security policy (no third-party scripts)</td>
+<td><code>web/</code></td>
+<td>Screens, user input</td>
+<td><span class="st ok">Implemented</span></td>
+</tr>
+<tr>
+<td><strong>Supabase Auth</strong></td>
+<td>Hosted user-account service</td>
+<td>Proven password, e-mail and two-step handling</td>
+<td>Sign-up, sign-in, reset, two-step</td>
+<td>E-mail, password (hashed by Supabase), codes</td>
+<td><span class="st ok">Implemented</span></td>
+</tr>
+<tr>
+<td><strong>Supabase Postgres</strong></td>
+<td>Hosted database</td>
+<td>Reliable storage with row-level security</td>
+<td>34 tables (Chapter 11)</td>
+<td>Cases, document text, passages, chats, drafts, calendar</td>
+<td><span class="st ok">Implemented</span></td>
+</tr>
+<tr>
+<td><strong>Supabase Storage</strong></td>
+<td>Hosted file storage</td>
+<td>Keeps original files private, off the server disk</td>
+<td>Bucket <code>case-files</code> (private)</td>
+<td>Uploaded case files</td>
+<td><span class="st ok">Implemented</span></td>
+</tr>
+<tr>
+<td><strong>Supabase Vault</strong></td>
+<td>Encrypted secret store</td>
+<td>Sign-in tokens never stored in plain text</td>
+<td>Session tokens</td>
+<td>Supabase tokens</td>
+<td><span class="st ok">Implemented</span></td>
+</tr>
+<tr>
+<td>Supabase Realtime, Edge Functions, Data API, pgvector</td>
+<td>Other Supabase services</td>
+<td>—</td>
+<td><strong>Not used.</strong> The Data API is deliberately closed to browser roles; vectors are searched in the app's memory</td>
+<td>—</td>
+<td>Not used</td>
+</tr>
+<tr>
+<td><strong>Ollama Cloud</strong> — <code>gpt-oss:120b</code>, <code>gpt-oss:20b</code></td>
+<td>Hosted large language models</td>
+<td>Answers, planning, summaries, translation, drafting, citation double-check; backup model</td>
+<td><code>nyaya/llm.py</code></td>
+<td>Question, chat history excerpt and retrieved passages, with identity numbers masked</td>
+<td><span class="st ok">Implemented</span></td>
+</tr>
+<tr>
+<td><strong>fastembed 0.9 (ONNX Runtime)</strong> with <strong>BAAI/bge-small-en-v1.5</strong></td>
+<td>Local embedding model</td>
+<td>Converts passages to 384-number "meaning" vectors, on our own machine</td>
+<td><code>nyaya/embeddings.py</code></td>
+<td>Passage text (never leaves the server)</td>
+<td><span class="st ok">Implemented</span></td>
+</tr>
+<tr>
+<td><strong>Cross-encoder re-ranker</strong> <code>Xenova/ms-marco-MiniLM-L-6-v2</code></td>
+<td>Local ranking model</td>
+<td>Picks the passages that really answer the question</td>
+<td><code>nyaya/retrieval.py</code></td>
+<td>Question + passages (local)</td>
+<td><span class="st ok">Implemented</span></td>
+</tr>
+<tr>
+<td><strong>In-memory vector index (NumPy)</strong></td>
+<td>Exact similarity search</td>
+<td>Simple and exact at current size (~9,700 passages)</td>
+<td><code>nyaya/vectorindex.py</code></td>
+<td>Vectors loaded from Postgres</td>
+<td><span class="st ok">Implemented</span></td>
+</tr>
+<tr>
+<td><strong>Postgres full-text search</strong> (SQLite FTS5 in local mode)</td>
+<td>Keyword search</td>
+<td>Section numbers, defined terms, names</td>
+<td><code>nyaya/retrieval.py</code></td>
+<td>Passage text</td>
+<td><span class="st ok">Implemented</span></td>
+</tr>
+<tr>
+<td><strong>pypdfium2 5.14</strong></td>
+<td>PDF reader (Chrome's PDF engine)</td>
+<td>Accurate text extraction; safe for untrusted files</td>
+<td><code>nyaya/parsing.py</code>, upload checks</td>
+<td>Uploaded PDFs</td>
+<td><span class="st ok">Implemented</span></td>
+</tr>
+<tr>
+<td><strong>RapidOCR 3.10</strong> (ONNX models)</td>
+<td>OCR engine</td>
+<td>Reads scanned PDFs and photos (English, Hindi, Marathi) without admin install</td>
+<td><code>nyaya/ocr.py</code></td>
+<td>Page images (local)</td>
+<td><span class="st ok">Implemented</span></td>
+</tr>
+<tr>
+<td>python-docx, openpyxl, xlrd, python-pptx, striprtf, defusedxml</td>
+<td>Office/format readers</td>
+<td>Word, Excel, PowerPoint, RTF, OpenDocument, safe XML</td>
+<td><code>nyaya/parsing.py</code></td>
+<td>Uploaded files</td>
+<td><span class="st ok">Implemented</span></td>
+</tr>
+<tr>
+<td>fpdf2 + uharfbuzz</td>
+<td>PDF writer with Indic text shaping</td>
+<td>Export drafts to PDF with correct Hindi/Marathi</td>
+<td><code>nyaya/export.py</code></td>
+<td>Draft text</td>
+<td><span class="st ok">Implemented</span></td>
+</tr>
+<tr>
+<td>psycopg 3 + psycopg-pool</td>
+<td>Postgres driver</td>
+<td>Secure (TLS) pooled database connections</td>
+<td><code>nyaya/db.py</code></td>
+<td>All database traffic</td>
+<td><span class="st ok">Implemented</span></td>
+</tr>
+<tr>
+<td>httpx</td>
+<td>HTTP client</td>
+<td>Calls to Supabase Auth/Storage, Ollama, India Code, LiveLaw</td>
+<td>several</td>
+<td>Requests to those services</td>
+<td><span class="st ok">Implemented</span></td>
+</tr>
+<tr>
+<td>Web Speech API</td>
+<td>Browser speech service</td>
+<td>Optional voice input / read-aloud</td>
+<td><code>web/js/voice.js</code></td>
+<td>Speech handled by the browser</td>
+<td><span class="st ok">Implemented</span></td>
+</tr>
+<tr>
+<td>pytest</td>
+<td>Test framework</td>
+<td>Automated tests</td>
+<td><code>tests/</code> (9 files)</td>
+<td>Synthetic data only</td>
+<td><span class="st ok">Implemented</span></td>
+</tr>
+<tr>
+<td>Git + GitHub</td>
+<td>Version control</td>
+<td>History, review, backup of code</td>
+<td>Repository <code>SwarangiK-21/NyaySutra-AI</code></td>
+<td>Code (no secrets; <code>.env</code> is ignored)</td>
+<td><span class="st ok">Implemented</span></td>
+</tr>
+<tr>
+<td>SMTP mail server</td>
+<td>E-mail sending</td>
+<td>Optional e-mail reminders</td>
+<td><code>nyaya/mailer.py</code></td>
+<td>Reminder text</td>
+<td><span class="st part">Built, not configured</span></td>
+</tr>
+<tr>
+<td>ClamAV</td>
+<td>Virus scanner</td>
+<td>Optional extra upload scan</td>
+<td><code>nyaya/filescan.py</code></td>
+<td>Uploaded files</td>
+<td><span class="st part">Supported, not installed</span></td>
+</tr>
+<tr>
+<td>Tesseract OCR</td>
+<td>Alternative OCR engine</td>
+<td>Used instead of RapidOCR if installed</td>
+<td><code>nyaya/ocr.py</code></td>
+<td>Page images</td>
+<td><span class="st part">Supported, not installed</span></td>
+</tr>
+<tr>
+<td>Hosting / deployment / monitoring</td>
+<td>—</td>
+<td>—</td>
+<td>No cloud hosting, container, CI pipeline or monitoring service exists</td>
+<td>—</td>
+<td><span class="st plan">Planned</span></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Configuration</strong> lives in a private <code>.env</code> file that is never committed. Its setting <em>names</em> (values are secret and not shown) include: <code>SUPABASE_URL</code>, <code>SUPABASE_DB_URL</code>, <code>SUPABASE_SECRET_KEY</code>, <code>SUPABASE_PUBLISHABLE_KEY</code>, <code>SUPABASE_BUCKET</code>, <code>OLLAMA_API_KEY</code>, <code>OLLAMA_HOST</code>, <code>LLM_MODEL</code>, <code>FAST_LLM_MODEL</code>, <code>LLM_FALLBACK_MODEL</code>, <code>EMBED_MODEL</code>, <code>RERANK_MODEL</code>, <code>AUTH_MODE</code>, <code>SIGNUP_MODE</code>, <code>MFA_REQUIRED_ROLES</code>, <code>SESSION_TTL_HOURS</code>, <code>SESSION_IDLE_MINUTES</code>, <code>APP_SECRET_KEY</code>, <code>OCR_ENGINE</code>, <code>SMTP_HOST</code>, <code>DEFAULT_TIMEZONE</code> and the various limits.</p>
+<p><strong>Why Supabase?</strong> It gives the four building blocks the project needs — accounts, a Postgres database with row-level security, private file storage and an encrypted vault — as one managed service with a data centre in Mumbai, so the team did not have to build or run them itself. The project uses Supabase <em>from the server only</em>: the browser never talks to Supabase directly.</p>
+<p><strong>Needs verification:</strong> the exact data-retention and privacy terms of Ollama Cloud for prompts sent to it; the speech-processing location of each browser's speech service.</p>
+<h1 id="7-data-sources-and-legal-information-collection">7. Data Sources and Legal Information Collection</h1>
+<table>
+<thead>
+<tr>
+<th>Source</th>
+<th>Type</th>
+<th>How NyaySutra accesses it</th>
+<th>Used for</th>
+<th>Limits / notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>India Code</strong> (indiacode.gov.in), Legislative Department, Ministry of Law &amp; Justice</td>
+<td>Primary legislation (central and state acts)</td>
+<td><strong>Official public REST API</strong> (DSpace) — by a download script for the core set, and live from the <em>All-India catalogue</em> for imports; daily update check</td>
+<td>Bare-act library, section lookup, research, provision verification</td>
+<td>Coverage is what India Code holds; some acts appear twice, some lack an English file; consolidations may lag amendments. Attribution shown on every act ("India Code").</td>
+</tr>
+<tr>
+<td><strong>eCourts district court portal</strong> (s3waas.gov.in host)</td>
+<td>Copy of the IPC text (India Code text)</td>
+<td><strong>One-time manual download</strong> (address recorded in the download script)</td>
+<td>IPC kept for pending matters</td>
+<td>IPC was repealed from 1 July 2024; labelled as repealed.</td>
+</tr>
+<tr>
+<td><strong>Indian Kanoon</strong> (indiankanoon.org)</td>
+<td>Case-law (judgments)</td>
+<td><strong>Manual download of three judgment PDFs</strong> stored in the library. <em>No Indian Kanoon API or scraping exists in the code.</em></td>
+<td>Sample precedents</td>
+<td>Three judgments only — not a case-law database. One file's date in the source name is a placeholder. Indian Kanoon's terms apply to the downloaded copies.</td>
+</tr>
+<tr>
+<td><strong>LiveLaw</strong> (livelaw.in)</td>
+<td>Legal news</td>
+<td><strong>Official RSS feed</strong>, polled hourly</td>
+<td>Headlines on <em>Updates</em> and in search</td>
+<td>Headlines and links only; full articles open on livelaw.in.</td>
+</tr>
+<tr>
+<td><strong>eCourts, Supreme Court, Bombay High Court, Maharashtra Police citizen portal</strong></td>
+<td>Case status, FIRs</td>
+<td><strong>Links only</strong> — opened by the user (CAPTCHA, no API). Never automated.</td>
+<td>Case-information search helper</td>
+<td>Users may import what they obtain themselves.</td>
+</tr>
+<tr>
+<td><strong>LatestLaws</strong></td>
+<td>Legal news / research</td>
+<td><strong>Link only</strong> (no feed; robots.txt disallows its API)</td>
+<td>Listed as a manual source</td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>User uploads</strong></td>
+<td>Client papers, orders, notices</td>
+<td>Uploaded by the lawyer</td>
+<td>Case research, drafting, summaries</td>
+<td>Confidential; private storage; per-case access.</td>
+</tr>
+<tr>
+<td><strong>Curated awareness content</strong> (<code>data/awareness/awareness.json</code>)</td>
+<td>Secondary, plain-language explanations with official links</td>
+<td>Written into the project</td>
+<td>Awareness pages</td>
+<td>8 items; "last verified" dates shown.</td>
+</tr>
+<tr>
+<td><strong>Draft templates</strong> (<code>data/library/drafts/</code>)</td>
+<td>Drafting models</td>
+<td>Written into the project</td>
+<td>Drafting</td>
+<td>Templates are not authority and are excluded from research answers.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Data quality and reliability.</strong> Statutes are taken from the official government source and labelled with their jurisdiction; repealed acts are labelled; each imported act records where and when it was fetched. Every answer shows exactly which passage was used, so the lawyer can verify it. <strong>Coverage is not comprehensive:</strong> the library holds 31 acts and 3 judgments; any other law must be added (or is simply not available to the assistant).</p>
+<h1 id="8-rag-explained-in-simple-language">8. RAG Explained in Simple Language</h1>
+<p><strong>Why an ordinary chatbot may be wrong.</strong> A large language model (LLM) is a program trained on a huge amount of text to predict good next words. It writes fluent answers from memory — but its memory can be old, incomplete or mixed up, and it does not show where a statement came from. When it does not know, it may still produce a plausible-sounding section number. This is called a <strong>hallucination</strong>.</p>
+<p><strong>What RAG does.</strong> <em>Retrieval-Augmented Generation</em> means: <strong>first find the relevant pages, then let the AI write only from those pages.</strong> It is like giving a research assistant the exact law-book pages before asking the question, and requiring every sentence to point to a page.</p>
+<figure><img src="diagrams/rag_pipeline.svg" alt="RAG pipeline"><figcaption>Figure 2 — The RAG pipeline as implemented: preparing documents (A) and answering a question (B).</figcaption></figure>
+
+<p><strong>Key ideas, as used in NyaySutra:</strong></p>
+<ul>
+<li><strong>Chunking</strong> — long documents are cut into passages that respect legal units: one passage per section for Acts, groups of numbered paragraphs for judgments, clauses for contracts. Each passage carries a header such as <em>"The Indian Contract Act, 1872 — Section 73"</em>.</li>
+<li><strong>Embeddings</strong> — each passage is turned into a list of 384 numbers that captures its meaning, so "get my deposit back" can match a passage about "refund of security". This runs on our own server.</li>
+<li><strong>Hybrid search</strong> — three searches together: an <strong>exact lookup</strong> ("Section 138 NI Act" must return exactly that section), a <strong>keyword search</strong> (rare words and names) and a <strong>meaning (vector) search</strong>. Their results are combined, then a <strong>re-ranker</strong> model reads question and passage together and keeps the best (about 8). Only documents the user is allowed to see, and only central law plus the chosen State's acts, are searched.</li>
+<li><strong>Context and citations</strong> — the chosen passages are numbered and given to the language model, wrapped in markers that text inside a document cannot break out of, with the rule "use ONLY these sources; cite [n] for every point; say if the sources do not cover something".</li>
+<li><strong>If evidence is weak</strong> — the agent rewrites the search once; if still weak, it says that the sources do not cover the question instead of guessing.</li>
+</ul>
+<p><strong>Example, start to finish.</strong> <em>Question:</em> "Can my client recover the security deposit, and within what time must she file a suit?" → the app recognised a research question (planner, gpt-oss:20b) → searched the case file and library, restricted to central law + Maharashtra → found 8 passages including the Limitation Act's Schedule (Articles 70 and 67) and CPC Order XIV → gpt-oss:120b wrote the answer citing them → the audit found one unsupported point and showed it → the trace listed every step and model.</p>
+<p><strong>Remaining risks (stated plainly).</strong> The answer can only be as good as the library: a missing State act or an amendment not yet reflected in India Code's file will not be found. The model can still misread a correct passage. The audit catches some but not all errors. Answers must be checked by a qualified lawyer.</p>
+<h1 id="9-ai-agents-and-architecture-of-the-assistant">9. AI Agents and Architecture of the Assistant</h1>
+<p><strong>Verdict: NyaySutra uses a single "agentic" pipeline, not a multi-agent system.</strong> One planner decides which of five tools to use for each question; the tools are ordinary code paths, not independent agents talking to each other. (A proposal for supervisor/specialist agents was reviewed in October 2026 and deliberately not built.)</p>
+<figure><img src="diagrams/agent_flow.svg" alt="Agent flow"><figcaption>Figure 3 — The research agent: checks, one planner, allow-listed tools, verification and fallback.</figcaption></figure>
+
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Input</th>
+<th>Output</th>
+<th>Can call</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Access check (server)</td>
+<td>User, chosen case/document/chat</td>
+<td>Allowed scope</td>
+<td>Database</td>
+</tr>
+<tr>
+<td>Request screening (code)</td>
+<td>Question</td>
+<td>Continue, or a fixed refusal</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Planner (gpt-oss:20b)</td>
+<td>Question, short history, list of case documents</td>
+<td>One tool + validated arguments (JSON)</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Research tool</td>
+<td>Question, scope, jurisdiction</td>
+<td>Cited answer</td>
+<td>Search engine, gpt-oss:120b</td>
+</tr>
+<tr>
+<td>Drafting tool</td>
+<td>Request, templates, law passages</td>
+<td>Draft with placeholders</td>
+<td>Search engine, gpt-oss:120b</td>
+</tr>
+<tr>
+<td>Document analysis tool</td>
+<td>One document</td>
+<td>Summary / timeline / issues / parties / arguments</td>
+<td>gpt-oss:120b</td>
+</tr>
+<tr>
+<td>Limitation calculator</td>
+<td>Proceeding type, start date</td>
+<td>Last date + basis</td>
+<td>Plain code</td>
+</tr>
+<tr>
+<td>Short chat</td>
+<td>Greeting</td>
+<td>Short reply</td>
+<td>gpt-oss:20b</td>
+</tr>
+<tr>
+<td>Citation audit + output filter</td>
+<td>Answer + sources</td>
+<td>Supported / list of issues; cleaned text</td>
+<td>Code + gpt-oss:20b</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Fallback behaviour:</strong> retries with back-off; a circuit breaker after 4 failures for 60 seconds; the backup model; answers labelled when the backup was used; incomplete answers labelled. If the planner fails, the request is treated as research. Background jobs re-check the user's permission when they run and are retried up to a limit, then marked failed with the reason.</p>
+<h1 id="10-system-architecture">10. System Architecture</h1>
+<figure><img src="diagrams/architecture.svg" alt="Architecture"><figcaption>Figure 4 — Verified components and data flow (no secrets or internal addresses shown).</figcaption></figure>
+
+<p>In plain terms:</p>
+<ul>
+<li><strong>The browser</strong> shows the screens. It never holds passwords, database keys or AI keys — only a session cookie.</li>
+<li><strong>The NyaySutra server</strong> (Python, FastAPI) is the only part that talks to Supabase, the language model and India Code. It checks who you are and what you may do on every request.</li>
+<li><strong>Supabase</strong> stores accounts, data and files in the Mumbai region, and enforces its own access rules as a second safety layer.</li>
+<li><strong>Local models</strong> (embeddings, re-ranker, OCR) run on the server itself, so passages and scans are processed without leaving it.</li>
+<li><strong>Ollama Cloud</strong> hosts the language models; it receives only the question and the selected passages, with identity numbers masked.</li>
+<li><strong>Background workers</strong> handle slow work (reading files, OCR, summaries, drafts, reminders) so the screens stay responsive.</li>
+</ul>
+<p><strong>Code and documentation disagreements found.</strong> Some code comments still describe SQLite as the main database (the app supports both; the live system uses Supabase Postgres). <code>docs/IMPLEMENTATION_PLAN.md</code> describes the state of 22 October 2026 (single user, SQLite, "Tesseract not installed") and is now outdated. The git history shows an earlier Streamlit + LangGraph prototype that the current code no longer uses.</p>
+<h1 id="11-database-and-storage-design">11. Database and Storage Design</h1>
+<figure><img src="diagrams/database.svg" alt="Database design"><figcaption>Figure 5 — Simplified, sanitised view of the main tables (34 in total).</figcaption></figure>
+
+<ul>
+<li><strong>People and access:</strong> <code>profiles</code> (one per account), <code>memberships</code> (role in the organisation), <code>invitations</code>, <code>app_sessions</code> (only a fingerprint of the session cookie is stored), <code>recovery_codes</code> (stored as one-way fingerprints).</li>
+<li><strong>Matters:</strong> <code>cases</code>, <code>case_members</code> (owner / lawyer), <code>case_notes</code>, <code>case_provisions</code>, <code>drafts</code> and <code>draft_versions</code>.</li>
+<li><strong>Documents and search:</strong> <code>documents</code> (one row per file or act, with jurisdiction, status and a checksum to detect duplicates), <code>chunks</code> (the passages with their meaning vectors and keyword index), <code>doc_derivatives</code> (translations and summaries).</li>
+<li><strong>Personal records:</strong> <code>chats</code> and <code>messages</code>, <code>search_history</code>, <code>calendar_events</code> and <code>event_reminders</code>, <code>notifications</code>, <code>user_prefs</code>.</li>
+<li><strong>System:</strong> <code>jobs</code>, <code>upload_batches</code>, <code>batch_items</code>, <code>audit_log</code>, <code>integrations</code>, <code>sync_log</code>, <code>source_records</code>, <code>organizations</code>, <code>org_settings</code>, <code>meta</code>, <code>auth_throttle</code>.</li>
+</ul>
+<p><strong>File lifecycle.</strong> Upload → checks → stored in the private bucket <code>case-files</code> under a server-generated name → text extracted and indexed → shown only through the server after an access check → deleted together with its passages when the document or case is deleted. Office files are always downloaded rather than displayed inside the app. Library acts are stored on the server's disk under <code>data/library/</code>.</p>
+<p><strong>How users' records are separated.</strong> Every request is checked by the server; in addition, <strong>row-level security</strong> (RLS) is switched on for all 34 tables: the database itself only returns rows the current user may see (their cases, their chats, their calendar). The database's public Data API is closed to browser roles, and the audit log cannot be edited or deleted by the application.</p>
+<h1 id="12-security-privacy-and-ai-guardrails">12. Security, Privacy and AI Guardrails</h1>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>In code?</th>
+<th>Tested?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Accounts via Supabase Auth; e-mail verification; password rules</td>
+<td>Yes</td>
+<td>Automated tests (with a fake Auth server) + live test</td>
+</tr>
+<tr>
+<td>Two-step verification (authenticator codes), recovery codes, device list</td>
+<td>Yes</td>
+<td>Automated + live test</td>
+</tr>
+<tr>
+<td>Server-side sessions; HttpOnly, SameSite=Strict cookie; CSRF token; host/origin checks; idle and absolute expiry</td>
+<td>Yes</td>
+<td>Automated tests</td>
+</tr>
+<tr>
+<td>Account lockout (5 failures / 15 min); rate limits on sign-in, sign-up, chat (20/min), uploads (60/min)</td>
+<td>Yes</td>
+<td>Automated tests</td>
+</tr>
+<tr>
+<td>Roles (Lawyer, Administrator) and per-case access, checked on every request</td>
+<td>Yes</td>
+<td>Automated tests incl. cross-user isolation</td>
+</tr>
+<tr>
+<td>Row-level security on all 34 tables; Data API closed</td>
+<td>Yes</td>
+<td>Live tests against Supabase (another user, an anonymous caller and an escalation attempt are refused)</td>
+</tr>
+<tr>
+<td>Upload checks: type allow-list, content signature, PDF JavaScript, Office macros / embedded objects / external links, size</td>
+<td>Yes</td>
+<td>Automated tests</td>
+</tr>
+<tr>
+<td>Virus scanning (ClamAV)</td>
+<td>Partly</td>
+<td><strong>Not installed</strong></td>
+</tr>
+<tr>
+<td>Prompt-injection defences: hidden-character removal, request screening, source delimiters, injection flags, allow-listed tools</td>
+<td>Yes</td>
+<td>Automated tests</td>
+</tr>
+<tr>
+<td>Output filter (secrets, internal instructions); citation verification</td>
+<td>Yes</td>
+<td>Automated tests</td>
+</tr>
+<tr>
+<td>Identity numbers masked before text reaches the language model; log redaction</td>
+<td>Yes</td>
+<td>Automated tests</td>
+</tr>
+<tr>
+<td>Audit log (actor, role, IP, outcome; never document contents), append-only</td>
+<td>Yes</td>
+<td>Automated + live test</td>
+</tr>
+<tr>
+<td>Secrets in <code>.env</code> only, never committed; tokens in Vault</td>
+<td>Yes</td>
+<td>Checked before each commit</td>
+</tr>
+<tr>
+<td>Leaked-password protection (Supabase setting)</td>
+<td>—</td>
+<td><strong>Off</strong> — recommended to enable</td>
+</tr>
+<tr>
+<td>Independent penetration test, backups, monitoring/alerting</td>
+<td>—</td>
+<td><strong>Not done</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>What this does <em>not</em> mean.</strong> These controls exist and are covered by automated tests, but the system has <strong>not</strong> been independently audited and is <strong>not</strong> claimed to be fully secure. Names, addresses and facts are sent to the language model when needed for analysis (only identity numbers are masked) — clients' consent and the provider's terms must be considered before real data is used.</p>
+<p><strong>Recommended additional tests:</strong> an external penetration test; automated dependency vulnerability scanning; a load test; a restore-from-backup drill; red-team prompt-injection documents in Hindi and Marathi.</p>
+<h1 id="13-legal-safety-and-responsible-ai">13. Legal Safety and Responsible AI</h1>
+<ul>
+<li><strong>Information, not advice.</strong> Every answer carries the notice <em>"AI research aid, not legal advice — verify citations in the primary source."</em> Drafts are labelled DRAFT until a lawyer approves a specific version.</li>
+<li><strong>Source verification.</strong> Statutes come from India Code; each citation opens the exact passage and page; provisions suggested for a case are checked against the library.</li>
+<li><strong>Uncertainty.</strong> When the sources are weak the assistant says so; unsupported points are listed by the citation audit; uncertain OCR words are marked <code>[?word]</code>; unknown facts in drafts stay as <code>[●]</code>.</li>
+<li><strong>Outdated law and jurisdiction.</strong> Acts may have been amended after India Code's file; repealed acts are labelled; State acts apply only in their State and answers are told to say whether a provision is central or State law. The library does not cover all States or all areas of law.</li>
+<li><strong>Sensitive data.</strong> Identity numbers are masked before AI calls; consent is asked before sending a document to the AI for translation or summary; chat retention can be limited.</li>
+<li><strong>When to consult a lawyer.</strong> Always before relying on an answer for advice, filing or litigation; whenever the audit flags issues; whenever the matter involves a State or area of law not in the library.</li>
+</ul>
+<h1 id="14-user-interface-and-pages">14. User Interface and Pages</h1>
+<table>
+<thead>
+<tr>
+<th>Page (menu)</th>
+<th>Purpose</th>
+<th>Main actions</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Sign in / Create account / Forgot password</td>
+<td>Access</td>
+<td>Sign in, register, reset, two-step code</td>
+</tr>
+<tr>
+<td>Dashboard</td>
+<td>Overview</td>
+<td>Start research, new case, quick links, upcoming items, updates</td>
+</tr>
+<tr>
+<td>Case Files</td>
+<td>Matters</td>
+<td>List and filter, create, open; tabs Overview / Documents / Provisions / Notes &amp; orders / People</td>
+</tr>
+<tr>
+<td>Case Search</td>
+<td>Identifier search</td>
+<td>Validate numbers, find workspace matches, open official portals, import</td>
+</tr>
+<tr>
+<td>Legal Research</td>
+<td>Cited AI answers</td>
+<td>Matters panel (matter, scope, jurisdiction), Recent History drawer, Sources panel, voice, new chat</td>
+</tr>
+<tr>
+<td>Drafting / Legal notice</td>
+<td>Drafts</td>
+<td>Generate, edit, review, approve, export Word/PDF</td>
+</tr>
+<tr>
+<td>Calendar</td>
+<td>Planning</td>
+<td>Month/week/day, new entry, complete, reschedule, cancel, delete, desktop alerts</td>
+</tr>
+<tr>
+<td>Bare Acts</td>
+<td>Law library</td>
+<td>Section lookup, filter by jurisdiction, All-India catalogue, judgments</td>
+</tr>
+<tr>
+<td>Awareness</td>
+<td>Public legal information</td>
+<td>Choose State and topic</td>
+</tr>
+<tr>
+<td>Updates</td>
+<td>Notifications and news</td>
+<td>Mark read, sources status, LiveLaw headlines, activity log (admin)</td>
+</tr>
+<tr>
+<td>Tools</td>
+<td>Utilities</td>
+<td>Limitation calculator, draft templates, jobs, privacy settings, about</td>
+</tr>
+<tr>
+<td>Account</td>
+<td>Personal settings</td>
+<td>Name, password, two-step, signed-in devices</td>
+</tr>
+<tr>
+<td>Administration (admin only)</td>
+<td>People and roles</td>
+<td>Users, roles, disable, invitations, audit log</td>
+</tr>
+<tr>
+<td>Header controls</td>
+<td>Accessibility</td>
+<td>Text size A−/A/A+, high contrast, English/हिंदी, system status, notification bell</td>
+</tr>
+</tbody>
+</table>
+<p>The screenshots in this document were taken from the running prototype with <strong>synthetic sample data</strong> created for this purpose and deleted afterwards. The administration page is described from the code; it was not captured.</p>
+<h1 id="15-api-and-integration-inventory">15. API and Integration Inventory</h1>
+<p>The server exposes about <strong>114 routes</strong>. Grouped by purpose (no credentials or payloads shown):</p>
+<table>
+<thead>
+<tr>
+<th>Group</th>
+<th>Examples</th>
+<th>Purpose</th>
+<th>Errors returned</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Session &amp; auth</td>
+<td><code>/api/session</code>, <code>/api/auth/login</code>, <code>/api/auth/signup</code>, <code>/api/auth/mfa/*</code>, <code>/api/auth/password/*</code>, <code>/auth/callback</code></td>
+<td>Sign-in, two-step, reset</td>
+<td>401 not signed in, 403 forbidden, 429 too many attempts</td>
+</tr>
+<tr>
+<td>Cases &amp; people</td>
+<td><code>/api/cases</code>, <code>/api/cases/{id}/members</code>, <code>/notes</code>, <code>/provisions</code></td>
+<td>Matters and access</td>
+<td>404 for cases the user cannot see (does not reveal they exist)</td>
+</tr>
+<tr>
+<td>Documents</td>
+<td><code>/api/cases/{id}/documents</code>, <code>/api/documents/{id}/file</code>, <code>/text</code>, <code>/intel</code>, <code>/translate</code>, <code>/summarize</code>, <code>/reprocess</code>, <code>/api/batches</code></td>
+<td>Upload, view, AI on documents</td>
+<td>415 wrong file type, 413 too large, clear reasons for quarantined files</td>
+</tr>
+<tr>
+<td>Research</td>
+<td><code>/api/chat</code> (streaming), <code>/api/chats</code>, <code>/api/history</code>, <code>/api/search</code>, <code>/api/library/*</code>, <code>/api/jurisdictions</code></td>
+<td>Answers, history, search, library</td>
+<td>Error events in the stream; 422 invalid input</td>
+</tr>
+<tr>
+<td>Drafting</td>
+<td><code>/api/drafting/*</code>, <code>/api/drafts/*</code></td>
+<td>Drafts and export</td>
+<td>409 if approval is blocked by placeholders</td>
+</tr>
+<tr>
+<td>Calendar</td>
+<td><code>/api/calendar/*</code></td>
+<td>Entries and reminders</td>
+<td>400 invalid dates/times, 404 for others' entries</td>
+</tr>
+<tr>
+<td>Jobs &amp; updates</td>
+<td><code>/api/jobs/*</code>, <code>/api/notifications</code>, <code>/api/news</code>, <code>/api/integrations/*</code></td>
+<td>Background work, bell, news</td>
+<td>Job states: queued, processing, completed, partial, failed, dead, cancelled</td>
+</tr>
+<tr>
+<td>Administration</td>
+<td><code>/api/admin/*</code>, <code>/api/audit</code></td>
+<td>Users, roles, invitations, log</td>
+<td>403 for non-administrators</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Outbound integrations:</strong> Supabase Auth, Postgres, Storage and Vault; Ollama Cloud; India Code API; LiveLaw RSS; optional SMTP. Each external call has time limits and readable error messages; India Code calls are restricted to <code>indiacode.gov.in</code>.</p>
+<h1 id="16-testing-and-validation">16. Testing and Validation</h1>
+<p><strong>Automated tests (executed on 25 October 2026):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Test file</th>
+<th>What it checks</th>
+<th>Tests</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>test_security.py</code></td>
+<td>Accounts, two-step, sessions, CSRF, roles, cross-user isolation, uploads, guardrails, audit, redaction</td>
+<td>35</td>
+</tr>
+<tr>
+<td><code>test_features.py</code></td>
+<td>Case forms, case search and record import, news-feed sync, languages, OCR rules, translation, summaries, provisions, drafting, export, awareness, unified search, retention</td>
+<td>29</td>
+</tr>
+<tr>
+<td><code>test_reliability.py</code></td>
+<td>Job queue, retries, cancellation, OCR checkpoints, LLM fallback, draft review, act versions</td>
+<td>18</td>
+</tr>
+<tr>
+<td><code>test_upgrades.py</code></td>
+<td>Open sign-up, personas, India Code catalogue/import, jurisdiction filter, history, calendar, reminders, e-mail retries</td>
+<td>13</td>
+</tr>
+<tr>
+<td><code>test_formats.py</code></td>
+<td>Every upload format, OCR on scanned PDFs and photos, refusal of macros/embedded objects</td>
+<td>11 functions (15 cases)</td>
+</tr>
+<tr>
+<td><code>test_core.py</code>, <code>test_api.py</code>, <code>test_supabase.py</code></td>
+<td>Chunking, retrieval, chat stream, Supabase layer</td>
+<td>7 + 6 + 9</td>
+</tr>
+<tr>
+<td><code>test_live_security.py</code> (opt-in, real Supabase)</td>
+<td>Row-level security, calendar/history privacy, auth + two-step + Vault, job queue</td>
+<td>4</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Results:</strong> 131 offline tests passed (5 live tests skipped in that run); the 4 live security tests passed when run against the real project with the app stopped. One live test in <code>test_supabase.py</code> was <strong>not re-run</strong> during this documentation pass. Offline tests use a fake language model and fake embeddings, so they test the plumbing and safety logic, <strong>not answer quality</strong>.</p>
+<p><strong>Manual checks performed while preparing this document</strong> (synthetic data): sign-up as Lawyer; scanned PDF OCR; every upload format; research answer with citations and audit; jurisdiction-filtered answer from an imported Karnataka act; calendar reminder delivered by the server; Recent History; India Code catalogue.</p>
+<p><strong>Proposed manual test cases (not yet executed):</strong></p>
+<table class="numbered">
+<thead>
+<tr>
+<th>#</th>
+<th>Scenario</th>
+<th>Expected result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Ask about a law not in the library</td>
+<td>Says the sources do not cover it; no invented section</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Search with no results</td>
+<td>Clear "no results" message</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Upload an <code>.exe</code> renamed to <code>.pdf</code>, a macro Excel file, a 60 MB file</td>
+<td>Each refused with a reason</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Language-model service unreachable</td>
+<td>Backup model used and labelled, or a clear error</td>
+</tr>
+<tr>
+<td>5</td>
+<td>India Code unreachable</td>
+<td>Catalogue shows "India Code did not respond"</td>
+</tr>
+<tr>
+<td>6</td>
+<td>User B opens user A's case/chat/calendar link</td>
+<td>"Not found"</td>
+</tr>
+<tr>
+<td>7</td>
+<td>A document containing "ignore previous instructions…"</td>
+<td>Passage flagged; instructions not followed</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Ask the assistant to forge a document</td>
+<td>Fixed refusal</td>
+</tr>
+<tr>
+<td>9</td>
+<td>Compare 20 answers against the cited passages by a lawyer</td>
+<td>Measure accuracy of citations (no figure exists yet)</td>
+</tr>
+<tr>
+<td>10</td>
+<td>Very large batch upload / many users at once</td>
+<td>Measure speed and failures (no load test yet)</td>
+</tr>
+</tbody>
+</table>
+<h1 id="17-current-progress-and-remaining-work">17. Current Progress and Remaining Work</h1>
+<p><strong>Completed and verified</strong></p>
+<ul>
+<li>Accounts with e-mail verification, two-step verification, sessions, lockout; two personas; public sign-up as Lawyer.</li>
+<li>Matters with per-case access; database row-level security on all tables; audit log.</li>
+<li>Upload of 21 file extensions (PDF, Word, Excel, CSV, PowerPoint, OpenDocument, RTF, text, images) with safety checks; OCR for scans (English, Hindi, Marathi); background processing with progress, retries and cancellation.</li>
+<li>Hybrid search (exact + keyword + meaning) with re-ranking and jurisdiction filter; cited answers with citation audit and trace.</li>
+<li>Law library of 31 acts; live India Code catalogue for all 36 States/UTs with import.</li>
+<li>Drafting with placeholders, review and export; provisions with verification; limitation calculator.</li>
+<li>Calendar with server-side reminders; Recent History; dashboard; unified search; LiveLaw headlines; English/Hindi interface.</li>
+</ul>
+<p><strong>Partially completed</strong></p>
+<ul>
+<li>Case-law coverage (3 sample judgments; no licensed database).</li>
+<li>State coverage (catalogue for all States, but only 2 State acts indexed; Maharashtra-specific helpers).</li>
+<li>Case-status lookup (official links only; no automation possible without an API).</li>
+<li>E-mail reminders (built; SMTP not configured). Virus scanning (supported; not installed).</li>
+<li>Awareness content (central + Maharashtra only).</li>
+</ul>
+<p><strong>Planned / not implemented</strong></p>
+<ul>
+<li>Hosting on a server with HTTPS, backups and monitoring; a production deployment process.</li>
+<li>Independent security review; dependency scanning; load testing.</li>
+<li>A measured answer-quality evaluation with lawyers.</li>
+</ul>
+<p><strong>Prioritised next steps (recommendations)</strong></p>
+<ol>
+<li><strong>Answer-quality evaluation</strong> — have lawyers rate 50–100 answers against their citations; this is the most important evidence for mentors and users.</li>
+<li><strong>Turn on leaked-password protection and install ClamAV</strong> — low effort, real risk reduction.</li>
+<li><strong>Expand the library</strong> for the States the users practise in (import from the catalogue) and add a licensed or properly permitted judgment source.</li>
+<li><strong>Hosting with HTTPS, backups and monitoring</strong> — required before any real client data.</li>
+<li><strong>Configure SMTP</strong> if e-mail reminders are wanted.</li>
+<li><strong>Security review</strong> by an independent tester.</li>
+</ol>
+<h1 id="18-known-limitations-and-risks">18. Known Limitations and Risks</h1>
+<p><strong>Observed (seen during testing):</strong></p>
+<ul>
+<li>OCR is slow on long scans (a 36-page scan took about 9½ minutes) and weaker on poor scans.</li>
+<li>India Code sometimes lists the same act twice and some acts have no English file.</li>
+<li>The citation audit flagged a real slip in a test answer — evidence that the model does make mistakes.</li>
+<li>The connection to Supabase occasionally timed out on this computer's network, which stopped background work until it recovered.</li>
+<li>A question combining two unrelated topics may retrieve sources for only one of them.</li>
+<li>Fixed while preparing this document: the dashboard showed 0 case documents (now counts correctly).</li>
+</ul>
+<p><strong>Possible risks (not yet observed):</strong></p>
+<ul>
+<li>Missing or outdated law leading to an incomplete answer; jurisdiction mistakes when a matter spans States.</li>
+<li>Dependence on external services (Ollama Cloud, Supabase, India Code); cost and rate limits of the AI provider — no cost figures have been measured.</li>
+<li>Scalability: the meaning-search index is held in memory (fine for ~10,000 passages; would need a dedicated vector index for much larger libraries); one server process.</li>
+<li>Privacy: case facts and names are sent to the AI provider; client consent and the provider's terms must be confirmed.</li>
+</ul>
+<h1 id="19-mentor-demonstration-guide-about-8-minutes">19. Mentor Demonstration Guide (about 8 minutes)</h1>
+<table class="numbered">
+<thead>
+<tr>
+<th>#</th>
+<th>Do this</th>
+<th>Show</th>
+<th>Behind the scenes</th>
+<th>Say</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Open <code>http://127.0.0.1:8000</code> signed out</td>
+<td>Public Bare Acts page; English/हिंदी switch</td>
+<td>Library served from the server</td>
+<td>"Anyone can read the official law text without an account."</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Sign in (with your authenticator code)</td>
+<td>Dashboard</td>
+<td>Supabase Auth + two-step + server session</td>
+<td>"Every lawyer has a private, two-step-protected account."</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Open a sample case → <em>Documents</em> → drop a scanned PDF</td>
+<td>Upload progress, then "ready"</td>
+<td>Safety checks, private storage, OCR, indexing</td>
+<td>"Even scanned papers become searchable."</td>
+</tr>
+<tr>
+<td>4</td>
+<td><em>Legal Research</em> → ☰ Matters → choose the case and its State</td>
+<td>Context line "Central + Maharashtra"</td>
+<td>Access and jurisdiction filters</td>
+<td>"We tell it which matter and which State's law apply."</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Ask: <em>"Can my client recover the security deposit, and within what time must she sue?"</em></td>
+<td>Answer streaming with [1] [2]</td>
+<td>Hybrid search → re-rank → model writes only from sources</td>
+<td>"It answers only from the passages it found."</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Open <em>Sources</em>, click a citation</td>
+<td>The exact passage and PDF page</td>
+<td>Citations are links to stored passages</td>
+<td>"Every point can be checked in the original."</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Expand <em>How this answer was produced</em></td>
+<td>Steps and models; audit box</td>
+<td>Trace and citation audit</td>
+<td>"If a point is not supported, it tells us."</td>
+</tr>
+<tr>
+<td>8</td>
+<td><em>Bare Acts</em> → <em>All-India catalogue</em> → choose a State → search</td>
+<td>Live India Code list</td>
+<td>Official India Code API</td>
+<td>"We can add any State's act from the official source."</td>
+</tr>
+<tr>
+<td>9</td>
+<td><em>Calendar</em> → new deadline with reminder</td>
+<td>Entry and upcoming list</td>
+<td>Server-side reminder scheduling</td>
+<td>"Reminders arrive even when the app is closed."</td>
+</tr>
+<tr>
+<td>10</td>
+<td>Open <em>Recent History</em></td>
+<td>Past conversations and searches</td>
+<td>Per-user, protected records</td>
+<td>"Previous research is one click away."</td>
+</tr>
+</tbody>
+</table>
+<p><em>Tip:</em> prepare the sample case and the scanned PDF before the meeting; OCR of a long scan takes minutes.</p>
+<h1 id="20-likely-mentor-questions-and-suggested-answers">20. Likely Mentor Questions and Suggested Answers</h1>
+<ol>
+<li><strong>Why Supabase?</strong> It gives us accounts, a database with row-level security, private file storage and an encrypted vault as one managed service in Mumbai, so we did not have to build those ourselves.</li>
+<li><strong>What is RAG and why is it necessary?</strong> Retrieve first, then answer only from what was retrieved. It makes answers checkable and reduces invented citations.</li>
+<li><strong>How do we obtain legal data?</strong> Acts from India Code's official API; three sample judgments downloaded manually; news from LiveLaw's RSS; the rest is uploaded by the lawyer.</li>
+<li><strong>How is Indian Kanoon used?</strong> Only as the source of three judgment PDFs downloaded manually as samples. There is no Indian Kanoon API integration.</li>
+<li><strong>How are citations generated and checked?</strong> Passages are numbered; the model must cite [n]; code checks every number and looks for unsupported sections, cases and dates; a second model double-checks; issues are shown.</li>
+<li><strong>What if the AI is wrong?</strong> The audit may flag it; every claim links to its source; the answer is labelled not legal advice; a lawyer must verify.</li>
+<li><strong>How do we protect user data?</strong> Private accounts with two-step, per-case access checked by the server and again by the database, private file storage, masked identity numbers, redacted logs, an audit log.</li>
+<li><strong>What are RBAC and RLS?</strong> Role-based access control decides what a <em>type</em> of user may do (Lawyer vs Administrator). Row-level security makes the <em>database itself</em> return only the rows a user may see.</li>
+<li><strong>What if an agent or external API fails?</strong> Retries, a circuit breaker and a backup model for the AI; clear messages if India Code or news is down; background jobs are retried and never left hanging.</li>
+<li><strong>How do we handle large volumes of documents?</strong> Background workers, batch uploads with limits, passages indexed once and searched quickly; at much larger scale we would move to a dedicated vector index and more workers.</li>
+<li><strong>How is it tested?</strong> 131 automated offline tests and 4 live tests against Supabase, plus manual checks with synthetic data. Answer quality has not yet been measured by lawyers.</li>
+<li><strong>What are the current limitations?</strong> Library coverage, sample-only case law, local-only deployment, OCR speed, no independent security audit.</li>
+<li><strong>How could it become production-ready?</strong> Hosting with HTTPS, backups, monitoring, a security review, a quality evaluation, wider library, a licensed judgment source and clear data-processing agreements.</li>
+<li><strong>Which AI models do you use?</strong> gpt-oss:120b for answers and gpt-oss:20b for fast tasks and as backup, via Ollama Cloud; local models for embeddings, re-ranking and OCR.</li>
+<li><strong>Does client data go to the AI company?</strong> The question and selected passages do, with identity numbers masked; files and embeddings stay with us and Supabase.</li>
+<li><strong>Is it a multi-agent system?</strong> No — one planner with five tools. That is simpler to secure and test; multiple agents were considered and not needed yet.</li>
+<li><strong>How do you handle State laws?</strong> Every act is tagged Central or with its State; research is limited to central law plus the chosen State; other States' acts can be imported from India Code.</li>
+<li><strong>Can it read Hindi and Marathi?</strong> Yes — uploads in those languages, OCR of scans, summaries and answers; the interface is English/Hindi.</li>
+<li><strong>What stops prompt injection in a document?</strong> Hidden characters removed, passages wrapped in unbreakable markers, instruction-like text flagged, and the model can only choose from allow-listed tools — the server, not the model, decides which data may be used.</li>
+<li><strong>Why not let it fetch case status automatically?</strong> Court portals use CAPTCHAs and offer no public API; bypassing them would be wrong. We link to the official page instead.</li>
+<li><strong>What does it cost to run?</strong> Not measured yet. Costs would come from the AI provider, Supabase and hosting.</li>
+<li><strong>How do you keep secrets safe?</strong> Keys live only in a private <code>.env</code> file on the server, never in the code or browser; sign-in tokens are encrypted in Supabase Vault.</li>
+</ol>
+<h1 id="21-glossary">21. Glossary</h1>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Simple meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>API</td>
+<td>A defined way for one program to ask another for data or actions — like a counter where requests are handed in.</td>
+</tr>
+<tr>
+<td>Endpoint / route</td>
+<td>One specific "counter window" of an API, e.g. <code>/api/chat</code>.</td>
+</tr>
+<tr>
+<td>Frontend</td>
+<td>What runs in the browser: screens and buttons.</td>
+</tr>
+<tr>
+<td>Backend / server</td>
+<td>The program that does the work behind the screens and talks to databases and AI.</td>
+</tr>
+<tr>
+<td>Database</td>
+<td>Organised storage of records (tables of rows and columns).</td>
+</tr>
+<tr>
+<td>Cloud storage</td>
+<td>Files kept on a provider's servers (here: a private Supabase bucket).</td>
+</tr>
+<tr>
+<td>Authentication</td>
+<td>Proving who you are (password + code).</td>
+</tr>
+<tr>
+<td>Authorization</td>
+<td>Deciding what you are allowed to do.</td>
+</tr>
+<tr>
+<td>RBAC</td>
+<td>Role-based access control: permissions by role (Lawyer, Administrator).</td>
+</tr>
+<tr>
+<td>RLS</td>
+<td>Row-level security: the database itself filters rows per user.</td>
+</tr>
+<tr>
+<td>LLM</td>
+<td>Large language model — an AI trained on text that writes fluent answers.</td>
+</tr>
+<tr>
+<td>Hallucination</td>
+<td>A confident but invented statement by an AI.</td>
+</tr>
+<tr>
+<td>RAG</td>
+<td>Retrieval-augmented generation: find sources first, then answer from them.</td>
+</tr>
+<tr>
+<td>Chunking</td>
+<td>Cutting documents into passages (here, by section, paragraph or clause).</td>
+</tr>
+<tr>
+<td>Embedding</td>
+<td>A list of numbers representing a passage's meaning.</td>
+</tr>
+<tr>
+<td>Vector / semantic search</td>
+<td>Finding passages whose meaning is close to the question, not just same words.</td>
+</tr>
+<tr>
+<td>Re-ranker</td>
+<td>A model that re-orders candidate passages by how well they answer the question.</td>
+</tr>
+<tr>
+<td>OCR</td>
+<td>Optical character recognition: reading text from images or scans.</td>
+</tr>
+<tr>
+<td>Prompt</td>
+<td>The instructions and text given to an AI model.</td>
+</tr>
+<tr>
+<td>Prompt injection</td>
+<td>Text that tries to give the AI new instructions (e.g. hidden in a document).</td>
+</tr>
+<tr>
+<td>Guardrails</td>
+<td>Rules in code that limit what the AI may see, do and output.</td>
+</tr>
+<tr>
+<td>Pipeline</td>
+<td>A sequence of processing steps.</td>
+</tr>
+<tr>
+<td>Background job</td>
+<td>Work done later by the server, with progress, so the screen is not blocked.</td>
+</tr>
+<tr>
+<td>Circuit breaker</td>
+<td>Stops calling a failing service for a short time.</td>
+</tr>
+<tr>
+<td>Fallback</td>
+<td>A backup used when the main option fails.</td>
+</tr>
+<tr>
+<td>Latency</td>
+<td>Waiting time before a response.</td>
+</tr>
+<tr>
+<td>Scalability</td>
+<td>Ability to handle more users or data.</td>
+</tr>
+<tr>
+<td>Two-step verification (MFA)</td>
+<td>A second proof of identity, here a 6-digit app code.</td>
+</tr>
+<tr>
+<td>CSRF</td>
+<td>A trick that makes a browser send unwanted requests; blocked by a secret token.</td>
+</tr>
+<tr>
+<td>Audit log</td>
+<td>A permanent record of who did what and when.</td>
+</tr>
+</tbody>
+</table>
+<h1 id="22-conclusion">22. Conclusion</h1>
+<p>NyaySutra shows that an AI legal research assistant can be built around <strong>evidence rather than eloquence</strong>: every answer is tied to numbered passages from official statute text or the lawyer's own files, the citations are checked automatically, and the data is protected by accounts, roles and database-level security. The prototype already supports the core workflow of a practising lawyer — matters, documents in many formats including scans, cited research, drafting, deadlines and history.</p>
+<p>It is still a prototype. The law library is a curated subset of Indian law, case law is limited to samples, the system runs on one computer, answer quality has not been measured with lawyers, and production safeguards (hosting, backups, monitoring, independent security review) remain to be done. With those steps — starting with a lawyer-led evaluation of answers — NyaySutra could become a reliable research aid for advocates, always as an assistant to, and never a substitute for, professional legal judgment.</p>
+<h1 id="23-sources-references-and-questions-for-the-team">23. Sources, References and Questions for the Team</h1>
+<p><strong>Official sources consulted (accessed 25 October 2026 unless noted):</strong></p>
+<ul>
+<li>India Code, Legislative Department, Ministry of Law and Justice — https://indiacode.gov.in/ (REST API: <code>/server/api/</code>).</li>
+<li>eCourts Services — https://services.ecourts.gov.in/ (checked 22 October 2026).</li>
+<li>Supreme Court of India — https://www.sci.gov.in/ (checked 22 October 2026).</li>
+<li>High Court of Judicature at Bombay — https://bombayhighcourt.gov.in/ (checked 22 October 2026).</li>
+<li>Maharashtra Police citizen portal — https://citizen.mahapolice.gov.in/ (checked 22 October 2026).</li>
+<li>LiveLaw RSS — https://www.livelaw.in/google_feeds.xml.</li>
+<li>Indian Kanoon — https://indiankanoon.org/ (source of three sample judgments).</li>
+<li>Supabase documentation (Auth, Postgres row-level security, Storage, Vault) — https://supabase.com/docs.</li>
+<li>Project documents: <code>README.md</code>, <code>docs/SECURITY.md</code>, <code>docs/SECURITY_AUDIT.md</code>, <code>docs/RELIABILITY.md</code>, <code>docs/SUPABASE_MIGRATION.md</code>, <code>docs/IMPLEMENTATION_PLAN.md</code> (historical).</li>
+</ul>
+<p><strong>Questions for the team (please confirm before sharing):</strong></p>
+<ol>
+<li>Student, team, mentor and institution details for the cover page.</li>
+<li>Has permission been checked for using the three Indian Kanoon judgment copies, and should a licensed judgment source be pursued?</li>
+<li>Ollama Cloud's data-handling terms for prompts containing client facts — has this been reviewed?</li>
+<li>Should e-mail reminders be enabled (which mail server)?</li>
+<li>Which States should be prioritised for importing acts?</li>
+<li>Is the intended deployment a single chamber/firm (one organisation, as now) or many organisations?</li>
+</ol></body></html>

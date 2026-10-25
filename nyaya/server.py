@@ -683,6 +683,8 @@ def dashboard(p: Principal = Depends(need("cases.list"))):
         f"SELECT case_type, COUNT(*) n FROM cases WHERE id IN ({ph}) GROUP BY case_type", mine)}
     lib = {r["collection"]: r["n"] for r in db.conn().execute(
         "SELECT collection, COUNT(*) n FROM documents WHERE status='ready' AND collection <> 'case' GROUP BY collection")}
+    lib["case"] = db.conn().execute(f"SELECT COUNT(*) FROM documents WHERE status='ready' AND collection='case' "
+                                    f"AND case_id IN ({ph})", mine).fetchone()[0]   # the caller's own matters only
     # Research history lives on the Legal Research page (Recent History), not here.
     return {"upcoming": upcoming, "by_type": by_type, "library": lib,
             "total_cases": sum(by_type.values())}

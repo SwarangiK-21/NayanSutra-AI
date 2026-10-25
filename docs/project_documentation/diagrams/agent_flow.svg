@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 520" font-family="Segoe UI, Noto Sans, Arial, sans-serif" font-size="13">
+  <title>NyaySutra research agent: one planner with allow-listed tools</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6577"/>
+    </marker>
+    <style>
+      .b{fill:#fff;stroke:#0b2c5f;stroke-width:1.5}
+      .r{fill:#fdecea;stroke:#b42318;stroke-width:1.5}
+      .g{fill:#eef7ec;stroke:#138808;stroke-width:1.5}
+      .o{fill:#fff8ee;stroke:#d9750f;stroke-width:1.5}
+      .h{font-weight:700;fill:#0b2c5f;font-size:13.5px}
+      .s{fill:#5a6577;font-size:11.5px}
+      .ln{stroke:#5a6577;stroke-width:1.4;fill:none;marker-end:url(#a)}
+    </style>
+  </defs>
+  <rect class="b" x="20" y="30" width="170" height="80" rx="8"/>
+  <text class="h" x="34" y="54">Server checks access</text>
+  <text class="s" x="34" y="74">which case, documents and</text>
+  <text class="s" x="34" y="90">chat this user may use</text>
+
+  <rect class="r" x="215" y="30" width="170" height="80" rx="8"/>
+  <text class="h" x="229" y="54">Request screening</text>
+  <text class="s" x="229" y="74">harmful / "reveal your</text>
+  <text class="s" x="229" y="90">prompt" → fixed refusal</text>
+
+  <rect class="o" x="410" y="30" width="170" height="80" rx="8"/>
+  <text class="h" x="424" y="54">Planner (gpt-oss:20b)</text>
+  <text class="s" x="424" y="74">picks ONE tool from an</text>
+  <text class="s" x="424" y="90">allow-list (JSON, validated)</text>
+
+  <rect class="b" x="605" y="30" width="170" height="80" rx="8"/>
+  <text class="h" x="619" y="54">Tool policy</text>
+  <text class="s" x="619" y="74">not allowed for this user</text>
+  <text class="s" x="619" y="90">or case → research instead</text>
+  <path class="ln" d="M190,70 L211,70"/><path class="ln" d="M385,70 L406,70"/><path class="ln" d="M580,70 L601,70"/>
+
+  <rect class="b" x="20" y="160" width="180" height="110" rx="8"/>
+  <text class="h" x="34" y="184">Research</text>
+  <text class="s" x="34" y="204">search → re-rank → if weak,</text>
+  <text class="s" x="34" y="220">rewrite query and retry →</text>
+  <text class="s" x="34" y="236">answer (gpt-oss:120b) or</text>
+  <text class="s" x="34" y="252">say the sources don't cover it</text>
+  <rect class="b" x="215" y="160" width="180" height="110" rx="8"/>
+  <text class="h" x="229" y="184">Drafting</text>
+  <text class="s" x="229" y="204">closest template + law</text>
+  <text class="s" x="229" y="220">passages → draft with</text>
+  <text class="s" x="229" y="236">[●] placeholders for</text>
+  <text class="s" x="229" y="252">anything unknown</text>
+  <rect class="b" x="410" y="160" width="180" height="110" rx="8"/>
+  <text class="h" x="424" y="184">Document analysis</text>
+  <text class="s" x="424" y="204">summary, timeline, issues,</text>
+  <text class="s" x="424" y="220">parties, arguments of one</text>
+  <text class="s" x="424" y="236">file (read in parts if large)</text>
+  <rect class="g" x="605" y="160" width="180" height="110" rx="8"/>
+  <text class="h" x="619" y="184">Limitation calculator</text>
+  <text class="s" x="619" y="204">plain code, no AI maths:</text>
+  <text class="s" x="619" y="220">24 categories from the</text>
+  <text class="s" x="619" y="236">Limitation Act schedule</text>
+  <rect class="b" x="800" y="160" width="180" height="110" rx="8"/>
+  <text class="h" x="814" y="184">Short chat</text>
+  <text class="s" x="814" y="204">greetings and small</text>
+  <text class="s" x="814" y="220">talk (fast model)</text>
+  <path class="ln" d="M690,110 C690,135 110,135 110,156"/><path class="ln" d="M690,110 C690,135 305,135 305,156"/>
+  <path class="ln" d="M690,110 L500,156"/><path class="ln" d="M690,110 L695,156"/><path class="ln" d="M690,110 L890,156"/>
+
+  <rect class="g" x="20" y="310" width="470" height="80" rx="8"/>
+  <text class="h" x="34" y="334">Checks after writing</text>
+  <text class="s" x="34" y="354">citation audit: every [n] must exist and be supported (code + fast model)</text>
+  <text class="s" x="34" y="372">output filter: removes secrets / internal instructions before storing or showing</text>
+  <rect class="o" x="510" y="310" width="470" height="80" rx="8"/>
+  <text class="h" x="524" y="334">If the language model fails</text>
+  <text class="s" x="524" y="354">retries with back-off → circuit breaker → backup model (gpt-oss:20b);</text>
+  <text class="s" x="524" y="372">answer is labelled "fallback model"; a cut-off answer is marked incomplete</text>
+  <path class="ln" d="M110,270 L110,306"/>
+
+  <rect class="b" x="20" y="420" width="960" height="80" rx="8"/>
+  <text class="h" x="34" y="444">Not a multi-agent system</text>
+  <text class="s" x="34" y="464">One planner chooses one tool per question; tools are ordinary code paths, not independent agents that talk to each other.</text>
+  <text class="s" x="34" y="482">Long tasks (translations, summaries, drafts, provision suggestions, file processing) run as durable background jobs with retries.</text>
+</svg>
