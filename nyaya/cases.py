@@ -101,9 +101,6 @@ def list_cases(principal) -> list[dict]:
         "FROM cases c JOIN case_members cm ON cm.case_id = c.id AND cm.user_id = ? "
         "WHERE c.org_id = ? ORDER BY c.updated_at DESC", (principal.user_id, principal.org_id)).fetchall()
     out = [dict(r) for r in rows]
-    if principal.role == "client":
-        for c in out:
-            c["access"] = "client"
     if principal.role == "admin":
         mine = {c["id"] for c in out}
         for r in db.conn().execute(f"SELECT {', '.join(META_FIELDS)} FROM cases WHERE org_id=? ORDER BY updated_at DESC",

@@ -39,6 +39,7 @@ class Hit:
     section: str | None
     page_start: int | None
     page_end: int | None
+    jurisdiction: str = ""
     score: float = 0.0
     exact: bool = False
     extra: dict = field(default_factory=dict)
@@ -54,9 +55,12 @@ class Hit:
 
 
 def _scope_sql(scope: str, case_id: str | None, doc_ids: set[str] | None,
-               exclude: frozenset[str] = frozenset()) -> tuple[str, list]:
+               exclude: frozenset[str] = frozenset(), jurisdiction: str | None = None) -> tuple[str, list]:
     """SQL filter on documents alias d, mirroring VectorIndex.search filters."""
     clauses, args = ["d.status='ready'"], []
+    if jurisdiction:   # central law + that state's own acts; other states' acts are left out
+        clauses.append("(d.collection <> 'bare_act' OR d.jurisdiction IN ('', 'Central', ?))")
+        args.append(jurisdiction)
     if exclude:
         clauses.append(f"d.collection NOT IN ({','.join('?' * len(exclude))})")
         args += sorted(exclude)
@@ -114,17 +118,17 @@ def keyword_ids(q: str, where: str, args: list, k: int) -> list[int]:
 
 
 def lexical(q: str, k: int, scope: str, case_id: str | None, doc_ids: set[str] | None,
-            exclude: frozenset[str] = frozenset()) -> list[int]:
-    where, args = _scope_sql(scope, case_id, doc_ids, exclude)
+            exclude: frozenset[str] = frozenset(), jurisdiction: str | None = None) -> list[int]:
+    where, args = _scope_sql(scope, case_id, doc_ids, exclude, jurisdiction)
     return keyword_ids(q, where, args, k)
 
 
 def exact(refs: list[citations.Ref], scope: str, case_id: str | None, doc_ids: set[str] | None,
-          exclude: frozenset[str] = frozenset({"draft"})) -> list[int]:
+          exclude: frozenset[str] = frozenset({"draft"}), jurisdiction: str | None = None) -> list[int]:
     """Chunks whose provision key matches a cited section/article/rule (in the named act if given)."""
     if not refs:
         return []
-    where, args = _scope_sql(scope, case_id, doc_ids, exclude)
+    where, args = _scope_sql(scope, case_id, doc_ids, exclude, jurisdiction)
     out: list[int] = []
     for r in refs[:8]:
         sql = f"SELECT c.id FROM chunks c JOIN documents d ON d.id=c.doc_id WHERE c.section=? AND {where}"
@@ -135,6 +139,15 @@ def exact(refs: list[citations.Ref], scope: str, case_id: str | None, doc_ids: s
         sql += " ORDER BY d.collection != 'bare_act', c.ord LIMIT 6"
         out += [row[0] for row in db.conn().execute(sql, params)]
     return list(dict.fromkeys(out))
+
+
+def other_state_doc_ids(jurisdiction: str | None) -> frozenset[str]:
+    """Statutes of states / UTs other than `jurisdiction` (nothing is excluded when no state is chosen)."""
+    if not jurisdiction:
+        return frozenset()
+    return frozenset(r["id"] for r in db.conn().execute(
+        "SELECT id FROM documents WHERE collection='bare_act' AND jurisdiction NOT IN ('', 'Central', ?)",
+        (jurisdiction,)))
 
 
 def act_doc_ids(acts: list[str]) -> set[str]:
@@ -176,12 +189,13 @@ def load_hits(ids: list[int]) -> list[Hit]:
         return []
     rows = db.conn().execute(
         f"SELECT c.id, c.doc_id, c.header, c.text, c.label, c.section, c.page_start, c.page_end, "
-        f"d.title, d.collection, d.doc_type FROM chunks c JOIN documents d ON d.id=c.doc_id "
+        f"d.title, d.collection, d.doc_type, d.jurisdiction FROM chunks c JOIN documents d ON d.id=c.doc_id "
         f"WHERE c.id IN ({','.join('?' * len(ids))}) AND d.status='ready'", ids).fetchall()   # never superseded text
     by_id = {r["id"]: r for r in rows}
     return [Hit(chunk_id=r["id"], doc_id=r["doc_id"], title=r["title"], collection=r["collection"],
                 doc_type=r["doc_type"], header=r["header"], text=r["text"], label=r["label"], section=r["section"],
-                page_start=r["page_start"], page_end=r["page_end"]) for i in ids if (r := by_id.get(i))]
+                page_start=r["page_start"], page_end=r["page_end"], jurisdiction=r["jurisdiction"] or "")
+            for i in ids if (r := by_id.get(i))]
 
 
 def _merge_parts(hits: list[Hit]) -> list[Hit]:
@@ -206,11 +220,12 @@ def _merge_parts(hits: list[Hit]) -> list[Hit]:
 def search(query: str, *, scope: str = "all", case_id: str | None = None, doc_ids: set[str] | None = None,
            k: int = config.CONTEXT_PASSAGES, extra_queries: list[str] | None = None,
            exclude: frozenset[str] = frozenset({"draft"}), hint: str = "",
-           context: str = "") -> tuple[list[Hit], dict]:
+           context: str = "", jurisdiction: str | None = None) -> tuple[list[Hit], dict]:
     """Return (hits, diagnostics). diagnostics['confidence'] is the top reranker logit (or None).
 
     Draft templates are excluded by default (they are model text, not authority);
-    the drafting flow searches them explicitly with exclude=frozenset()."""
+    the drafting flow searches them explicitly with exclude=frozenset().
+    `jurisdiction` (a state / UT) limits statutes to central law plus that state's acts."""
     if scope == "case" and not case_id:
         return [], {"reason": "no case selected", "confidence": None, "exact_hits": 0}
     index.wait_ready()
@@ -225,20 +240,22 @@ def search(query: str, *, scope: str = "all", case_id: str | None = None, doc_id
     qv = embeddings.embed_query(query)
     colls = _collections(scope, exclude)
     inc_case = scope in ("all", "case")
+    jur = jurisdiction or None
+    skip = other_state_doc_ids(jur)
 
     dense = [cid for cid, _ in index.search(qv, config.CANDIDATES, case_id=case_id, collections=colls,
-                                             doc_ids=doc_ids, include_case_docs=inc_case)]
+                                             doc_ids=doc_ids, include_case_docs=inc_case, skip_doc_ids=skip)]
     lists: list[tuple[list[int], float]] = [
-        (dense, 1.0), (lexical(query, config.CANDIDATES, scope, case_id, doc_ids, exclude), 1.0)]
-    exact_ids = exact(refs, scope, case_id, doc_ids)
+        (dense, 1.0), (lexical(query, config.CANDIDATES, scope, case_id, doc_ids, exclude, jur), 1.0)]
+    exact_ids = exact(refs, scope, case_id, doc_ids, jurisdiction=jur)
     if exact_ids:
         lists.append((exact_ids, 3.0))
-    ctx_ids = exact(ctx_refs, scope, case_id, doc_ids) if ctx_refs else []
+    ctx_ids = exact(ctx_refs, scope, case_id, doc_ids, jurisdiction=jur) if ctx_refs else []
     if ctx_ids:
         lists.append((ctx_ids, 1.5))
     focus: set[str] = set()
     if acts and scope != "case":
-        focus = act_doc_ids(acts)
+        focus = act_doc_ids(acts) - skip
         if doc_ids:
             focus &= doc_ids
         if focus:
@@ -247,7 +264,7 @@ def search(query: str, *, scope: str = "all", case_id: str | None = None, doc_id
     for q2 in extra_queries or []:
         lists.append(([cid for cid, _ in index.search(embeddings.embed_query(q2), 20, case_id=case_id,
                                                       collections=colls, doc_ids=doc_ids,
-                                                      include_case_docs=inc_case)], 0.7))
+                                                      include_case_docs=inc_case, skip_doc_ids=skip)], 0.7))
 
     fused = rrf(lists)[: config.RERANK_POOL]
     hits = load_hits(fused)
@@ -292,5 +309,5 @@ def search(query: str, *, scope: str = "all", case_id: str | None = None, doc_id
         used += len(h.text)
         per_doc[h.doc_id] = per_doc.get(h.doc_id, 0) + 1
     diag = {"refs": [r.key for r in refs], "acts": acts, "candidates": len(fused), "confidence": confidence,
-            "exact_hits": len(exact_ids), "indexed": len(index)}
+            "exact_hits": len(exact_ids), "indexed": len(index), "jurisdiction": jur or "all"}
     return picked, diag

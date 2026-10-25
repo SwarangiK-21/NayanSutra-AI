@@ -60,6 +60,8 @@ def _cleanup(user_ids: list[str], case_ids: list[str]) -> None:
                 c.execute("DELETE FROM app_sessions WHERE user_id=?", (uid,))
                 c.execute("DELETE FROM user_prefs WHERE user_id=?", (uid,))
                 c.execute("DELETE FROM notifications WHERE user_id=?", (uid,))
+                c.execute("DELETE FROM calendar_events WHERE owner_id=?", (uid,))   # reminders cascade
+                c.execute("DELETE FROM search_history WHERE user_id=?", (uid,))
                 c.execute("DELETE FROM profiles WHERE user_id=?", (uid,))   # memberships, codes cascade
             c.execute("DELETE FROM invitations WHERE email LIKE 'qa-%@example.com'")
 
@@ -123,23 +125,77 @@ def test_live_rls_isolation(live):
             with pytest.raises(psycopg.Error):
                 with db.tx() as c:
                     c.execute("UPDATE audit_log SET action='x' WHERE id = (SELECT MIN(id) FROM audit_log)")
-        # After the owner adds user 2 as a client, user 2 sees the case but not internal notes.
+        # The retired personas are refused by the database itself.
+        with _as(u1):
+            with pytest.raises(psycopg.Error):
+                with db.tx() as c:
+                    c.execute("INSERT INTO case_members(case_id, user_id, access, added_by, created_at) VALUES(?,?,?,?,?)",
+                              (case_id, u2, "client", u1, db.now()))
+        with db.system():
+            with pytest.raises(psycopg.Error):
+                with db.tx() as c:
+                    c.execute("UPDATE memberships SET role='auditor' WHERE user_id=?", (u2,))
+        # After the owner adds user 2 as a fellow lawyer, user 2 sees the case and its notes.
         with _as(u1):
             with db.tx() as c:
                 c.execute("INSERT INTO case_members(case_id, user_id, access, added_by, created_at) VALUES(?,?,?,?,?)",
-                          (case_id, u2, "client", u1, db.now()))
+                          (case_id, u2, "advocate", u1, db.now()))
                 c.execute("INSERT INTO case_notes(id, case_id, author, content, created_at) VALUES(?,?,?,?,?)",
                           (f"note_qa{tag}", case_id, "QA", "internal strategy", db.now()))
         with _as(u2):
             assert db.conn().execute("SELECT COUNT(*) FROM cases WHERE id=?", (case_id,)).fetchone()[0] == 1
             assert db.conn().execute("SELECT COUNT(*) FROM documents WHERE id=?", (doc_id,)).fetchone()[0] == 1
-            assert db.conn().execute("SELECT COUNT(*) FROM case_notes WHERE case_id=?", (case_id,)).fetchone()[0] == 0
-            with db.tx() as c:
-                assert c.execute("DELETE FROM documents WHERE id=?", (doc_id,)).rowcount == 0   # clients cannot delete
+            assert db.conn().execute("SELECT COUNT(*) FROM case_notes WHERE case_id=?", (case_id,)).fetchone()[0] == 1
     finally:
         _cleanup([u1, u2], [case_id])
     with db.system():
         assert db.conn().execute("SELECT COUNT(*) FROM profiles WHERE email LIKE 'qa-rls%'").fetchone()[0] == 0
+
+
+def test_live_calendar_and_history_are_private(live):
+    """Calendar entries, their reminders and search history: only their owner, enforced by the database."""
+    u1, u2 = str(uuid.uuid4()), str(uuid.uuid4())
+    tag = secrets.token_hex(3)
+    case_id, ev_id = f"CASE-QA-{tag}", f"evt_qa{tag}"
+    try:
+        with db.system():
+            with db.tx() as c:
+                for uid, n in ((u1, 1), (u2, 2)):
+                    c.execute("INSERT INTO profiles(user_id, email, display_name, created_at, updated_at) VALUES(?,?,?,?,?)",
+                              (uid, f"qa-cal{n}-{tag}@example.com", f"QA {n}", db.now(), db.now()))
+                    c.execute("INSERT INTO memberships(org_id, user_id, role, created_at) VALUES(?,?,?,?)",
+                              (db.DEFAULT_ORG, uid, "advocate", db.now()))
+        cols = ("id, org_id, owner_id, case_id, kind, title, event_date, timezone, starts_at_utc, reminders, "
+                "created_at, updated_at")
+        row = lambda eid, owner, case: (eid, db.DEFAULT_ORG, owner, case, "hearing", "QA hearing", "2030-01-10",
+                                        "Asia/Kolkata", "2030-01-10T03:30:00", "[]", db.now(), db.now())
+        with _as(u1):
+            with db.tx() as c:
+                c.execute("INSERT INTO cases(id, title, case_type, org_id, created_by, created_at, updated_at) "
+                          "VALUES(?,?,?,?,?,?,?)", (case_id, "QA calendar matter", "Civil", db.DEFAULT_ORG, u1, db.now(), db.now()))
+                c.execute(f"INSERT INTO calendar_events({cols}) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", row(ev_id, u1, case_id))
+                c.execute("INSERT INTO event_reminders(id, event_id, owner_id, rule, channel, remind_at_utc) VALUES(?,?,?,?,?,?)",
+                          (f"rem_qa{tag}", ev_id, u1, "1d", "in_app", "2030-01-09T03:30:00"))
+                c.execute("INSERT INTO search_history(id, user_id, org_id, query, created_at) VALUES(?,?,?,?,?)",
+                          (f"srch_qa{tag}", u1, db.DEFAULT_ORG, "QA private search", db.now()))
+            assert db.conn().execute("SELECT COUNT(*) FROM calendar_events WHERE id=?", (ev_id,)).fetchone()[0] == 1
+        with _as(u2):
+            for table, key in (("calendar_events", ev_id), ("event_reminders", f"rem_qa{tag}"), ("search_history", f"srch_qa{tag}")):
+                assert db.conn().execute(f"SELECT COUNT(*) FROM {table} WHERE id=?", (key,)).fetchone()[0] == 0, table
+            with db.tx() as c:
+                assert c.execute("UPDATE calendar_events SET title='x' WHERE id=?", (ev_id,)).rowcount == 0
+                assert c.execute("DELETE FROM search_history WHERE id=?", (f"srch_qa{tag}",)).rowcount == 0
+            with pytest.raises(psycopg.Error):   # cannot file an entry in someone else's name
+                with db.tx() as c:
+                    c.execute(f"INSERT INTO calendar_events({cols}) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", row(f"{ev_id}b", u1, None))
+            with pytest.raises(psycopg.Error):   # nor link one to a matter they cannot open
+                with db.tx() as c:
+                    c.execute(f"INSERT INTO calendar_events({cols}) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", row(f"{ev_id}c", u2, case_id))
+        with _as(None):
+            assert db.conn().execute("SELECT COUNT(*) FROM calendar_events").fetchone()[0] == 0
+            assert db.conn().execute("SELECT COUNT(*) FROM search_history").fetchone()[0] == 0
+    finally:
+        _cleanup([u1, u2], [case_id])
 
 
 def test_live_auth_mfa_and_vault(live):

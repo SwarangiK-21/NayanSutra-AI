@@ -6,19 +6,15 @@ provision says without going through here.
 """
 from __future__ import annotations
 
-import json
 from functools import lru_cache
 
-from . import citations, config, db, retrieval
+from . import citations, db, retrieval
 
 
 @lru_cache(maxsize=1)
 def _manifest() -> dict:
-    p = config.BARE_ACTS_DIR / "manifest.json"
-    try:
-        return json.loads(p.read_text("utf-8"))
-    except (OSError, ValueError):
-        return {}
+    from .indiacode import read_manifest
+    return read_manifest()
 
 
 def act_meta(doc_title: str) -> dict:

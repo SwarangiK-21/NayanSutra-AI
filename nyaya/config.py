@@ -86,15 +86,28 @@ SYNC_ENABLED = _bool("SYNC_ENABLED", True)
 SYNC_TICK_SECONDS = int(_env("SYNC_TICK_SECONDS", default="60"))
 HTTP_USER_AGENT = "NyaySutra-AI/1.0 (+local legal research assistant)"
 
+# ── Calendar reminders ──────────────────────────────────────────────────────
+DEFAULT_TIMEZONE = _env("DEFAULT_TIMEZONE", default="Asia/Kolkata")
+REMINDERS_ENABLED = _bool("REMINDERS_ENABLED", True)        # background dispatcher (off in tests)
+REMINDER_TICK_SECONDS = int(_env("REMINDER_TICK_SECONDS", default="30"))
+# Optional e-mail reminders through your own SMTP server (off until SMTP_HOST and SMTP_FROM are set).
+SMTP_HOST = _env("SMTP_HOST")
+SMTP_PORT = int(_env("SMTP_PORT", default="587"))
+SMTP_USER = _env("SMTP_USER")
+SMTP_PASSWORD = _env("SMTP_PASSWORD")
+SMTP_FROM = _env("SMTP_FROM")
+SMTP_STARTTLS = _bool("SMTP_STARTTLS", True)
+SMTP_SSL = _bool("SMTP_SSL", False)
+
 # ── Accounts (Supabase Auth, used server-side) ──────────────────────────────
 # Publishable key ('sb_publishable_…' or the legacy anon key): used only by the backend for the Auth API.
 SUPABASE_PUBLISHABLE_KEY = _env("SUPABASE_PUBLISHABLE_KEY", "SUPABASE_ANON_KEY")
 # supabase = per-user accounts; local = single-user operator on this computer (no accounts); auto = supabase when
 # SUPABASE_URL and the publishable key are set.
 AUTH_MODE = _env("AUTH_MODE", default="auto").lower()
-# invite_only = an administrator must invite an e-mail address first; open = anyone may register (as a client).
-SIGNUP_MODE = _env("SIGNUP_MODE", default="invite_only").lower()
-MFA_REQUIRED_ROLES = tuple(r.strip() for r in _env("MFA_REQUIRED_ROLES", default="admin,auditor,advocate").split(",")
+# open = anyone may register (as a Lawyer); invite_only = only invited e-mail addresses get access
+SIGNUP_MODE = _env("SIGNUP_MODE", default="open").lower()
+MFA_REQUIRED_ROLES = tuple(r.strip() for r in _env("MFA_REQUIRED_ROLES", default="admin,advocate").split(",")
                            if r.strip())
 SESSION_TTL_HOURS = int(_env("SESSION_TTL_HOURS", default="12"))
 SESSION_IDLE_MINUTES = int(_env("SESSION_IDLE_MINUTES", default="60"))

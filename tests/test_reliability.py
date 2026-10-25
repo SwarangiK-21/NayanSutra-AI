@@ -152,6 +152,22 @@ def test_cancel_a_queued_job_and_a_running_one(local_db):
     assert jobs.get(j["id"], accounts.LOCAL_USER_ID)["status"] == "cancelled"
 
 
+def test_job_permission_recheck_runs_as_the_owner(local_db):
+    # Under Postgres row-level security the re-check only sees the owner's case memberships when it runs with the
+    # owner's identity; a worker thread has no identity of its own.
+    seen = []
+
+    def check(p, params):
+        seen.append((db.current().user_id, db.current().system))
+
+    @jobs.handler("test_recheck", authorize=check)
+    def task(params, ctx):
+        return {}
+    jobs.submit("test_recheck", {}, owner=accounts.LOCAL_USER_ID)
+    assert jobs.run_one(jobs._claim("ai")) == "completed"
+    assert seen == [(accounts.LOCAL_USER_ID, False)]
+
+
 def test_timeouts_permanent_errors_and_stale_locks(local_db, monkeypatch):
     monkeypatch.setattr(jobs, "BACKOFF_BASE", 0.0)
 
@@ -367,9 +383,8 @@ def test_cut_off_answer_is_labelled_incomplete(fake, offline, monkeypatch):
 # ── Draft review ─────────────────────────────────────────────────────────────
 def test_draft_must_be_approved_per_version(fake, monkeypatch):
     person(fake, "adv@example.com", "advocate")
-    person(fake, "client@example.com", "client")
     person(fake, "other@example.com", "advocate")
-    a, cl, o = signed_in("adv@example.com"), signed_in("client@example.com"), signed_in("other@example.com")
+    a, o = signed_in("adv@example.com"), signed_in("other@example.com")
     case_id = new_case(a)
     monkeypatch.setattr(llm, "chat", lambda *x, **k: "DRAFT — FOR REVIEW BY A QUALIFIED LEGAL PROFESSIONAL\n\nNotice to "
                                                       "[●: name of the opposite party] to pay the deposit.")
@@ -395,9 +410,9 @@ def test_draft_must_be_approved_per_version(fake, monkeypatch):
 
 
 def signed_in_admin_items(fake):
-    person(fake, "auditor@example.com", "auditor")
+    person(fake, "admin@example.com", "admin")
     security_limiter_reset()
-    return signed_in("auditor@example.com").get("/api/audit?limit=500").json()["items"]
+    return signed_in("admin@example.com").get("/api/audit?limit=500").json()["items"]
 
 
 # ── Library versions ─────────────────────────────────────────────────────────

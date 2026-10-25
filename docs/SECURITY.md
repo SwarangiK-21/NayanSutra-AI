@@ -24,27 +24,32 @@ mode** (loopback only, the person at the computer is the administrator) — kept
 
 ## 2. Roles and permissions (`nyaya/authz.py`)
 
-Roles are given only by an administrator (invitation or role change). A user cannot choose or change their own role;
-self-registration (`SIGNUP_MODE=open`) gives the lowest role.
+Two personas: **Lawyer** (`advocate`) and **Administrator** (`admin`). Anyone may register (`SIGNUP_MODE=open`,
+the default) and becomes a Lawyer after verifying their e-mail; only an administrator can make someone an
+administrator (invitation or role change). A user cannot choose or change their own role. `SIGNUP_MODE=invite_only`
+restores invitation-only access. The former Client and Security-auditor roles were retired in migration 07 (their
+accounts became Lawyers — what public sign-up gives anyone — and per-case client access was removed).
 
-| Permission | Guest | Client | Advocate | Admin | Auditor |
-|---|:-:|:-:|:-:|:-:|:-:|
-| Public library: bare acts, awareness, limitation, news | ✓ | ✓ | ✓ | ✓ | |
-| Own account, sessions, MFA, notifications | | ✓ | ✓ | ✓ | ✓ |
-| AI legal research (library + cases they can access) | | ✓ | ✓ | ✓ | |
-| See case list (own cases) | | ✓ | ✓ | ✓ (whole organisation, metadata) | |
-| Create cases, drafting, case search / record import | | | ✓ | ✓ | |
-| Manage users, roles, invitations, organisation settings, integrations | | | | ✓ | |
-| Read audit log (actions only, never document contents) | | | | ✓ | ✓ |
+| Permission | Guest | Lawyer | Administrator |
+|---|:-:|:-:|:-:|
+| Public library: bare acts, India Code catalogue, awareness, limitation, news | ✓ | ✓ | ✓ |
+| Own account, sessions, MFA, notifications, own calendar and research history | | ✓ | ✓ |
+| AI legal research (library + cases they can access), choose jurisdiction | | ✓ | ✓ |
+| Create cases, drafting, case search / record import, add an India Code act to the library | | ✓ | ✓ |
+| See the organisation's case list (metadata of cases they are not on) | | | ✓ |
+| Manage users, roles, invitations, organisation settings, integrations | | | ✓ |
+| Read audit log (actions only, never document contents) | | | ✓ |
 
-Case access (per matter, `case_members`), capped by the organisation role:
+Case access (per matter, `case_members`):
 
-| Action on a case | Owner | Advocate | Client | Admin not on the case |
-|---|:-:|:-:|:-:|:-:|
-| See case details and documents, upload, AI on documents, chat | ✓ | ✓ | ✓ | metadata only |
-| Edit case, delete documents, internal notes, drafts, provisions, records | ✓ | ✓ | | |
-| Manage people on the case | ✓ | | | ✓ |
-| Delete case | ✓ | | | ✓ |
+| Action on a case | Owner | Lawyer on the case | Admin not on the case |
+|---|:-:|:-:|:-:|
+| See case details and documents, upload, AI on documents, chat, notes, drafts, provisions | ✓ | ✓ | metadata only |
+| Manage people on the case | ✓ | | ✓ |
+| Delete case | ✓ | | ✓ |
+
+Calendar entries, their reminders and search history are private to their owner — administrators included — in the
+API and in row-level security; an entry can only be linked to a matter its owner can open.
 
 An administrator who needs to work on a case adds themselves; that is recorded as `case.member_add` with
 `self_assigned: true`. Organisations (tenants) are isolated: a case's organisation must match the caller's, even if a
@@ -57,7 +62,7 @@ stray membership row existed.
 | Password storage | Auth: bcrypt hashing | Password rules before Supabase (≥12 chars, ≤72 bytes for bcrypt, common-password list, not the e-mail name) |
 | E-mail verification | Auth: confirmation e-mail + single-use link (PKCE) | Refuses sign-in with an unconfirmed address even if confirmation is switched off; invitation applied only to verified e-mail |
 | Password reset | Auth: single-use, expiring recovery link (PKCE, must be opened in the same browser) | Reset session can only set a password; afterwards every session is signed out (`scope=global`) |
-| MFA | Auth: TOTP enrol / challenge / verify, AAL1→AAL2 | MFA required for admin, auditor, advocate (`MFA_REQUIRED_ROLES`); 10 recovery codes (keyed HMAC-SHA256, single use — Supabase has none); fresh TOTP needed to disable MFA or regenerate codes; 5 wrong codes end the sign-in attempt |
+| MFA | Auth: TOTP enrol / challenge / verify, AAL1→AAL2 | MFA required for admin and lawyer (`MFA_REQUIRED_ROLES`); 10 recovery codes (keyed HMAC-SHA256, single use — Supabase has none); fresh TOTP needed to disable MFA or regenerate codes; 5 wrong codes end the sign-in attempt |
 | Sessions | Auth: rotating refresh tokens, sign-out scopes, bans | Server-side sessions (only SHA-256 of the cookie stored), 12 h absolute + 60 min idle expiry, token rotation on every privilege change, list/revoke own sessions, revalidation with Supabase each access-token lifetime (revocation or ban at Supabase ends the app session) |
 | Token storage | Vault (encrypted at rest) | SECURITY DEFINER wrappers usable only in the system context |
 | Brute force | Auth: per-IP rate limits | Account lockout in Postgres (5 failures / 15 min per e-mail, across IPs and instances); per-IP limits on sign-in, sign-up, reset, MFA, chat, upload, export |
@@ -72,7 +77,7 @@ stray membership row existed.
 * Policies: members see their cases; documents/chunks/derived text follow the case; chats are personal; drafts belong to
   the author or the case team; notifications and preferences are per user; memberships can be changed only by an
   administrator and never on their own row; the audit log is insert-only (UPDATE/DELETE revoked) and readable by
-  admins/auditors of the organisation.
+  the organisation's administrators; calendar entries, reminders and search history are visible only to their owner.
 * Sessions, recovery codes, throttle counters and Vault tokens are reachable only in the explicit system context used by
   sign-in, ingestion, sync and retention code (`db.system()`).
 * **Limit:** the system context is a claim set by backend code on a shared role. RLS therefore protects against

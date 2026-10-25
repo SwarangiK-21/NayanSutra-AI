@@ -2,7 +2,7 @@
    user administration and case members. The browser never sees Supabase keys or tokens — every call goes to the
    NyaySutra backend, which holds the session server-side. What a user may do is decided by the server; hiding a
    button here is only for clarity. */
-import { $, $$, api, confirmDialog, crumbs, fmtDateTime, html, initSession, mount, raw, spinner, state, toast } from "./core.js";
+import { $, $$, api, bindTabs, confirmDialog, crumbs, fmtDateTime, html, initSession, mount, raw, spinner, state, tabBar, tabPanel, toast } from "./core.js";
 import { t } from "./i18n.js";
 
 export const can = (perm) => Boolean(state.session?.permissions?.includes(perm));
@@ -120,7 +120,8 @@ function showRecoveryCodes(el, codes, next) {
 export function renderSignup(go, q) {
   crumbs([[t("auth.create")]]);
   mount($("#main"), card(t("auth.create"), html`
-    ${state.session?.signup_mode === "invite_only" ? html`<div class="notice" style="margin-bottom:10px">${t("auth.invite_only")}</div>` : ""}
+    ${state.session?.signup_mode === "invite_only" ? html`<div class="notice" style="margin-bottom:10px">${t("auth.invite_only")}</div>`
+      : html`<p class="small muted" style="margin-top:0">${t("auth.open_signup")}</p>`}
     <form class="stack" id="suForm">
       <div><label class="f" for="sn">${t("auth.name")}</label><input id="sn" autocomplete="name" maxlength="80" required></div>
       <div><label class="f" for="se">${t("auth.email")}</label><input type="email" id="se" autocomplete="email" maxlength="254" required value="${q.get("email") || ""}"></div>
@@ -178,30 +179,34 @@ export async function viewAccount(main) {
   crumbs([[t("auth.account")]]);
   const a = await api("/api/account");
   const roleName = t(`role_name.${a.role}`, {}, a.role);
+  const sb = a.auth_mode === "supabase";
   mount(main, html`<h1 class="page-title">${t("auth.account")}</h1>
-    <div class="grid g-2">
-      <div class="card"><div class="card-h"><h2>${t("auth.profile")}</h2></div><form class="card-b stack" id="profForm">
-        <div class="small muted">${a.user.email || ""} · ${t("auth.role")}: <strong>${roleName}</strong></div>
+    <p class="page-lead">${a.user.email || ""} · ${t("auth.role")}: <strong>${roleName}</strong></p>
+    <div id="acctTabs" style="max-width:860px">
+    ${tabBar("acct", [["profile", t("auth.profile")], ...(sb ? [["password", t("auth.change_pw")], ["mfa", t("auth.mfa")]] : []),
+      ["sessions", html`${t("auth.sessions")}<span class="tab-n">${a.sessions.length}</span>`]], t("auth.account"))}
+    ${tabPanel("acct", "profile", html`<div class="card"><form class="card-b stack" id="profForm">
         <div><label class="f" for="dn">${t("auth.name")}</label><input id="dn" maxlength="80" required value="${a.user.display_name || ""}"></div>
-        <div><button class="btn btn-sm" type="submit">${t("common.save")}</button></div></form></div>
-      ${a.auth_mode === "supabase" ? html`<div class="card"><div class="card-h"><h2>${t("auth.change_pw")}</h2></div><form class="card-b stack" id="pwForm">
+        <div><button class="btn btn-sm" type="submit">${t("common.save")}</button></div></form></div>`)}
+    ${sb ? tabPanel("acct", "password", html`<div class="card"><form class="card-b stack" id="pwForm">
         <div><label class="f" for="cp">${t("auth.current_pw")}</label><input type="password" id="cp" autocomplete="current-password" maxlength="200" required></div>
         <div><label class="f" for="np">${t("auth.new_pw")}</label><input type="password" id="np" autocomplete="new-password" minlength="12" maxlength="72" required>${pwRules()}</div>
-        <div><button class="btn btn-sm" type="submit">${t("auth.change_pw")}</button></div></form></div>` : ""}
-      ${a.auth_mode === "supabase" ? html`<div class="card"><div class="card-h"><h2>${t("auth.mfa")}</h2></div><div class="card-b stack" id="mfaCard">
+        <div><button class="btn btn-sm" type="submit">${t("auth.change_pw")}</button></div></form></div>`) : ""}
+    ${sb ? tabPanel("acct", "mfa", html`<div class="card"><div class="card-b stack" id="mfaCard">
         <div>${a.mfa.enabled ? html`<span class="chip chip-ok">${t("auth.mfa_on")}</span> <span class="small muted">${t("auth.codes_left", { n: a.mfa.recovery_codes_left })}</span>`
           : html`<span class="chip chip-warn">${t("auth.mfa_off")}</span>`} ${a.mfa.required ? html`<span class="small muted">${t("auth.mfa_required_role")}</span>` : ""}</div>
         ${a.mfa.enabled ? html`<form class="row" id="mfaAct"><input id="mcode" inputmode="numeric" maxlength="7" placeholder="${t("auth.code")}" aria-label="${t("auth.code")}" style="max-width:140px" required>
             <button class="btn btn-ghost btn-sm" type="submit" data-act="codes">${t("auth.new_codes")}</button>
             ${a.mfa.required ? "" : html`<button class="btn btn-danger btn-sm" type="submit" data-act="off">${t("auth.mfa_disable")}</button>`}</form>`
-          : html`<div><button class="btn btn-sm" id="mfaOn">${t("auth.mfa_enable")}</button></div>`}</div></div>` : ""}
-      <div class="card"><div class="card-h"><h2>${t("auth.sessions")}</h2>${a.sessions.length > 1 ? html`<button class="btn btn-ghost btn-sm" id="revokeOthers">${t("auth.revoke_others")}</button>` : ""}</div>
+          : html`<div><button class="btn btn-sm" id="mfaOn">${t("auth.mfa_enable")}</button></div>`}</div></div>`) : ""}
+    ${tabPanel("acct", "sessions", html`<div class="card">${a.sessions.length > 1 ? html`<div class="card-h"><span class="small muted">${t("auth.sessions")}</span><button class="btn btn-ghost btn-sm" id="revokeOthers">${t("auth.revoke_others")}</button></div>` : ""}
         <div class="table-wrap"><table class="gov"><thead><tr><th>${t("auth.device")}</th><th>${t("auth.last_active")}</th><th></th></tr></thead><tbody>
         ${a.sessions.map((s) => html`<tr><td class="small">${(s.user_agent || "—").slice(0, 70)}<br><span class="muted">${s.ip || ""}</span></td>
           <td class="small">${fmtDateTime(s.last_seen_at)}</td>
           <td>${s.current ? html`<span class="chip chip-ok">${t("auth.this_session")}</span>` : html`<button class="btn btn-ghost btn-sm" data-revoke="${s.public_id}">${t("auth.revoke")}</button>`}</td></tr>`)}
-        </tbody></table></div></div>
+        </tbody></table></div></div>`)}
     </div>`);
+  bindTabs($("#acctTabs"), "acct", "acctTab");
   $("#profForm").onsubmit = async (e) => { e.preventDefault();
     try { await api("/api/account", { method: "PATCH", body: { display_name: $("#dn").value.trim() } }); state.session = await initSession(); applyNavPermissions(); toast(t("common.saved")); }
     catch (err) { toast(err.message, true); } };
@@ -234,25 +239,30 @@ export async function viewAdmin(main) {
   const [{ users, roles }, { invitations }] = await Promise.all([api("/api/admin/users"), api("/api/admin/invitations")]);
   const me = state.session.user.id;
   const roleOpts = (sel) => roles.map((r) => html`<option value="${r}" ${r === sel ? raw("selected") : ""}>${t(`role_name.${r}`, {}, r)}</option>`);
-  mount(main, html`<h1 class="page-title">${t("admin.title")}</h1><p class="page-lead">${t("admin.lead")}</p>
-    <div class="card"><div class="card-h"><h2>${t("admin.users", { n: users.length })}</h2><a class="small" href="#/updates?tab=activity">${t("admin.audit")} →</a></div>
+  const open = invitations.filter((i) => !i.accepted_at);
+  mount(main, html`<div class="page-head"><h1 class="page-title">${t("admin.title")}</h1><span class="spacer"></span><a class="btn btn-ghost btn-sm" href="#/updates?tab=activity">${t("admin.audit")} →</a></div>
+    <p class="page-lead">${t("admin.lead")}</p>
+    <div id="adminTabs">
+    ${tabBar("adm", [["people", html`${t("admin.users", { n: users.length })}`], ["invite", t("admin.invite")],
+      ["pending", html`${t("admin.pending")}${open.length ? html`<span class="tab-n">${open.length}</span>` : ""}`]], t("admin.title"))}
+    ${tabPanel("adm", "people", html`<div class="card">
       <div class="table-wrap"><table class="gov"><thead><tr><th>${t("auth.name")}</th><th>${t("auth.role")}</th><th>${t("admin.status")}</th><th>${t("auth.mfa")}</th><th>${t("auth.last_active")}</th></tr></thead><tbody>
       ${users.map((u) => html`<tr><td><strong>${u.display_name || "—"}</strong><br><span class="small muted">${u.email}</span></td>
         <td>${u.user_id === me ? t(`role_name.${u.role}`, {}, u.role) : html`<select data-role="${u.user_id}" aria-label="${t("auth.role")}">${roleOpts(u.role)}</select>`}</td>
         <td>${u.user_id === me ? t(`admin.st_${u.status}`) : html`<button class="btn btn-ghost btn-sm" data-status="${u.user_id}" data-to="${u.status === "active" ? "disabled" : "active"}">${u.status === "active" ? t("admin.disable") : t("admin.enable")}</button>`}</td>
         <td>${u.mfa_enabled ? "✓" : "—"}</td><td class="small">${fmtDateTime(u.last_seen)}</td></tr>`)}
-      </tbody></table></div></div>
-    <div class="grid g-2" style="margin-top:16px">
-      <div class="card"><div class="card-h"><h2>${t("admin.invite")}</h2></div><form class="card-b stack" id="invForm">
+      </tbody></table></div></div>`)}
+    ${tabPanel("adm", "invite", html`<div class="card" style="max-width:640px"><form class="card-b stack" id="invForm">
         <div class="small muted">${t("admin.invite_hint")}</div>
         <div><label class="f" for="ie">${t("auth.email")}</label><input type="email" id="ie" maxlength="254" required></div>
         <div><label class="f" for="ir">${t("auth.role")}</label><select id="ir">${roleOpts("client")}</select></div>
-        <div><button class="btn btn-sm" type="submit">${t("admin.invite")}</button></div><div id="invLink"></div></form></div>
-      <div class="card"><div class="card-h"><h2>${t("admin.pending")}</h2></div><div class="card-b">
-        ${invitations.filter((i) => !i.accepted_at).length ? html`<ul class="list-plain">${invitations.filter((i) => !i.accepted_at).map((i) => html`<li>${i.email} · ${t(`role_name.${i.role}`, {}, i.role)}
+        <div><button class="btn btn-sm" type="submit">${t("admin.invite")}</button></div><div id="invLink"></div></form></div>`)}
+    ${tabPanel("adm", "pending", html`<div class="card" style="max-width:860px"><div class="card-b">
+        ${open.length ? html`<ul class="list-plain">${open.map((i) => html`<li>${i.email} · ${t(`role_name.${i.role}`, {}, i.role)}
           <span class="small muted">${t("admin.expires")} ${fmtDateTime(i.expires_at)}</span> <button class="btn btn-ghost btn-sm" data-uninvite="${i.id}">${t("admin.revoke")}</button></li>`)}</ul>`
-          : html`<div class="empty">${t("admin.none_pending")}</div>`}</div></div>
+          : html`<div class="empty">${t("admin.none_pending")}</div>`}</div></div>`)}
     </div>`);
+  bindTabs($("#adminTabs"), "adm", "adminTab");
   $$("[data-role]", main).forEach((s) => { s.onchange = async () => {
     try { await api(`/api/admin/users/${encodeURIComponent(s.dataset.role)}`, { method: "PATCH", body: { role: s.value } }); toast(t("common.saved")); }
     catch (err) { toast(err.message, true); viewAdmin(main); } }; });
@@ -280,7 +290,7 @@ export async function membersCard(el, caseId) {
     ${data.can_manage ? html`<form class="stack" id="memForm" style="margin-top:10px"><div class="small muted">${t("members.add_hint")}</div>
       <input id="memQ" placeholder="${t("members.search_ph")}" aria-label="${t("members.search_ph")}" autocomplete="off" list="memList">
       <datalist id="memList"></datalist>
-      <div class="row"><select id="memAccess" aria-label="${t("members.access")}"><option value="advocate">${t("members.advocate")}</option><option value="client">${t("members.client")}</option><option value="owner">${t("members.owner")}</option></select>
+      <div class="row"><select id="memAccess" aria-label="${t("members.access")}"><option value="advocate">${t("members.advocate")}</option><option value="owner">${t("members.owner")}</option></select>
         <button class="btn btn-sm" type="submit">${t("members.add")}</button></div></form>` : ""}
   </div></div>`);
   let timer;

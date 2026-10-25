@@ -185,11 +185,12 @@ def ensure_profile(user: dict) -> dict:
                     claim_unowned(uid, org)
                 db.audit("invitation.accept", "invitation", inv["id"], role=role)
             elif config.SIGNUP_MODE == "open":
+                # Public registration: always a Lawyer, never an administrator (only an invitation can do that).
                 with db.tx() as c:
                     c.execute("INSERT INTO memberships(org_id, user_id, role, created_at, created_by) VALUES(?,?,?,?,?)",
-                              (db.DEFAULT_ORG, uid, "client", now, None))
-                org, role = db.DEFAULT_ORG, "client"
-                db.audit("membership.self_registered", "user", uid, role="client")
+                              (db.DEFAULT_ORG, uid, "advocate", now, None))
+                org, role = db.DEFAULT_ORG, "advocate"
+                db.audit("membership.self_registered", "user", uid, role="advocate")
     out = dict(prof)
     out.update(org_id=org, role=role)
     return out

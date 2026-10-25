@@ -129,7 +129,8 @@ Full description, test evidence and remaining risks: [docs/SECURITY.md](docs/SEC
 * Per-user accounts on Supabase Auth (verified e-mail, reset links, TOTP two-step verification + recovery codes),
   used server-side; the browser holds only an HttpOnly session cookie. Server-side sessions with idle/absolute expiry,
   revocation and rotation; account lockout; CSRF header; Host allow-list; Origin check.
-* Roles (client, advocate, administrator, security auditor) assigned only by an administrator; a central permission
+* Two personas — Lawyer (anyone who registers and verifies their e-mail) and Administrator (appointed only by an
+  administrator); a central permission
   matrix (`nyaya/authz.py`) and per-case membership checked on every request; the same rules enforced again by
   Postgres row-level security.
 * Uploads: extension allow-list, magic-byte check, active-content check (PDF JavaScript, Word macros/remote

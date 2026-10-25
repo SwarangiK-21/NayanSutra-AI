@@ -131,7 +131,8 @@ class VectorIndex:
 
     def search(self, qvec: np.ndarray, k: int, *, case_id: str | None = None,
                collections: set[str] | None = None, doc_ids: set[str] | None = None,
-               include_case_docs: bool = True) -> list[tuple[int, float]]:
+               include_case_docs: bool = True, skip_doc_ids: set[str] | frozenset[str] | None = None
+               ) -> list[tuple[int, float]]:
         """Top-k (chunk_id, cosine) under the filters.
 
         Library collections are shared; 'case' collection rows are only visible
@@ -144,6 +145,8 @@ class VectorIndex:
                 mask &= np.isin(self.doc, list(doc_ids))
             if collections is not None:
                 mask &= np.isin(self.coll, list(collections))
+            if skip_doc_ids:
+                mask &= ~np.isin(self.doc, list(skip_doc_ids))
             is_case = self.coll == "case"
             if include_case_docs and case_id:
                 mask &= ~is_case | (self.case == case_id)

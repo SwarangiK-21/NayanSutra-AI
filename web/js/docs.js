@@ -15,7 +15,7 @@ export async function viewDocument(main, r) {
   const isEnglish = L.lang === "en";
   const ocr = data.ocr;
   mount(main, html`
-    <div class="row"><h1 class="page-title">${d.title}</h1><span class="spacer"></span>
+    <div class="page-head"><h1 class="page-title">${d.title}</h1><span class="spacer"></span>
       <a class="btn btn-ghost" href="/api/documents/${encodeURIComponent(id)}/file" target="_blank" rel="noopener">${t("doc.original")} ↗</a>
       ${d.case_id ? html`<a class="btn btn-ghost" href="#/research?case=${encodeURIComponent(d.case_id)}&doc=${encodeURIComponent(id)}&task=summary">💬 ${t("doc.ask")}</a>` : ""}</div>
     <div class="row" style="margin-bottom:12px">
@@ -28,13 +28,14 @@ export async function viewDocument(main, r) {
     </div>
     ${["failed", "quarantined", "cancelled"].includes(d.status) ? html`<div class="notice notice-red"><strong>${t(`doc.st_${d.status}`)}</strong> — ${d.error}</div>` : ""}
     ${d.meta?.quality?.warnings?.length ? html`<div class="notice" style="margin-bottom:12px"><strong>${t("doc.quality_title")}</strong><ul>${d.meta.quality.warnings.map((w) => html`<li>${w}</li>`)}</ul></div>` : ""}
-    <div class="card"><div class="card-h"><h2>${t("doc.ai_tools")}</h2><span class="small muted">${t("doc.ai_note")}</span></div><div class="card-b">
-      <div class="row">
-        ${!isEnglish ? html`<button class="btn" id="trBtn" ${d.status !== "ready" ? raw("disabled") : ""}>${der.translation_en ? t("doc.retranslate") : t("doc.translate")}</button>` : ""}
-        <button class="btn btn-saffron" data-sum="en" ${d.status !== "ready" ? raw("disabled") : ""}>${t("doc.summary_en")}</button>
-        <button class="btn btn-ghost" data-sum="hi" lang="hi" ${d.status !== "ready" ? raw("disabled") : ""}>${t("doc.summary_hi")}</button>
-        <button class="btn btn-ghost" data-sum="mr" lang="mr" ${d.status !== "ready" ? raw("disabled") : ""}>${t("doc.summary_mr")}</button></div>
-      <div id="jobBox" style="margin-top:10px" aria-live="polite"></div></div></div>
+    <div class="row" style="margin:4px 0 6px" title="${t("doc.ai_note")}"><span class="small muted">${t("doc.ai_tools")}:</span>
+      <button class="btn btn-saffron btn-sm" data-sum="en" ${d.status !== "ready" ? raw("disabled") : ""}>${t("doc.summary_en")}</button>
+      ${!isEnglish ? html`<button class="btn btn-ghost btn-sm" id="trBtn" ${d.status !== "ready" ? raw("disabled") : ""}>${der.translation_en ? t("doc.retranslate") : t("doc.translate")}</button>` : ""}
+      <details class="menu"><summary class="btn btn-ghost btn-sm">${t("doc.other_summaries")}</summary><div class="menu-list" style="left:0;right:auto">
+        <button type="button" data-sum="hi" lang="hi" ${d.status !== "ready" ? raw("disabled") : ""}>${t("doc.summary_hi")}</button>
+        <button type="button" data-sum="mr" lang="mr" ${d.status !== "ready" ? raw("disabled") : ""}>${t("doc.summary_mr")}</button></div></details></div>
+    <div class="small muted" style="margin-bottom:4px">${t("doc.ai_note")}</div>
+    <div id="jobBox" aria-live="polite"></div>
     <div class="tabs" role="tablist" style="margin-top:16px">
       ${[["summary", t("doc.tab_summary")], ["text", t("doc.tab_text")], ...(!isEnglish ? [["translation", t("doc.tab_translation")]] : []), ["original", t("doc.tab_original")]].map(([k, lbl]) =>
         html`<a role="tab" class="tab ${k === tab ? "active" : ""}" aria-selected="${String(k === tab)}" href="#/doc/${encodeURIComponent(id)}?tab=${k}">${lbl}</a>`)}</div>

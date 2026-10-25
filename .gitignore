@@ -14,3 +14,5 @@ supabase/.temp/
 supabase/.branches/
 models/
 data/backups/
+# Acts imported from India Code at run time (kept with their own manifest; re-importable from the app)
+data/library/bare_acts/states/

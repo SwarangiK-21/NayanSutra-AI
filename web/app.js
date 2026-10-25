@@ -1,8 +1,8 @@
 /* NyaySutra AI — frontend entry: router, chrome, and the core views (dashboard, cases, research, library).
    Feature views live in /static/js/*.js. No external libraries (CSP: script-src 'self'). */
-import { $, $$, api, bindRowLinks, COLL_LABEL, crumbs, daysTo, fieldError, fmtDate, formData, hideDrawer, html,
+import { $, $$, api, bindRowLinks, bindTabs, COLL_LABEL, crumbs, daysTo, fieldError, fmtDate, formData, hideDrawer, html,
   initSession, markdown, mount, num, raw, reference, setUnauthenticatedHandler, showDrawer, spinner, state, store,
-  toast, TYPE_BADGE } from "./js/core.js";
+  tabBar, tabPanel, toast, TYPE_BADGE } from "./js/core.js";
 import { applyStatic, initialLang, lang, LANGS, setLang, t } from "./js/i18n.js";
 import { viewCaseSearch } from "./js/casesearch.js";
 import { openDocument, viewDocument, viewUpload } from "./js/docs.js";
@@ -12,6 +12,8 @@ import { refreshBell, viewUpdates } from "./js/updates.js";
 import { viewAwareness } from "./js/awareness.js";
 import { viewSearch } from "./js/search.js";
 import { viewJobs } from "./js/jobs.js";
+import { upcomingCard, viewCalendar } from "./js/calendar.js";
+import { catalogueView } from "./js/statelaw.js";
 import { voiceControls, speakButton, bindSpeak } from "./js/voice.js";
 import { applyNavPermissions, can, membersCard, renderEnroll, renderForgot, renderLogin, renderMfa, renderReset,
   renderSignup, viewAccount, viewAdmin } from "./js/auth.js";
@@ -25,7 +27,12 @@ async function refreshStatus() {
     const idx = html`<span class="chip ${s.indexed_chunks ? "chip-ok" : "chip-warn"}">${t("status.index", { n: num(s.indexed_chunks) })}</span>`;
     const models = s.models_ready ? "" : html`<span class="chip chip-wait">${t("status.loading_models")}</span>`;
     const proc = s.processing ? html`<span class="chip chip-wait">${t("status.indexing", { n: s.processing })}</span>` : "";
-    mount($("#mastStatus"), html`${llm}${idx}${models}${proc}`);
+    // One chip with the state that matters most; the full status opens on demand.
+    const head = s.llm_reachable === false ? llm : s.processing ? proc : !s.models_ready ? models
+      : html`<span class="chip chip-ok"><span class="dot" aria-hidden="true"></span> ${t("status.ready")}</span>`;
+    const open = $("#mastStatus .status-pop")?.open;
+    mount($("#mastStatus"), html`<details class="status-pop" ${open ? raw("open") : ""}><summary aria-label="${t("status.system")}">${head}</summary>
+      <div class="menu-list"><div class="small muted">${t("status.system")}</div>${llm}${idx}${models}${proc}</div></details>`);
     if (!s.models_ready) setTimeout(refreshStatus, 3000);  // clear the chip promptly once warm-up ends
   } catch { mount($("#mastStatus"), html`<span class="chip chip-err">${t("status.unreachable")}</span>`); }
 }
@@ -34,7 +41,7 @@ async function refreshStatus() {
 const routes = { dashboard: viewDashboard, cases: viewCases, research: viewResearch, acts: viewActs,
   drafts: viewDrafts, limitation: viewLimitation, about: viewAbout, lookup: viewCaseSearch, doc: viewDocument,
   upload: viewUpload, drafting: viewDrafting, notice: viewNotice, updates: viewUpdates, awareness: viewAwareness,
-  search: viewSearch, tools: viewTools, account: viewAccount, admin: viewAdmin, jobs: viewJobs,
+  search: viewSearch, tools: viewTools, account: viewAccount, admin: viewAdmin, jobs: viewJobs, calendar: viewCalendar,
   login: (m, r) => renderLogin(route, r.q), signup: (m, r) => renderSignup(route, r.q), forgot: () => renderForgot(),
   "reset-password": () => renderReset() };
 // Pages a signed-out visitor may open (public legal information); everything else asks them to sign in.
@@ -45,7 +52,9 @@ function parseHash() {
   const parts = path.split("/").map(decodeURIComponent);
   return { name: parts[0], arg: parts[1], q: new URLSearchParams(qs || "") };
 }
+let routeSeq = 0;
 async function route() {
+  const seq = ++routeSeq;
   clearInterval(state.pollTimer);
   window.onbeforeunload = null;  // the draft editor sets an unsaved-changes guard while it is open
   const r = parseHash();
@@ -65,7 +74,8 @@ async function route() {
   $$("[data-nav]").forEach((a) => { const on = a.dataset.nav === navName; a.classList.toggle("active", on); if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   $("#navList").classList.remove("open");
   const main = $("#main");
-  try { await fn(main, r); } catch (e) { if (!e.handled) mount(main, html`<div class="notice notice-red">${e.message}</div>`); }
+  // A page that fails after the user has already moved on must not overwrite the page now on screen.
+  try { await fn(main, r); } catch (e) { if (!e.handled && seq === routeSeq) mount(main, html`<div class="notice notice-red">${e.message}</div>`); }
   // A new page starts at the top; staying on the same page (e.g. switching chats) keeps the scroll.
   const page = `${r.name}/${r.arg || ""}`;
   if (page !== state.lastPage) { state.lastPage = page; window.scrollTo(0, 0); }
@@ -86,46 +96,33 @@ async function viewDashboard(main) {
   const [d, notes] = await Promise.all([api("/api/dashboard"), api("/api/notifications?limit=5")]);
   const lib = d.library || {};
   const actions = [
-    ["🔎", t("qa.search_case"), "#/lookup"], ["＋", t("qa.new_case"), "#/cases?new=1"],
-    ["📄", t("qa.upload_summarise"), "#/upload"], ["💬", t("qa.research_chat"), "#/research"],
+    ["📅", t("cal.title"), "#/calendar"], ["🔎", t("qa.search_case"), "#/lookup"], ["📄", t("qa.upload_summarise"), "#/upload"],
     ["✍", t("qa.draft"), "#/drafting"], ["✉", t("qa.notice"), "#/notice"],
-    ["📘", t("qa.search_acts"), "#/acts"], ["🛣", t("qa.awareness"), "#/awareness"],
-    ["🔔", t("qa.updates"), "#/updates"],
+    ["📘", t("qa.search_acts"), "#/acts"], ["🛣", t("qa.awareness"), "#/awareness"], ["🔔", t("qa.updates"), "#/updates"],
   ];
   mount(main, html`
     <h1 class="page-title">${t("nav.dashboard")}</h1>
     <p class="page-lead">${t("dash.lead")}</p>
     <div class="banner">
       <div><h2>${t("dash.banner_title")}</h2><p>${t("dash.banner_text")}</p></div>
-      <div class="row"><a class="btn btn-saffron" href="#/research">${t("dash.start_research")}</a><a class="btn btn-ghost" href="#/cases?new=1">${t("qa.new_case")}</a></div>
+      <div class="row"><a class="btn btn-saffron" href="#/research">${t("dash.start_research")}</a><a class="btn btn-ghost" href="#/cases?new=1">＋ ${t("qa.new_case")}</a></div>
     </div>
-    <section aria-labelledby="qaTitle" style="margin-top:16px">
-      <h2 id="qaTitle" class="section-title">${t("dash.quick_actions")}</h2>
-      <div class="action-grid">${actions.map(([ico, label, href]) => html`<a class="card action" href="${href}"><span class="action-ico" aria-hidden="true">${ico}</span><span>${label}</span></a>`)}</div>
-    </section>
-    <div class="grid g-4 tiles" style="margin-top:16px">
+    <nav class="quick-links" aria-label="${t("dash.quick_actions")}" style="margin-top:14px">${actions.map(([ico, label, href]) => html`<a href="${href}"><span aria-hidden="true">${ico}</span>${label}</a>`)}</nav>
+    <div class="grid g-4 tiles" style="margin-top:20px">
       ${tile("⚖", d.total_cases, t("dash.case_files"), "#/cases")}
       ${tile("📄", lib.case || 0, t("dash.case_documents"), "#/cases")}
       ${tile("📘", lib.bare_act || 0, t("dash.acts_indexed"), "#/acts")}
       ${tile("✍", lib.draft || 0, t("dash.templates"), "#/drafts")}
     </div>
-    <div class="grid g-side" style="margin-top:16px">
-      <div class="card"><div class="card-h"><h2>${t("dash.upcoming")}</h2><a class="small" href="#/cases">${t("dash.all_cases")} →</a></div>
-        <div class="table-wrap">${d.upcoming.length ? html`<table class="gov"><thead><tr><th>${t("col.date")}</th><th>${t("col.matter")}</th><th>${t("col.type")}</th><th>${t("col.court")}</th></tr></thead><tbody>
-          ${d.upcoming.map((c) => html`<tr class="clickable" data-href="#/cases/${encodeURIComponent(c.id)}"><td><strong>${fmtDate(c.next_hearing_date)}</strong><br><span class="small muted">${t("dash.in_days", { n: daysTo(c.next_hearing_date) })}</span></td>
-            <td>${c.title}</td><td><span class="badge ${TYPE_BADGE[c.case_type] || ""}">${t(`cat.${c.case_type}`, {}, c.case_type)}</span></td><td class="small">${c.court}</td></tr>`)}
-          </tbody></table>` : html`<div class="empty">${t("dash.no_hearings")}</div>`}</div></div>
-      <div class="stack">
-        <div class="card"><div class="card-h"><h2>${t("dash.recent_updates")}</h2><a class="small" href="#/updates">${t("common.view_all")} →</a></div><div class="card-b">
+    <div class="grid g-side" style="margin-top:20px">
+      <div class="card"><div class="card-h"><h2>${t("dash.upcoming_all")}</h2><a class="small" href="#/calendar">${t("cal.open")} →</a></div>
+        <div id="dashUpcoming">${spinner()}</div></div>
+      <div class="card"><div class="card-h"><h2>${t("dash.recent_updates")}${notes.items.some((n) => !n.read_at) ? html` <span class="tab-n">${notes.items.filter((n) => !n.read_at).length}</span>` : ""}</h2>
+          <a class="small" href="#/updates">${t("common.view_all")} →</a></div><div class="card-b">
           ${notes.items.length ? html`<ul class="list-plain">${notes.items.map((n) => html`<li>${n.link ? html`<a href="${n.link}">${n.title}</a>` : n.title}<br><span class="small muted">${fmtDate(n.created_at)}${n.read_at ? "" : html` · <span class="chip chip-wait">${t("updates.new")}</span>`}</span></li>`)}</ul>`
-            : html`<div class="empty">${t("dash.no_updates")}</div>`}
-        </div></div>
-        <div class="card"><div class="card-h"><h2>${t("dash.recent_research")}</h2></div><div class="card-b">
-          ${d.recent_chats.length ? html`<ul class="list-plain">${d.recent_chats.map((c) => html`<li><a href="#/research?${c.case_id ? `case=${encodeURIComponent(c.case_id)}&` : ""}chat=${encodeURIComponent(c.id)}">${c.title}</a><br>
-            <span class="small muted">${c.case_title || t("research.general")} · ${fmtDate(c.updated_at)}</span></li>`)}</ul>` : html`<div class="empty">${t("dash.no_research")}</div>`}
-        </div></div>
-      </div>
+            : html`<div class="empty">${t("dash.no_updates")}</div>`}</div></div>
     </div>`);
+  upcomingCard($("#dashUpcoming"));
   bindRowLinks(main);
 }
 const tile = (ico, n, lbl, href) => html`<a class="card tile" href="${href}" style="text-decoration:none"><span class="tile-ico" aria-hidden="true">${ico}</span>
@@ -277,15 +274,22 @@ async function viewCase(main, r) {
   const types = docsRes.types;
   const idents = [["form.case_number", c.case_number], ["form.filing_number", c.filing_number], ["form.cnr", c.cnr_number],
     ["form.fir", c.fir_number], ["form.police_station", c.police_station], ["form.filing_year", c.filing_year]].filter(([, v]) => v);
+  const nNotes = (c.notes || []).length;
+  const tabs = [["overview", t("case.tab_overview")], ["docs", html`${t("case.tab_documents")}<span class="tab-n" id="docN">${docsRes.documents.length}</span>`],
+    ...(may.provisions ? [["provisions", t("case.tab_provisions")]] : []),
+    ...(may.notes ? [["notes", html`${t("case.notes")}${nNotes ? html`<span class="tab-n">${nNotes}</span>` : ""}`]] : []),
+    ["team", t("case.tab_team")]];
   mount(main, html`
-    <div class="row"><h1 class="page-title">${c.title}</h1><span class="badge ${TYPE_BADGE[c.case_type] || ""}">${t(`cat.${c.case_type}`, {}, c.case_type)}</span>
+    <div class="page-head"><h1 class="page-title">${c.title}</h1><span class="badge ${TYPE_BADGE[c.case_type] || ""}">${t(`cat.${c.case_type}`, {}, c.case_type)}</span>
       ${c.is_draft ? html`<span class="chip chip-warn">${t("cases.draft_badge")}</span>` : ""}
       <span class="spacer"></span>${may.drafts ? html`<a class="btn btn-ghost" href="#/drafting?case=${encodeURIComponent(id)}">✍ ${t("qa.draft")}</a>` : ""}
       <a class="btn btn-saffron" href="#/research?case=${encodeURIComponent(id)}">💬 ${t("case.research_this")}</a></div>
-    <p class="page-lead">${[c.case_subtype, c.case_number || c.cnr_number || t("case.no_number"), c.court || t("case.no_court"), [c.district, c.state].filter(Boolean).join(", "), c.status].filter(Boolean).join(" · ")}</p>
+    <p class="case-meta">${[c.case_subtype, c.case_number || c.cnr_number || t("case.no_number"), c.court || t("case.no_court"), [c.district, c.state].filter(Boolean).join(", "), c.status].filter(Boolean).map((x) => html`<span>${x}</span>`)}
+      ${c.next_hearing_date ? html`<span>${t("form.next_hearing")}: <strong>${fmtDate(c.next_hearing_date)}</strong></span>` : ""}</p>
     ${c.is_draft ? html`<div class="notice" style="margin-bottom:16px">${t("case.draft_notice")}</div>` : ""}
-    <div class="grid g-side">
-      <div class="stack">
+    <div id="caseTabs">
+    ${tabBar("case", tabs, t("case.sections"))}
+    ${tabPanel("case", "overview", html`<div class="grid g-side">
         <div class="card dossier"><div class="card-h"><h2>${t("case.dossier")}</h2>${may["case.update"] ? html`<button class="btn btn-ghost btn-sm" id="editBtn">${t("common.edit")}</button>` : ""}</div>
           <div class="card-b" id="dossierView"><dl>
             <dt>${t("col.client")}</dt><dd>${c.client_name || "—"} (${c.client_role || "—"})</dd>
@@ -301,29 +305,28 @@ async function viewCase(main, r) {
             <button class="btn btn-ghost" type="button" id="cancelEdit">${t("common.cancel")}</button>
             <span class="spacer"></span>${may["case.delete"] ? html`<button class="btn btn-danger" type="button" id="deleteCase">${t("case.delete")}</button>` : ""}</div></form>
         </div>
-        <div id="provPanel"></div>
-        <div class="card"><div class="card-h"><h2>${t("case.documents")}</h2><span class="small muted">${t("case.doc_formats")}</span></div>
+        <div class="card"><div class="card-h"><h2>${t("case.ask")}</h2></div><div class="card-b quick">
+          ${["case.q1", "case.q2", "case.q3", "case.q4"].map((k) =>
+            html`<a class="btn btn-ghost" style="justify-content:flex-start;text-align:left" href="#/research?case=${encodeURIComponent(id)}&q=${encodeURIComponent(t(k))}">${t(k)}</a>`)}
+        </div></div>
+      </div>`)}
+    ${tabPanel("case", "docs", html`<div class="card"><div class="card-h"><h2>${t("case.documents")}</h2><span class="small muted">${t("case.doc_formats")}</span></div>
           <div class="card-b">
             ${may["documents.upload"] ? html`<div class="row" style="margin-bottom:10px"><label class="f" for="docType" style="margin:0">${t("case.doc_type")}</label>
               <select id="docType" style="max-width:260px"><option value="auto">${t("case.detect")}</option>${Object.entries(types).filter(([k]) => k !== "template").map(([k, v]) => html`<option value="${k}">${v}</option>`)}</select></div>
             <label class="dropzone" id="drop"><input type="file" id="fileInput" multiple accept=".pdf,.docx,.doc,.txt,.md,.png,.jpg,.jpeg,.tif,.tiff,.webp">
               <strong>${t("case.drop")}</strong><br><span class="small muted">${t("case.drop_hint")}</span></label>` : ""}
             <div id="docList" style="margin-top:8px"></div>
-          </div></div>
-      </div>
-      <div class="stack">
-        <div id="membersPanel"></div>
-        ${may.notes ? html`<div class="card"><div class="card-h"><h2>${t("case.notes")}</h2></div><div class="card-b">
+          </div></div>`)}
+    ${may.provisions ? tabPanel("case", "provisions", html`<div id="provPanel"></div>`) : ""}
+    ${may.notes ? tabPanel("case", "notes", html`<div class="card" style="max-width:860px"><div class="card-h"><h2>${t("case.notes")}</h2></div><div class="card-b">
           <form id="noteForm" class="stack"><textarea id="noteText" placeholder="${t("case.note_ph")}" aria-label="${t("case.new_note")}"></textarea>
-            <button class="btn btn-sm" type="submit">${t("case.add_note")}</button></form>
-          <div style="margin-top:12px">${(c.notes || []).length ? c.notes.map((n) => html`<div class="note"><div class="small muted">${n.author} · ${fmtDate(n.created_at)}</div>${n.content}</div>`) : html`<div class="empty">${t("case.no_notes")}</div>`}</div>
-        </div></div>` : ""}
-        <div class="card"><div class="card-h"><h2>${t("case.ask")}</h2></div><div class="card-b quick">
-          ${["case.q1", "case.q2", "case.q3", "case.q4"].map((k) =>
-            html`<a class="btn btn-ghost" href="#/research?case=${encodeURIComponent(id)}&q=${encodeURIComponent(t(k))}">${t(k)}</a>`)}
-        </div></div>
-      </div>
+            <div><button class="btn btn-sm" type="submit">${t("case.add_note")}</button></div></form>
+          <div style="margin-top:16px">${nNotes ? c.notes.map((n) => html`<div class="note"><div class="small muted">${n.author} · ${fmtDate(n.created_at)}</div>${n.content}</div>`) : html`<div class="empty">${t("case.no_notes")}</div>`}</div>
+        </div></div>`) : ""}
+    ${tabPanel("case", "team", html`<div id="membersPanel" style="max-width:860px"></div>`)}
     </div>`);
+  bindTabs($("#caseTabs"), "case", "caseTab", c.is_draft && r.q.get("edit") ? "overview" : r.q.get("tab"));
   if (may.provisions) provisionsPanel($("#provPanel"), c, () => route());
   membersCard($("#membersPanel"), id);
 
@@ -354,7 +357,7 @@ async function viewCase(main, r) {
     clearInterval(state.pollTimer);
     if (docs.some((d) => d.status === "processing")) state.pollTimer = setInterval(loadDocs, 2500);
   };
-  const loadDocs = async () => { try { renderDocs((await api(`/api/documents?case_id=${encodeURIComponent(id)}`)).documents); refreshStatus(); } catch { /* transient */ } };
+  const loadDocs = async () => { try { const { documents } = await api(`/api/documents?case_id=${encodeURIComponent(id)}`); renderDocs(documents); $("#docN").textContent = String(documents.length); refreshStatus(); } catch { /* transient */ } };
   renderDocs(docsRes.documents);
 
   const upload = async (files) => {
@@ -400,47 +403,120 @@ async function viewResearch(main, r) {
   const qCase = r.q.get("case");
   if (qCase !== null) { state.caseId = qCase || null; store.set("caseId", state.caseId); }
   state.chatId = r.q.get("chat") || null;
-  const { cases } = await api("/api/cases");
+  const [{ cases }, ref] = await Promise.all([api("/api/cases"), reference()]);
   if (state.caseId && !cases.some((c) => c.id === state.caseId)) state.caseId = null;
   const cur = cases.find((c) => c.id === state.caseId);
+  // Jurisdiction: "" = the matter's state (or all of India without one); "all" = every state; or one state / UT.
+  state.jur = store.get("rs.jur", "");
+  if (state.jur && state.jur !== "all" && !ref.states.includes(state.jur)) state.jur = "";
+  const jurLabel = () => state.jur === "all" ? t("research.jur_all_short") : state.jur ? t("research.jur_state_short", { state: state.jur })
+    : cur?.state ? t("research.jur_state_short", { state: cur.state }) : t("research.jur_all_short");
   if (!cur && state.scope === "case") state.scope = "all";
   crumbs([[t("nav.research")], ...(cur ? [[cur.title, `#/cases/${encodeURIComponent(cur.id)}`]] : [])]);
+  const scopeLabel = () => t({ all: "research.scope_all", case: "research.scope_case", library: "research.scope_library" }[state.scope] || "research.scope_all");
+  const ctx = () => html`${cur ? html`<strong>${cur.title}</strong>` : t("research.general")} · ${scopeLabel()} · ${jurLabel()}`;
   mount(main, html`
-    <h1 class="page-title">${t("nav.research")}</h1>
-    <p class="page-lead">${cur ? t("research.lead_case") : t("research.lead")}</p>
-    <div class="research">
-      <aside class="side" aria-label="${t("research.settings")}">
-        <div class="card"><div class="card-h"><h3>${t("research.matter")}</h3></div><div class="card-b">
-          <select id="caseSel" aria-label="${t("research.select_case")}"><option value="">${t("research.general_option")}</option>${cases.map((c) => html`<option value="${c.id}" ${c.id === state.caseId ? raw("selected") : ""}>[${t(`cat.${c.case_type}`, {}, c.case_type)}] ${c.title}</option>`)}</select>
-          <div class="scope" role="radiogroup" aria-label="${t("research.scope")}" style="margin-top:10px">
+    <div class="rs-bar">
+      <h1 class="page-title">${t("nav.research")}</h1>
+      <button type="button" class="btn btn-ghost btn-sm rs-toggle" id="tgLeft" aria-controls="rsLeft" aria-pressed="false">☰ ${t("research.matters")}</button>
+      <button type="button" class="btn btn-ghost btn-sm rs-toggle" id="tgHist" aria-controls="rsHist" aria-pressed="false">🕘 ${t("research.history")}</button>
+      <span class="rs-ctx" id="rsCtx" title="${cur ? cur.title : t("research.general")}">${ctx()}</span>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-ghost btn-sm" id="newChat">＋ ${t("research.new_chat")}</button>
+      <button type="button" class="btn btn-ghost btn-sm rs-toggle" id="tgRight" aria-controls="rsRight" aria-pressed="false">${t("research.sources")} <span class="tab-n" id="srcN">0</span></button>
+    </div>
+    <div class="research" id="rsGrid">
+      <aside class="card rs-panel rs-left" id="rsLeft" aria-label="${t("research.matters")}">
+        <div class="card-h"><h2>${t("research.matters")}</h2><button type="button" class="rs-close" data-close="left" aria-label="${t("research.close_panel")}" title="${t("research.close_panel")}">✕</button></div>
+        <div class="rs-panel-b">
+          <h3 class="mini"><label for="caseSel">${t("research.matter")}</label></h3>
+          <select id="caseSel"><option value="">${t("research.general_option")}</option>${cases.map((c) => html`<option value="${c.id}" ${c.id === state.caseId ? raw("selected") : ""}>[${t(`cat.${c.case_type}`, {}, c.case_type)}] ${c.title}</option>`)}</select>
+          <h3 class="mini" id="scopeH">${t("research.scope")}</h3>
+          <div class="scope" role="radiogroup" aria-labelledby="scopeH">
             <label><input type="radio" name="scope" value="all" ${state.scope === "all" ? raw("checked") : ""}> <span><strong>${t("research.scope_all")}</strong><br><span class="small muted">${t("research.scope_all_hint")}</span></span></label>
             <label><input type="radio" name="scope" value="case" ${state.scope === "case" ? raw("checked") : ""} ${cur ? "" : raw("disabled")}> <span><strong>${t("research.scope_case")}</strong><br><span class="small muted">${t("research.scope_case_hint")}</span></span></label>
             <label><input type="radio" name="scope" value="library" ${state.scope === "library" ? raw("checked") : ""}> <span><strong>${t("research.scope_library")}</strong><br><span class="small muted">${t("research.scope_library_hint")}</span></span></label>
           </div>
-          <div id="caseDocs" class="small" style="margin-top:8px"></div></div></div>
-        <div class="card"><div class="card-h"><h3>${t("research.conversations")}</h3><button class="btn btn-sm" id="newChat">＋ ${t("research.new")}</button></div>
-          <ul class="chat-list" id="chatList"></ul></div>
+          <h3 class="mini"><label for="jurSel">${t("research.jurisdiction")}</label></h3>
+          <select id="jurSel"><option value="">${cur?.state ? t("research.jur_auto_case", { state: cur.state }) : t("research.jur_auto_none")}</option>
+            <option value="all" ${state.jur === "all" ? raw("selected") : ""}>${t("research.jur_all")}</option>
+            <optgroup label="${t("research.jur_states")}">${ref.states.map((s) => html`<option value="${s}" ${s === state.jur ? raw("selected") : ""}>${t("research.jur_state_opt", { state: s })}</option>`)}</optgroup></select>
+          <div class="hint">${t("research.jur_hint")} <a href="#/acts?tab=catalogue">${t("research.jur_add")}</a></div>
+          <div id="caseDocs" class="small" style="margin-top:12px"></div>
+        </div>
+      </aside>
+      <aside class="card rs-panel rs-hist" id="rsHist" aria-label="${t("research.history")}">
+        <div class="card-h"><h2>🕘 ${t("research.history")}</h2><button type="button" class="rs-close" data-close="hist" aria-label="${t("research.close_panel")}" title="${t("research.close_panel")}">✕</button></div>
+        <div class="rs-panel-b" id="histBody">
+          ${tabBar("hist", [["chats", t("research.conversations")], ["searches", t("research.searches")]], t("research.history"))}
+          ${tabPanel("hist", "chats", html`<ul class="chat-list hist-list" id="histChats"></ul>`)}
+          ${tabPanel("hist", "searches", html`<ul class="chat-list hist-list" id="histSearches"></ul><div id="histClear" style="margin-top:10px"></div>`)}
+        </div>
       </aside>
       <section class="card chatbox" aria-label="${t("research.conversation")}">
         <div class="thread" id="thread" aria-live="polite"></div>
-        <form class="composer" id="composer">
-          <div class="suggest" id="suggest"></div>
-          ${cur ? html`<div class="row small" style="margin-bottom:6px"><label for="focusDoc" class="muted">${t("research.focus_doc")}</label>
-            <select id="focusDoc" style="max-width:320px"><option value="">${t("research.all_docs")}</option></select></div>` : ""}
+        <form class="composer" id="composer"><div class="composer-in">
           <div class="row" style="align-items:flex-end;flex-wrap:nowrap">
             <textarea id="q" placeholder="${t("research.placeholder")}" aria-label="${t("research.your_question")}" rows="2"></textarea>
             <span id="voiceSlot"></span>
             <button class="btn btn-saffron" type="submit" id="sendBtn" style="height:54px">${t("research.send")} ➤</button></div>
-          <div class="small muted" style="margin-top:6px">${t("research.enter_hint")} · ${cur ? t("research.using_case") : t("research.select_case_hint")} · ${t("research.answer_lang", { lang: LANGS.find((l) => l.code === lang())?.label || "English" })}</div>
+          <div class="composer-foot small muted">
+            ${cur ? html`<span><label for="focusDoc">${t("research.focus_doc")}</label> <select id="focusDoc"><option value="">${t("research.all_docs")}</option></select></span>` : ""}
+            <span>${t("research.enter_hint")}</span>
+            <span>${t("research.answer_lang", { lang: LANGS.find((l) => l.code === lang())?.label || "English" })}</span></div>
           <div id="voiceStatus" class="small" aria-live="polite"></div>
-        </form>
+        </div></form>
       </section>
-      <aside class="card sources-col" aria-label="${t("research.sources")}"><div class="card-h"><h3>${t("research.sources")}</h3><span class="small muted" id="srcCount"></span></div>
-        <div class="card-b" id="sourcesPanel"><div class="empty">${t("research.sources_empty")}</div></div></aside>
+      <aside class="card rs-panel rs-right" id="rsRight" aria-label="${t("research.sources")}">
+        <div class="card-h"><h2>${t("research.sources")}</h2><span class="row"><span class="small muted" id="srcCount"></span>
+          <button type="button" class="rs-close" data-close="right" aria-label="${t("research.close_panel")}" title="${t("research.close_panel")}">✕</button></span></div>
+        <div class="rs-panel-b" id="sourcesPanel"><div class="empty">${t("research.sources_empty")}</div></div></aside>
+      <div class="rs-scrim" id="rsScrim"></div>
     </div>`);
 
+  // Panels: remembered on wide screens; on phones they open one at a time over the chat and start closed.
+  const narrow = () => matchMedia("(max-width: 900px)").matches;
+  const grid = $("#rsGrid");
+  let showLeft = !narrow() && store.get("rs.left", false), showRight = !narrow() && store.get("rs.right", false);
+  let showHist = false;   // Recent History always starts hidden and slides over the workspace
+  const apply = () => {
+    grid.classList.toggle("show-left", showLeft); grid.classList.toggle("show-right", showRight); grid.classList.toggle("wide", !showLeft && !showRight);
+    grid.classList.toggle("show-hist", showHist);
+    $("#tgLeft").setAttribute("aria-pressed", String(showLeft)); $("#tgRight").setAttribute("aria-pressed", String(showRight));
+    $("#tgHist").setAttribute("aria-pressed", String(showHist));
+  };
+  const toggle = (side, on) => {
+    if (side === "hist") {
+      showHist = on ?? !showHist;
+      if (showHist && narrow()) showLeft = showRight = false;
+      apply();
+      if (showHist) { loadHistory(); $("#rsHist .rs-close").focus(); }
+      return;
+    }
+    const left = side === "left";
+    if (left) showLeft = on ?? !showLeft; else showRight = on ?? !showRight;
+    if (narrow()) { if (left && showLeft) showRight = false; if (!left && showRight) showLeft = false; showHist = false; }
+    else { store.set("rs.left", showLeft); store.set("rs.right", showRight); }
+    apply();
+    if (narrow() && (left ? showLeft : showRight)) $(`${left ? "#rsLeft" : "#rsRight"} .rs-close`).focus();
+  };
+  const toggler = { left: "#tgLeft", right: "#tgRight", hist: "#tgHist" };
+  $("#tgLeft").onclick = () => toggle("left");
+  $("#tgRight").onclick = () => toggle("right");
+  $("#tgHist").onclick = () => toggle("hist");
+  $$("[data-close]", grid).forEach((b) => { b.onclick = () => { toggle(b.dataset.close, false); $(toggler[b.dataset.close]).focus(); }; });
+  $("#rsScrim").onclick = () => { showHist = false; if (narrow()) showLeft = showRight = false; apply(); };
+  grid.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (showHist) { showHist = false; apply(); $("#tgHist").focus(); }
+    else if (narrow() && (showLeft || showRight)) { showLeft = showRight = false; apply(); $("#q").focus(); }
+  });
+  bindTabs($("#histBody"), "hist", "histTab");
+  apply();
+
   $("#caseSel").onchange = (e) => { location.hash = `#/research?case=${encodeURIComponent(e.target.value)}`; };
-  $$("input[name=scope]").forEach((el) => { el.onchange = () => { state.scope = el.value; store.set("scope", el.value); }; });
+  $$("input[name=scope]").forEach((el) => { el.onchange = () => { state.scope = el.value; store.set("scope", el.value); mount($("#rsCtx"), ctx()); }; });
+  $("#jurSel").onchange = (e) => { state.jur = e.target.value; store.set("rs.jur", state.jur); mount($("#rsCtx"), ctx()); };
   $("#newChat").onclick = () => {
     const h = `#/research?case=${encodeURIComponent(state.caseId || "")}`;
     if (location.hash === h) route(); else location.hash = h;
@@ -460,13 +536,14 @@ async function viewResearch(main, r) {
 
   const suggestions = cur ? [t("research.s_case1"), t("research.s_case2"), t("research.s_case3"), cur.case_type === "Criminal" ? t("research.s_case4_crim") : t("research.s_case4")]
     : [t("research.s1"), t("research.s2"), t("research.s3"), t("research.s4")];
-  mount($("#suggest"), html`${suggestions.map((s) => html`<button type="button" data-s="${s}">${s}</button>`)}`);
-  $$("[data-s]", $("#suggest")).forEach((b) => { b.onclick = () => { if (!state.streaming) send(b.dataset.s); }; });
 
-  loadChatList();
   if (cur) loadCaseDocs(cur.id);
   if (state.chatId) await loadChat(state.chatId);
-  else mount($("#thread"), html`<div class="empty" id="welcome"><strong>${t("research.namaste")}</strong> ${cur ? t("research.welcome_case", { title: cur.title }) : t("research.welcome")}<br>${t("research.examples")}</div>`);
+  else {  // a new conversation starts with a short welcome and example questions; both go once the first question is sent
+    mount($("#thread"), html`<div class="empty rs-welcome" id="welcome"><strong>${t("research.namaste")}</strong> ${cur ? t("research.welcome_case", { title: cur.title }) : t("research.welcome")}<br>${t("research.examples")}
+      <div class="suggest">${suggestions.map((x) => html`<button type="button" data-s="${x}">${x}</button>`)}</div></div>`);
+    $$("[data-s]", $("#thread")).forEach((b) => { b.onclick = () => { if (!state.streaming) send(b.dataset.s); }; });
+  }
 
   const doc = r.q.get("doc"), task = r.q.get("task"), pre = r.q.get("q");
   history.replaceState(null, "", `#/research?case=${encodeURIComponent(state.caseId || "")}${state.chatId ? `&chat=${encodeURIComponent(state.chatId)}` : ""}`);
@@ -487,17 +564,33 @@ async function loadCaseDocs(caseId) {
   } catch { /* ignore */ }
 }
 
-async function loadChatList() {
-  try {
-    const { chats } = await api(`/api/chats${state.caseId ? `?case_id=${encodeURIComponent(state.caseId)}` : ""}`);
-    mount($("#chatList"), chats.length ? html`${chats.map((c) => html`<li><a href="#/research?case=${encodeURIComponent(state.caseId || "")}&chat=${encodeURIComponent(c.id)}" class="${c.id === state.chatId ? "active" : ""}" title="${c.title}">${c.title}</a>
-      <button type="button" data-delchat="${c.id}" aria-label="${t("research.delete_chat")}" title="${t("common.delete")}">✕</button></li>`)}` : html`<li class="empty small">${t("research.no_chats")}</li>`);
-    $$("[data-delchat]", $("#chatList")).forEach((b) => { b.onclick = async () => {
-      if (!confirm(t("research.confirm_delete_chat"))) return;
-      await api(`/api/chats/${encodeURIComponent(b.dataset.delchat)}`, { method: "DELETE" });
-      if (b.dataset.delchat === state.chatId) location.hash = `#/research?case=${encodeURIComponent(state.caseId || "")}`; else loadChatList();
-    }; });
-  } catch { /* ignore */ }
+/** Recent History: the person's own conversations (every matter) and searches; reopened with one click. */
+async function loadHistory() {
+  if (!$("#histChats")) return;
+  let data;
+  try { data = await api("/api/history?limit=40"); }
+  catch (e) { mount($("#histChats"), html`<li class="notice notice-red">${e.message}</li>`); return; }
+  const { chats, searches } = data;
+  mount($("#histChats"), chats.length ? html`${chats.map((c) => html`<li><a href="#/research?case=${encodeURIComponent(c.case_id || "")}&chat=${encodeURIComponent(c.id)}" class="${c.id === state.chatId ? "active" : ""}" title="${c.title}">
+      <span class="hist-t">${c.title}</span><span class="hist-sub">${c.case_title || t("research.general")} · ${fmtDate(c.updated_at)}</span></a>
+    <button type="button" data-delchat="${c.id}" aria-label="${t("research.delete_chat")}" title="${t("common.delete")}">✕</button></li>`)}` : html`<li class="empty small">${t("research.no_chats")}</li>`);
+  const searchHref = (s) => { const p = new URLSearchParams({ q: s.query, ...(s.filters || {}) }); return `#/search?${p}`; };
+  mount($("#histSearches"), searches.length ? html`${searches.map((s) => html`<li><a href="${searchHref(s)}" title="${s.query}">
+      <span class="hist-t">🔎 ${s.query}</span><span class="hist-sub">${fmtDate(s.created_at)}${s.results !== null && s.results !== undefined ? ` · ${t("research.n_results", { n: s.results })}` : ""}${Object.keys(s.filters || {}).length ? ` · ${t("research.filtered")}` : ""}</span></a>
+    <button type="button" data-delsearch="${s.id}" aria-label="${t("research.delete_search")}" title="${t("common.delete")}">✕</button></li>`)}` : html`<li class="empty small">${t("research.no_searches")}</li>`);
+  mount($("#histClear"), searches.length ? html`<button type="button" class="btn btn-ghost btn-sm" id="clearSearches">${t("research.clear_searches")}</button>` : "");
+  $$("[data-delchat]", $("#histChats")).forEach((b) => { b.onclick = async () => {
+    if (!confirm(t("research.confirm_delete_chat"))) return;
+    try { await api(`/api/chats/${encodeURIComponent(b.dataset.delchat)}`, { method: "DELETE" }); } catch (e) { toast(e.message, true); return; }
+    if (b.dataset.delchat === state.chatId) location.hash = `#/research?case=${encodeURIComponent(state.caseId || "")}`; else loadHistory();
+  }; });
+  $$("[data-delsearch]", $("#histSearches")).forEach((b) => { b.onclick = async () => {
+    try { await api(`/api/history/searches/${encodeURIComponent(b.dataset.delsearch)}`, { method: "DELETE" }); loadHistory(); } catch (e) { toast(e.message, true); }
+  }; });
+  $("#clearSearches")?.addEventListener("click", async () => {
+    if (!confirm(t("research.confirm_clear_searches"))) return;
+    try { await api("/api/history/searches", { method: "DELETE" }); toast(t("research.searches_cleared")); loadHistory(); } catch (e) { toast(e.message, true); }
+  });
 }
 
 async function loadChat(chatId) {
@@ -535,6 +628,7 @@ function renderAi(el, content, sources, meta, live = null) {
   const origin = ORIGIN(sources);
   const metaRow = html`<div class="msg-meta">
     ${meta.intent ? html`<span class="chip">${INTENT()[meta.intent] || meta.intent}</span>` : ""}
+    ${meta.jurisdiction && meta.jurisdiction !== "all" && meta.intent && !["chitchat", "blocked", "calculation"].includes(meta.intent) ? html`<span class="chip" title="${t("research.jur_hint")}">⚖ ${t("research.jur_state_short", { state: meta.jurisdiction })}</span>` : ""}
     ${origin ? html`<span class="chip" title="${t("origin.hint")}">📂 ${t("origin.answered_from", { where: origin })}</span>` : ""}
     ${sources && sources.length ? html`<span class="chip">${t("research.n_sources", { n: sources.length })}</span>` : ""}
     ${meta.fallback_used ? html`<span class="chip chip-warn" title="${t("trace.fallback_hint")}">${t("trace.fallback")}</span>` : ""}
@@ -543,7 +637,7 @@ function renderAi(el, content, sources, meta, live = null) {
     ${meta.elapsed ? html`<span>${meta.elapsed}s</span>` : ""}
     ${!live && content ? speakButton(meta.lang) : ""}</div>`;
   const trace = !live && (meta.trace || []).length ? html`<details class="small trace"><summary>${t("trace.title")}</summary><ol>
-    ${meta.trace.map((s) => html`<li><strong>${t(`trace.step_${s.step}`, {}, s.step)}</strong> — ${t(`trace.st_${s.status}`, {}, s.status)}${s.model ? ` · ${s.model}` : ""}${s.fallback ? ` (${t("trace.fallback")})` : ""}${s.passages !== undefined ? ` · ${t("trace.passages", { n: s.passages })}` : ""}${s.issues ? ` · ${t("trace.issues", { n: s.issues })}` : ""}${s.requested ? ` · ${s.requested} → ${s.used}` : ""}</li>`)}</ol></details>` : "";
+    ${meta.trace.map((s) => html`<li><strong>${t(`trace.step_${s.step}`, {}, s.step)}</strong> — ${t(`trace.st_${s.status}`, {}, s.status)}${s.model ? ` · ${s.model}` : ""}${s.fallback ? ` (${t("trace.fallback")})` : ""}${s.passages !== undefined ? ` · ${t("trace.passages", { n: s.passages })}` : ""}${s.jurisdiction && s.jurisdiction !== "all" ? ` · ${s.jurisdiction}` : ""}${s.issues ? ` · ${t("trace.issues", { n: s.issues })}` : ""}${s.requested ? ` · ${s.requested} → ${s.used}` : ""}</li>`)}</ol></details>` : "";
   const status = live ? html`<div class="status-line"><span class="spinner"></span><span>${live}</span></div>` : "";
   const verify = v ? (v.grounded
     ? html`<div class="verify verify-ok">✓ ${t("research.audit_ok")}</div>`
@@ -555,9 +649,11 @@ function renderAi(el, content, sources, meta, live = null) {
 
 function renderSourcesPanel(sources) {
   $("#srcCount").textContent = sources.length ? t("research.n_used", { n: sources.length }) : "";
+  $("#srcN").textContent = String(sources.length);
   const L = COLL_LABEL();
   mount($("#sourcesPanel"), sources.length ? html`${sources.map((s) => html`<div class="src-card" role="button" tabindex="0" data-src="${JSON.stringify(s)}">
-    <div><span class="src-n">${s.n}</span><span class="badge b-${s.collection}">${L[s.collection] || s.kind}</span> ${s.exact ? html`<span class="chip chip-ok" title="${t("research.exact_hint")}">${t("research.exact")}</span>` : ""}${s.injection_suspected ? html` <span class="chip chip-warn" title="${t("guard.injection_hint")}">${t("guard.injection")}</span>` : ""}</div>
+    <div><span class="src-n">${s.n}</span><span class="badge b-${s.collection}">${L[s.collection] || s.kind}</span>
+      ${s.jurisdiction ? html` <span class="chip ${s.jurisdiction === "Central" ? "" : "chip-wait"}" title="${t("research.jur_chip_hint")}">${s.jurisdiction === "Central" ? t("research.central_law") : s.jurisdiction}</span>` : ""} ${s.exact ? html`<span class="chip chip-ok" title="${t("research.exact_hint")}">${t("research.exact")}</span>` : ""}${s.injection_suspected ? html` <span class="chip chip-warn" title="${t("guard.injection_hint")}">${t("guard.injection")}</span>` : ""}</div>
     <div class="src-title" style="margin-top:4px">${s.title}</div>
     <div class="small muted">${[s.label, s.page && !/^pp?\./.test(s.label || "") ? `p. ${s.page}` : ""].filter(Boolean).join(" · ")}</div>
     <div class="src-snip">${s.snippet}</div></div>`)}` : html`<div class="empty">${t("research.no_sources")}</div>`);
@@ -597,7 +693,8 @@ async function send(text, extra = {}) {
   try {
     const r = await fetch("/api/chat", { method: "POST", credentials: "same-origin",
       headers: { "Content-Type": "application/json", "X-Nyaya-CSRF": state.csrf || "" },
-      body: JSON.stringify({ message: text, chat_id: state.chatId, case_id: state.caseId, scope: state.scope, lang: lang(), ...extra }) });
+      body: JSON.stringify({ message: text, chat_id: state.chatId, case_id: state.caseId, scope: state.scope, lang: lang(),
+        ...(state.jur ? { jurisdiction: state.jur } : {}), ...extra }) });
     if (!r.ok) { let m = ""; try { m = (await r.json()).detail; } catch { /* */ } throw new Error(m || t("err.request_failed", { status: r.status })); }
     const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "";
     for (;;) {
@@ -627,7 +724,8 @@ async function send(text, extra = {}) {
   } finally {
     live = null; paint();
     state.streaming = false; $("#sendBtn").disabled = false; $("#q")?.focus();
-    loadChatList(); refreshStatus();
+    if ($("#rsGrid")?.classList.contains("show-hist")) loadHistory();
+    refreshStatus();
   }
 }
 
@@ -636,11 +734,19 @@ async function viewActs(main, r) {
   crumbs([[t("nav.acts")]]);
   const lib = await api("/api/library");
   const acts = lib.bare_act;
-  const tab = r.q.get("tab") === "judgments" ? "judgments" : "acts";
+  const tab = ["judgments", "catalogue"].includes(r.q.get("tab")) ? r.q.get("tab") : "acts";
+  const tabs = html`<div class="tabs" role="tablist">${[["acts", t("acts.tab_acts"), "#/acts"], ["catalogue", t("acts.tab_catalogue"), "#/acts?tab=catalogue"],
+    ["judgments", t("acts.tab_judgments"), "#/acts?tab=judgments"]].map(([k, label, href]) =>
+    html`<a role="tab" class="tab ${tab === k ? "active" : ""}" aria-selected="${String(tab === k)}" href="${href}">${label}</a>`)}</div>`;
+  if (tab === "catalogue") {   // the official India Code record for Central law and every state / UT
+    mount(main, html`<h1 class="page-title">${t("acts.title")}</h1><p class="page-lead">${t("acts.lead")}</p>${tabs}<div id="catBox"></div>`);
+    return catalogueView($("#catBox"), r);
+  }
+  const jurs = [...new Set(acts.map((a) => a.jurisdiction || "Central"))].sort((a, b) => (a === "Central" ? -1 : b === "Central" ? 1 : a.localeCompare(b)));
   mount(main, html`
     <h1 class="page-title">${t("acts.title")}</h1>
     <p class="page-lead">${t("acts.lead")}</p>
-    <div class="tabs" role="tablist"><a role="tab" class="tab ${tab === "acts" ? "active" : ""}" href="#/acts">${t("acts.tab_acts")}</a><a role="tab" class="tab ${tab === "judgments" ? "active" : ""}" href="#/acts?tab=judgments">${t("acts.tab_judgments")}</a></div>
+    ${tabs}
     ${tab === "acts" ? html`
     <div class="card"><div class="card-h"><h2>${t("acts.lookup")}</h2></div>
       <form class="card-b row" id="lookupForm" style="align-items:flex-end">
@@ -648,27 +754,33 @@ async function viewActs(main, r) {
         <div style="flex:1;min-width:200px"><label class="f" for="lact">${t("acts.act")}</label><select id="lact"><option value="">${t("acts.all_acts")}</option>${acts.map((a) => html`<option value="${a.title}" ${a.title === r.q.get("act") ? raw("selected") : ""}>${a.title}</option>`)}</select></div>
         <button class="btn" type="submit">${t("common.search")}</button></form>
       <div id="lookupResults"></div></div>
-    <h2 class="section-title" style="margin-top:22px">${t("acts.in_library", { n: acts.length })}</h2>
-    <div class="grid g-3">${acts.map((a) => html`<div class="card act-card">
-      <h3>${a.title}</h3>
-      <div class="row">${a.meta.short ? html`<span class="chip">${a.meta.short}</span>` : ""}${(a.meta.areas || []).map((x) => html`<span class="badge ${TYPE_BADGE[x] || ""}">${t(`cat.${x}`, {}, x)}</span>`)}
-        ${a.meta.repealed ? html`<span class="chip chip-warn" title="${a.meta.note || ""}">${t("acts.repealed")}</span>` : ""}
-        ${(a.meta.version || 1) > 1 ? html`<button type="button" class="chip chip-ok" data-versions="${a.id}" title="${t("acts.version_hint")}">${t("acts.version", { v: a.meta.version, date: fmtDate(a.meta.version_date) })}</button>` : ""}
-        ${a.status !== "ready" ? html`<span class="chip chip-wait">${a.status}</span>` : ""}</div>
-      <div class="small muted">${t("acts.meta", { pages: a.pages || "?", n: a.n_chunks || 0 })}${a.meta.act_number ? ` · Act ${a.meta.act_number} of ${a.meta.year}` : ""}${a.meta.fetched_at ? ` · ${t("acts.fetched", { date: fmtDate(a.meta.fetched_at) })}` : ""}</div>
-      <div class="row"><a class="btn btn-ghost btn-sm" href="/api/documents/${encodeURIComponent(a.id)}/file" target="_blank" rel="noopener">${t("acts.open_pdf")} ↗</a>
-        ${a.meta.item_url ? html`<a class="btn btn-ghost btn-sm" href="${a.meta.item_url}" target="_blank" rel="noopener noreferrer">India Code ↗</a>` : ""}
-        <a class="btn btn-ghost btn-sm" href="#/research?case=&q=${encodeURIComponent(`Under the ${a.title}, `)}">${t("acts.ask")}</a></div></div>`)}</div>
-    ${acts.length ? "" : html`<div class="notice">${t("acts.empty")}</div>`}` : html`
+    <div class="card" style="margin-top:20px"><div class="card-h"><h2>${t("acts.in_library", { n: acts.length })}</h2>
+      <span class="row">${jurs.length > 1 ? html`<select id="actJur" aria-label="${t("acts.jurisdiction")}" style="width:auto"><option value="">${t("acts.all_jurisdictions")}</option>
+        ${jurs.map((j) => html`<option value="${j}">${j === "Central" ? t("acts.central_acts") : j}</option>`)}</select>` : ""}
+      ${acts.length > 6 ? html`<input type="search" id="actFilter" placeholder="${t("acts.filter_ph")}" aria-label="${t("acts.filter_ph")}" style="max-width:240px">` : ""}</span></div>
+    ${acts.length ? html`<ul class="rows" id="actRows">${acts.map((a) => html`<li data-name="${`${a.title} ${a.meta.short || ""}`.toLowerCase()}" data-jur="${a.jurisdiction || "Central"}"><div class="r-main">
+      <div class="r-title">${a.title} ${a.meta.short ? html`<span class="chip">${a.meta.short}</span>` : ""}
+        <span class="chip ${(a.jurisdiction || "Central") === "Central" ? "" : "chip-wait"}">${(a.jurisdiction || "Central") === "Central" ? t("research.central_law") : a.jurisdiction}</span></div>
+      <div class="r-meta">${(a.meta.areas || []).map((x) => html`<span class="badge ${TYPE_BADGE[x] || ""}">${t(`cat.${x}`, {}, x)}</span> `)}
+        ${t("acts.meta", { pages: a.pages || "?", n: a.n_chunks || 0 })}${a.meta.act_number ? ` · Act ${a.meta.act_number} of ${a.meta.year}` : ""}${a.meta.fetched_at ? ` · ${t("acts.fetched", { date: fmtDate(a.meta.fetched_at) })}` : ""}
+        ${a.meta.repealed ? html` <span class="chip chip-warn" title="${a.meta.note || ""}">${t("acts.repealed")}</span>` : ""}
+        ${(a.meta.version || 1) > 1 ? html` <button type="button" class="chip chip-ok" data-versions="${a.id}" title="${t("acts.version_hint")}">${t("acts.version", { v: a.meta.version, date: fmtDate(a.meta.version_date) })}</button>` : ""}
+        ${a.status !== "ready" ? html` <span class="chip chip-wait">${a.status}</span>` : ""}</div></div>
+      <div class="r-act"><a class="btn btn-ghost btn-sm" href="#/research?case=&q=${encodeURIComponent(`Under the ${a.title}, `)}">${t("acts.ask")}</a>
+        <details class="menu"><summary class="btn btn-ghost btn-sm">${t("common.open")}</summary><div class="menu-list">
+          <a href="/api/documents/${encodeURIComponent(a.id)}/file" target="_blank" rel="noopener">${t("acts.open_pdf")} ↗</a>
+          ${a.meta.item_url ? html`<a href="${a.meta.item_url}" target="_blank" rel="noopener noreferrer">India Code ↗</a>` : ""}</div></details></div></li>`)}</ul>`
+      : html`<div class="card-b"><div class="notice">${t("acts.empty")}</div></div>`}
+    <div class="card-b small muted">${t("acts.more_states")} <a href="#/acts?tab=catalogue">${t("acts.tab_catalogue")} →</a></div></div>` : html`
     <div class="card"><div class="card-h"><h2>${t("acts.precedents")}</h2></div>
       <form class="card-b row" id="jForm" style="align-items:flex-end">
         <div style="flex:2;min-width:240px"><label class="f" for="jq">${t("acts.precedent_label")}</label><input type="search" id="jq" placeholder="${t("acts.precedent_ph")}" value="${r.q.get("q") || ""}"></div>
         <button class="btn" type="submit">${t("common.search")}</button></form>
       <div id="jResults"></div>
       <div class="card-b small muted">${t("acts.precedent_note", { n: lib.judgment.length })}</div></div>
-    <div class="grid g-3" style="margin-top:16px">${lib.judgment.map((j) => html`<div class="card act-card"><h3>${j.title}</h3>
-      <div class="small muted">${t("acts.meta", { pages: j.pages || "?", n: j.n_chunks || 0 })}${j.meta.source ? ` · ${j.meta.source}` : ""}</div>
-      <div class="row"><a class="btn btn-ghost btn-sm" href="/api/documents/${encodeURIComponent(j.id)}/file" target="_blank" rel="noopener">${t("acts.open_pdf")} ↗</a></div></div>`)}</div>`}`);
+    ${lib.judgment.length ? html`<div class="card" style="margin-top:20px"><ul class="rows">${lib.judgment.map((j) => html`<li><div class="r-main"><div class="r-title">${j.title}</div>
+      <div class="r-meta">${t("acts.meta", { pages: j.pages || "?", n: j.n_chunks || 0 })}${j.meta.source ? ` · ${j.meta.source}` : ""}</div></div>
+      <div class="r-act"><a class="btn btn-ghost btn-sm" href="/api/documents/${encodeURIComponent(j.id)}/file" target="_blank" rel="noopener">${t("acts.open_pdf")} ↗</a></div></li>`)}</ul></div>` : ""}`}`);
   if (tab === "judgments") {
     const runJ = async () => {
       const q = $("#jq").value.trim(); if (!q) return;
@@ -696,6 +808,12 @@ async function viewActs(main, r) {
   };
   $("#lookupForm").onsubmit = (e) => { e.preventDefault(); run(); };
   if (r.q.get("q")) run();
+  const filterActs = () => {
+    const q = ($("#actFilter")?.value || "").trim().toLowerCase(), j = $("#actJur")?.value || "";
+    $$("#actRows > li").forEach((li) => { li.hidden = (!!q && !li.dataset.name.includes(q)) || (!!j && li.dataset.jur !== j); });
+  };
+  $("#actFilter")?.addEventListener("input", filterActs);
+  $("#actJur")?.addEventListener("change", filterActs);
   $$("[data-versions]", main).forEach((b) => { b.onclick = async () => {
     const { versions } = await api(`/api/documents/${encodeURIComponent(b.dataset.versions)}/versions`);
     showDrawer(t("acts.versions"));
@@ -715,13 +833,13 @@ async function viewDrafts(main) {
     <h1 class="page-title">${t("nav.templates")}</h1>
     <p class="page-lead">${t("templates.lead")}</p>
     <div class="tabs" role="tablist">${areas.map((a) => html`<button type="button" role="tab" data-area="${a}" class="${a === "All" ? "active" : ""}">${a === "All" ? t("common.all") : t(`cat.${a}`, {}, a)}</button>`)}</div>
-    <div class="grid g-3" id="draftGrid"></div>`);
+    <div class="card" id="draftGrid"></div>`);
   const grid = () => {
     const list = drafts.filter((d) => area === "All" || (d.meta.area || "General") === area);
-    mount($("#draftGrid"), list.length ? html`${list.map((d) => html`<div class="card act-card"><h3>${d.title}</h3>
-      <div class="row"><span class="badge ${TYPE_BADGE[d.meta.area] || "b-draft"}">${t(`cat.${d.meta.area || "General"}`, {}, d.meta.area || "General")}</span></div>
-      <div class="row"><button class="btn btn-ghost btn-sm" data-open="${d.id}">${t("templates.read")}</button>
-        <a class="btn btn-ghost btn-sm" href="#/drafting?template=${encodeURIComponent(d.id)}">${t("templates.use")}</a></div></div>`)}` : html`<div class="empty">${t("templates.none")}</div>`);
+    mount($("#draftGrid"), list.length ? html`<ul class="rows">${list.map((d) => html`<li><div class="r-main"><div class="r-title">${d.title}</div>
+      <div class="r-meta"><span class="badge ${TYPE_BADGE[d.meta.area] || "b-draft"}">${t(`cat.${d.meta.area || "General"}`, {}, d.meta.area || "General")}</span></div></div>
+      <div class="r-act"><button class="btn btn-ghost btn-sm" data-open="${d.id}">${t("templates.read")}</button>
+        <a class="btn btn-sm" href="#/drafting?template=${encodeURIComponent(d.id)}">${t("templates.use")}</a></div></li>`)}</ul>` : html`<div class="empty">${t("templates.none")}</div>`);
     $$("[data-open]", $("#draftGrid")).forEach((b) => { b.onclick = () => openDraft(drafts.find((d) => d.id === b.dataset.open), cases); });
   };
   $$("[data-area]").forEach((b) => { b.onclick = () => { area = b.dataset.area; $$("[data-area]").forEach((x) => x.classList.toggle("active", x === b)); grid(); }; });
@@ -750,18 +868,16 @@ async function viewLimitation(main) {
   mount(main, html`
     <h1 class="page-title">${t("limitation.title")}</h1>
     <p class="page-lead">${t("limitation.lead")}</p>
-    <div class="grid g-side">
-      <div class="card"><div class="card-h"><h2>${t("limitation.compute")}</h2></div>
+    <div class="card" style="max-width:860px"><div class="card-h"><h2>${t("limitation.compute")}</h2></div>
         <form class="card-b stack" id="limForm">
           <div><label class="f" for="lc">${t("limitation.proceeding")}</label><select id="lc">${categories.map((c) => html`<option value="${c.key}">[${c.area}] ${c.label} — ${c.period}</option>`)}</select></div>
           <div><label class="f" for="ld">${t("limitation.start")}</label><input type="date" id="ld" value="${today}" required><div class="small muted" id="lstarts"></div></div>
           <button class="btn" type="submit">${t("limitation.calculate")}</button></form>
-        <div id="limResult"></div></div>
-      <div class="card"><div class="card-h"><h2>${t("limitation.important")}</h2></div><div class="card-b small">${caveat}</div></div>
-    </div>
-    <div class="card" style="margin-top:16px"><div class="card-h"><h2>${t("limitation.supported")}</h2></div><div class="table-wrap"><table class="gov">
+        <div id="limResult"></div>
+        <div class="card-b" style="padding-top:0"><div class="notice small"><strong>${t("limitation.important")}:</strong> ${caveat}</div></div></div>
+    <details class="panel" style="margin-top:20px"><summary>${t("limitation.supported")} <span class="s-aside">${categories.length}</span></summary><div class="table-wrap"><table class="gov">
       <thead><tr><th>${t("limitation.proceeding")}</th><th>${t("limitation.period")}</th><th>${t("limitation.starts")}</th><th>${t("limitation.basis")}</th></tr></thead>
-      <tbody>${categories.map((c) => html`<tr><td>${c.label} <span class="badge ${TYPE_BADGE[c.area] || ""}">${c.area}</span></td><td>${c.period}</td><td class="small">${c.starts}</td><td class="small">${c.basis}</td></tr>`)}</tbody></table></div></div>`);
+      <tbody>${categories.map((c) => html`<tr><td>${c.label} <span class="badge ${TYPE_BADGE[c.area] || ""}">${c.area}</span></td><td>${c.period}</td><td class="small">${c.starts}</td><td class="small">${c.basis}</td></tr>`)}</tbody></table></div></details>`);
   const starts = () => { const c = categories.find((x) => x.key === $("#lc").value); $("#lstarts").textContent = c ? `${t("limitation.starts")}: ${c.starts}` : ""; };
   $("#lc").onchange = starts; starts();
   $("#limForm").onsubmit = async (e) => {
@@ -782,18 +898,19 @@ async function viewTools(main) {
   const items = [["⏱", t("nav.limitation"), t("tools.limitation"), "#/limitation"], ["📑", t("nav.templates"), t("tools.templates"), "#/drafts"],
     ...(can("integrations.read") ? [["🔌", t("tools.integrations"), t("tools.integrations_hint"), "#/updates?tab=sources"]] : []),
     ...(can("audit.read") ? [["🗒", t("tools.activity"), t("tools.activity_hint"), "#/updates?tab=activity"]] : []),
-    ...(can("account.self") ? [["⏳", t("jobs.title"), t("jobs.hint"), "#/jobs"], ["⚙", t("tools.privacy"), t("tools.privacy_hint"), "#/tools?privacy=1"]] : []),
+    ...(can("account.self") ? [["⏳", t("jobs.title"), t("jobs.hint"), "#/jobs"]] : []),
     ["ℹ", t("nav.about"), t("tools.about"), "#/about"]];
   mount(main, html`<h1 class="page-title">${t("nav.tools")}</h1><p class="page-lead">${t("tools.lead")}</p>
-    <div class="grid g-3">${items.map(([ico, title, hint, href]) => html`<a class="card act-card tool" href="${href}"><h3><span aria-hidden="true">${ico}</span> ${title}</h3><div class="small muted">${hint}</div></a>`)}</div>
-    ${can("account.self") ? html`<div class="card" style="margin-top:16px" id="privacyCard"><div class="card-h"><h2>${t("tools.privacy")}</h2></div><form class="card-b stack" id="privForm">
+    <div class="card"><ul class="rows">${items.map(([ico, title, hint, href]) => html`<li><span class="tile-ico" aria-hidden="true">${ico}</span>
+      <div class="r-main"><a class="r-title" href="${href}">${title}</a><div class="r-meta">${hint}</div></div></li>`)}</ul></div>
+    ${can("account.self") ? html`<details class="panel" style="margin-top:20px" id="privacyCard" ${new URLSearchParams(location.hash.split("?")[1] || "").get("privacy") ? raw("open") : ""}><summary>⚙ ${t("tools.privacy")} <span class="s-aside">${t("tools.privacy_hint")}</span></summary><form class="panel-b stack" id="privForm">
       ${can("settings.manage") ? html`<div><label class="f" for="ret">${t("privacy.retention")}</label><select id="ret" name="chat_retention_days">
         ${[["", t("privacy.keep")], ["30", "30"], ["90", "90"], ["180", "180"], ["365", "365"]].map(([v, l]) => html`<option value="${v}" ${String(state.prefs.chat_retention_days || "") === v ? raw("selected") : ""}>${l}${v ? ` ${t("privacy.days")}` : ""}</option>`)}</select>
         <div class="hint">${t("privacy.retention_hint")}</div></div>` : ""}
       <div class="small">${t("privacy.voice_status")}: <strong>${state.prefs.voice_consent === "granted" ? t("privacy.granted") : t("privacy.not_granted")}</strong>
         ${state.prefs.voice_consent === "granted" ? html` <button class="btn btn-ghost btn-sm" type="button" id="revokeVoice">${t("privacy.revoke")}</button>` : ""}</div>
       <div class="small muted">${t("privacy.facts")}</div>
-      ${can("settings.manage") ? html`<div><button class="btn btn-sm" type="submit">${t("common.save")}</button></div>` : ""}</form></div>` : ""}`);
+      ${can("settings.manage") ? html`<div><button class="btn btn-sm" type="submit">${t("common.save")}</button></div>` : ""}</form></details>` : ""}`);
   if ($("#privForm")) $("#privForm").onsubmit = async (e) => {
     e.preventDefault();
     try { state.prefs = await api("/api/prefs", { method: "PUT", body: { values: { chat_retention_days: $("#ret").value } } }); toast(t("common.saved")); } catch (err) { toast(err.message, true); }
@@ -808,16 +925,16 @@ async function viewAbout(main) {
   const s = state.status || await api("/api/status");
   mount(main, html`
     <h1 class="page-title">${t("about.title")}</h1>
-    <div class="grid g-2">
-      <div class="card"><div class="card-h"><h2>${t("about.how")}</h2></div><div class="card-b md">${markdown(t("about.how_md"))}</div></div>
-      <div class="card"><div class="card-h"><h2>${t("about.config")}</h2></div><div class="card-b"><table class="gov"><tbody>
+    <div style="max-width:960px">
+      <details class="panel" open><summary>${t("about.how")}</summary><div class="panel-b md">${markdown(t("about.how_md"))}</div></details>
+      <details class="panel"><summary>${t("about.config")}</summary><div class="panel-b"><table class="gov"><tbody>
         <tr><td>${t("about.answer_model")}</td><td>${s.llm_model} (${s.llm_host})</td></tr><tr><td>${t("about.fast_model")}</td><td>${s.fast_model}</td></tr>
         <tr><td>${t("about.embeddings")}</td><td>${s.embed_model} (local)</td></tr><tr><td>${t("about.reranker")}</td><td>${s.reranker || "—"} (local)</td></tr>
         <tr><td>${t("about.ocr")}</td><td>${s.ocr ? `${s.ocr.engine} (${(s.ocr.langs || []).join(", ")})` : t("about.ocr_missing")}</td></tr>
         <tr><td>${t("about.passages")}</td><td>${num(s.indexed_chunks)}</td></tr>
-        <tr><td>${t("about.storage")}</td><td>${s.database || "—"} · ${s.file_storage || "—"}</td></tr></tbody></table></div></div>
-      <div class="card"><div class="card-h"><h2>${t("about.chunking")}</h2></div><div class="card-b md">${markdown(t("about.chunking_md"))}</div></div>
-      <div class="card"><div class="card-h"><h2>${t("about.security")}</h2></div><div class="card-b md">${markdown(t("about.security_md"))}</div></div>
+        <tr><td>${t("about.storage")}</td><td>${s.database || "—"} · ${s.file_storage || "—"}</td></tr></tbody></table></div></details>
+      <details class="panel"><summary>${t("about.chunking")}</summary><div class="panel-b md">${markdown(t("about.chunking_md"))}</div></details>
+      <details class="panel"><summary>${t("about.security")}</summary><div class="panel-b md">${markdown(t("about.security_md"))}</div></details>
     </div>`);
 }
 
@@ -851,6 +968,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#drawerClose").onclick = hideDrawer;
   $("#drawer").addEventListener("click", (e) => { if (e.target.id === "drawer") hideDrawer(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#drawer").hidden) hideDrawer(); });
+  // Drop-down menus (<details class="menu">) close on a click elsewhere, after choosing an item, or on Escape.
+  const closeMenus = (except) => $$("details.menu[open], details.status-pop[open]").forEach((d) => { if (d !== except) d.open = false; });
+  document.addEventListener("click", (e) => {
+    const d = e.target.closest("details.menu, details.status-pop");
+    closeMenus(d);
+    if (d && e.target.closest(".menu-list a, .menu-list button")) d.open = false;
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenus(); });
   $("#logoutBtn").onclick = async () => { try { await api("/api/auth/logout", { method: "POST", retry: false }); } catch { /* already gone */ }
     state.caseId = null; store.set("caseId", null); location.hash = "#/login"; location.reload(); };
   $("#globalSearch").onsubmit = (e) => { e.preventDefault(); const q = $("#gq").value.trim(); if (q) location.hash = `#/search?q=${encodeURIComponent(q)}`; };

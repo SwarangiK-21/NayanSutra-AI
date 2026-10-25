@@ -14,7 +14,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/e7571d39-11a7-4a2c-86e3-c515ae43e617/content",
     "pdf_name": "a1872-9.pdf",
     "sha256": "85a7a066098255c93001d678aeaf483f91d3080918363c03b78d40c3eeb8b386",
-    "fetched_at": "2026-10-18T06:59:36+00:00"
+    "fetched_at": "2026-10-18T06:59:36+00:00",
+    "jurisdiction": "Central"
   },
   "the_bharatiya_nyaya_sanhita_2023.pdf": {
     "title": "The Bharatiya Nyaya Sanhita, 2023",
@@ -31,7 +32,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/8007a80e-259b-429d-9ca4-1a2f474b5000/content",
     "pdf_name": "a2023-45.pdf",
     "sha256": "d4449e9995b21fd52627811d08f9d21feda6a3678b7e5355b651242d152167f5",
-    "fetched_at": "2026-10-18T06:59:47+00:00"
+    "fetched_at": "2026-10-18T06:59:47+00:00",
+    "jurisdiction": "Central"
   },
   "the_bharatiya_sakshya_adhiniyam_2023.pdf": {
     "title": "The Bharatiya Sakshya Adhiniyam, 2023",
@@ -49,7 +51,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/fa0f7526-d871-41f2-a644-2a42952211f5/content",
     "pdf_name": "a2023-47.pdf",
     "sha256": "554b2b4ae3d9f09bf31e6e1ba2b2cb8a4e7f4f5ffd6f3156736752cbbce116d5",
-    "fetched_at": "2026-10-18T07:00:03+00:00"
+    "fetched_at": "2026-10-18T07:00:03+00:00",
+    "jurisdiction": "Central"
   },
   "the_code_of_civil_procedure_1908.pdf": {
     "title": "The Code of Civil Procedure, 1908",
@@ -66,7 +69,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/fc9dad3f-97a9-4216-843b-934665693468/content",
     "pdf_name": "a1908-05.pdf",
     "sha256": "393b8848fdfc476a21cc3abf4f0d3f510557e2dff6fc6914b1f379bea1730614",
-    "fetched_at": "2026-10-18T07:00:09+00:00"
+    "fetched_at": "2026-10-18T07:00:09+00:00",
+    "jurisdiction": "Central"
   },
   "the_specific_relief_act_1963.pdf": {
     "title": "The Specific Relief Act, 1963",
@@ -83,7 +87,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/d47b330c-8fdb-4a6b-9fcf-72201b62e1ba/content",
     "pdf_name": "a1963-47.pdf",
     "sha256": "6785305b261cbbde103f8e68b6ace98dabc7a180b1eb621c94fa20186420939a",
-    "fetched_at": "2026-10-18T07:00:10+00:00"
+    "fetched_at": "2026-10-18T07:00:10+00:00",
+    "jurisdiction": "Central"
   },
   "the_limitation_act_1963.pdf": {
     "title": "The Limitation Act, 1963",
@@ -103,7 +108,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/3900a3de-8131-435a-9af0-ebad58242273/content",
     "pdf_name": "a1963-36.pdf",
     "sha256": "f04b51220f8f7ec97a1d7e8c73f14f37a91e8b300361db4b006b7d8226e31ed6",
-    "fetched_at": "2026-10-18T07:00:11+00:00"
+    "fetched_at": "2026-10-18T07:00:11+00:00",
+    "jurisdiction": "Central"
   },
   "the_negotiable_instruments_act_1881.pdf": {
     "title": "The Negotiable Instruments Act, 1881",
@@ -121,7 +127,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/82bf1927-5e52-4aab-a876-50552c5952cd/content",
     "pdf_name": "a1881-26.pdf",
     "sha256": "ed3e9db7f37052a1bc1cd665500910c5e123de888bce0375585e9a766bf38501",
-    "fetched_at": "2026-10-18T07:00:13+00:00"
+    "fetched_at": "2026-10-18T07:00:13+00:00",
+    "jurisdiction": "Central"
   },
   "the_arbitration_and_conciliation_act_1996.pdf": {
     "title": "The Arbitration and Conciliation Act, 1996",
@@ -138,7 +145,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/c368a901-3738-47f6-acb8-9885147945ec/content",
     "pdf_name": "a1996-26.pdf",
     "sha256": "6fb32e5ffe2581740345d948c1e362bfbb5018ca7958932cde8ca92436485b6c",
-    "fetched_at": "2026-10-18T07:00:14+00:00"
+    "fetched_at": "2026-10-18T07:00:14+00:00",
+    "jurisdiction": "Central"
   },
   "the_transfer_of_property_act_1882.pdf": {
     "title": "The Transfer of Property Act, 1882",
@@ -156,7 +164,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/df9f8770-4efe-4cf9-85ba-1ea884649679/content",
     "pdf_name": "a1882-04.pdf",
     "sha256": "28f73f2e4ab32913b7bd2c1d46fba41f4dd86ba845502823cc47d77cace3b623",
-    "fetched_at": "2026-10-18T07:00:16+00:00"
+    "fetched_at": "2026-10-18T07:00:16+00:00",
+    "jurisdiction": "Central"
   },
   "the_registration_act_1908.pdf": {
     "title": "The Registration Act, 1908",
@@ -174,7 +183,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/0b9471f4-9b18-47dd-bb76-cccf556db838/content",
     "pdf_name": "a1908-16.pdf",
     "sha256": "736a9560fb7c323874e79d3a4a884f36ca979a30dab73110cdabe2662ae35a22",
-    "fetched_at": "2026-10-18T07:00:17+00:00"
+    "fetched_at": "2026-10-18T07:00:17+00:00",
+    "jurisdiction": "Central"
   },
   "the_indian_stamp_act_1899.pdf": {
     "title": "The Indian Stamp Act, 1899",
@@ -192,7 +202,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/dc504bf4-89fc-4298-8ce6-edc6da5731d0/content",
     "pdf_name": "a1899-2_.pdf",
     "sha256": "e81b1037c7fbd89d8b5f7b62a9c3c973931e428da97e8a5e93c4931c82bad94e",
-    "fetched_at": "2026-10-18T07:00:20+00:00"
+    "fetched_at": "2026-10-18T07:00:20+00:00",
+    "jurisdiction": "Central"
   },
   "the_commercial_courts_act_2015.pdf": {
     "title": "The Commercial Courts Act, 2015",
@@ -209,7 +220,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/acd3c277-430e-4cad-bd08-03e7aff64e20/content",
     "pdf_name": "a2016-04.pdf",
     "sha256": "cdba269e1766246a9ff67d2af8563d6ed3ced01b49758a4f85317d9a2ea6008d",
-    "fetched_at": "2026-10-18T07:00:21+00:00"
+    "fetched_at": "2026-10-18T07:00:21+00:00",
+    "jurisdiction": "Central"
   },
   "the_consumer_protection_act_2019.pdf": {
     "title": "The Consumer Protection Act, 2019",
@@ -226,7 +238,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/d546dfb5-3044-4661-981d-3e1771c290b9/content",
     "pdf_name": "A2019-35.pdf",
     "sha256": "4bbed366bc2206bb1c3b1817c5ccdd652d1e66d9476c6779cf5239e71e3ba2a7",
-    "fetched_at": "2026-10-18T07:00:23+00:00"
+    "fetched_at": "2026-10-18T07:00:23+00:00",
+    "jurisdiction": "Central"
   },
   "the_information_technology_act_2000.pdf": {
     "title": "The Information Technology Act, 2000",
@@ -244,7 +257,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/770a7d02-48f2-4274-bab9-10d0f48ee264/content",
     "pdf_name": "A2000-21.pdf",
     "sha256": "003b3218fe399b293c73f6aef9ca52e5c1d080388c43fb0523572c1dc5f3d529",
-    "fetched_at": "2026-10-18T07:00:24+00:00"
+    "fetched_at": "2026-10-18T07:00:24+00:00",
+    "jurisdiction": "Central"
   },
   "the_hindu_marriage_act_1955.pdf": {
     "title": "The Hindu Marriage Act, 1955",
@@ -261,7 +275,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/526166d6-239d-4b6c-8999-c776179dea69/content",
     "pdf_name": "a1955-25.pdf",
     "sha256": "f219e8e6c6e6cf4b2f73b3b7dcbfabcddc3ccd2cc11d98cdf6b2757cb74d9e9e",
-    "fetched_at": "2026-10-18T07:00:26+00:00"
+    "fetched_at": "2026-10-18T07:00:26+00:00",
+    "jurisdiction": "Central"
   },
   "the_special_marriage_act_1954.pdf": {
     "title": "The Special Marriage Act, 1954",
@@ -278,7 +293,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/ec3f21c1-cdda-4c2f-a290-f877dab8b380/content",
     "pdf_name": "a1954-43.pdf",
     "sha256": "2c8b872a83e150d8bf56a830d0a8bb3529c6d7e07e69945dd3921566b19108c5",
-    "fetched_at": "2026-10-18T07:00:27+00:00"
+    "fetched_at": "2026-10-18T07:00:27+00:00",
+    "jurisdiction": "Central"
   },
   "the_hindu_succession_act_1956.pdf": {
     "title": "The Hindu Succession Act, 1956",
@@ -296,7 +312,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/08b1e3ba-8e9d-4022-8cb7-b0b2ac577f3e/content",
     "pdf_name": "A1956-30.pdf",
     "sha256": "d2c8389d14b02be68dbf4d1ff039cc3c0a64378a0748683292583be35b748b34",
-    "fetched_at": "2026-10-18T07:00:29+00:00"
+    "fetched_at": "2026-10-18T07:00:29+00:00",
+    "jurisdiction": "Central"
   },
   "the_hindu_adoptions_and_maintenance_act_1956.pdf": {
     "title": "The Hindu Adoptions and Maintenance Act, 1956",
@@ -313,7 +330,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/70770786-6c27-41aa-b816-f27315d051cc/content",
     "pdf_name": "A1956-78.pdf",
     "sha256": "f826e635a4e338e3e0ff66c88bdf13f522574393a40f25347bac751fc9f9a904",
-    "fetched_at": "2026-10-18T07:00:31+00:00"
+    "fetched_at": "2026-10-18T07:00:31+00:00",
+    "jurisdiction": "Central"
   },
   "the_guardians_and_wards_act_1890.pdf": {
     "title": "The Guardians and Wards Act, 1890",
@@ -330,7 +348,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/fb254c35-b277-48dd-a39c-fb66c2a9fb25/content",
     "pdf_name": "a1890-8.pdf",
     "sha256": "bdd4abc84270bd815b7d35d1f7630b12f6b2ea01de06ae188a41b4003d157c80",
-    "fetched_at": "2026-10-18T07:00:32+00:00"
+    "fetched_at": "2026-10-18T07:00:32+00:00",
+    "jurisdiction": "Central"
   },
   "the_family_courts_act_1984.pdf": {
     "title": "The Family Courts Act, 1984",
@@ -347,7 +366,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/d53f8e79-8580-4083-b455-6492a13643ee/content",
     "pdf_name": "a1984-66.pdf",
     "sha256": "dbcb1b75b82edfbcd9b2422d9ec5f5915080e13598c88ee2efea300445083814",
-    "fetched_at": "2026-10-18T07:00:34+00:00"
+    "fetched_at": "2026-10-18T07:00:34+00:00",
+    "jurisdiction": "Central"
   },
   "the_protection_of_women_from_domestic_violence_act_2005.pdf": {
     "title": "The Protection of Women from Domestic Violence Act, 2005",
@@ -365,7 +385,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/8aa8ec49-c98c-4e76-91ac-bab44815e835/content",
     "pdf_name": "a2005-43.pdf",
     "sha256": "bcf17f3ebe2b1e35ff601851578c460a050534d7530193d927298729655dfa5b",
-    "fetched_at": "2026-10-18T07:00:35+00:00"
+    "fetched_at": "2026-10-18T07:00:35+00:00",
+    "jurisdiction": "Central"
   },
   "the_dowry_prohibition_act_1961.pdf": {
     "title": "The Dowry Prohibition Act, 1961",
@@ -383,7 +404,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/9114da6a-2be2-42fc-a2c2-c1deff81aee4/content",
     "pdf_name": "a1961-28.pdf",
     "sha256": "d29bf14c8e7cffe5914086e1ce832b34467150caa2c66aee0fd107deba764dea",
-    "fetched_at": "2026-10-18T07:00:37+00:00"
+    "fetched_at": "2026-10-18T07:00:37+00:00",
+    "jurisdiction": "Central"
   },
   "the_indian_succession_act_1925.pdf": {
     "title": "The Indian Succession Act, 1925",
@@ -401,7 +423,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/22fcebb0-a39e-4e28-8ce7-a0d6d3ea7fcc/content",
     "pdf_name": "A1925-39.pdf",
     "sha256": "7555f529206e8a573aeb306a07de86970efa67eb46e3789b956690938298764a",
-    "fetched_at": "2026-10-18T07:00:39+00:00"
+    "fetched_at": "2026-10-18T07:00:39+00:00",
+    "jurisdiction": "Central"
   },
   "the_protection_of_children_from_sexual_offences_act_2012.pdf": {
     "title": "The Protection of Children from Sexual Offences Act, 2012",
@@ -418,7 +441,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/520a6c63-50ce-499d-860a-c2ed2797300a/content",
     "pdf_name": "A2012-32.pdf",
     "sha256": "5a173cc87d51624663dceb588d20a468ef49505be4fa131609d5867ac7dab021",
-    "fetched_at": "2026-10-18T07:00:40+00:00"
+    "fetched_at": "2026-10-18T07:00:40+00:00",
+    "jurisdiction": "Central"
   },
   "the_right_to_fair_compensation_and_transparency_in_land_acquisition_rehabilitation_and_res.pdf": {
     "title": "The Right to Fair Compensation and Transparency in Land Acquisition, Rehabilitation and Resettlement Act, 2013",
@@ -435,7 +459,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/ae735011-ee30-4e36-bc1c-aef0da4b23a1/content",
     "pdf_name": "A2013-30.pdf",
     "sha256": "4ed77432b6ad614f338d25cfcfa9f63e7b321adb65029ec4cc24c0b60568b052",
-    "fetched_at": "2026-10-18T07:00:42+00:00"
+    "fetched_at": "2026-10-18T07:00:42+00:00",
+    "jurisdiction": "Central"
   },
   "the_maharashtra_land_revenue_code_1966.pdf": {
     "title": "The Maharashtra Land Revenue Code, 1966",
@@ -452,7 +477,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/de00ee10-97db-48e2-ba13-f25e652accad/content",
     "pdf_name": "the_maharashtra_land_revenue_code,_1966.pdf",
     "sha256": "00ec56451d0d5ae47c6d6b234d8efe58d05614f09410d7dac43fb8e467ddf692",
-    "fetched_at": "2026-10-18T07:00:43+00:00"
+    "fetched_at": "2026-10-18T07:00:43+00:00",
+    "jurisdiction": "Maharashtra"
   },
   "the_bharatiya_nagarik_suraksha_sanhita_2023.pdf": {
     "title": "The Bharatiya Nagarik Suraksha Sanhita, 2023",
@@ -469,7 +495,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/73f93470-5f6a-4f0f-bc23-1309e32b9554/content",
     "pdf_name": "A2023-46.pdf",
     "sha256": "572c79880b9f8effc8fa6e39b864101835a0fb5d85b194b90a99d170121a0562",
-    "fetched_at": "2026-10-18T07:06:24+00:00"
+    "fetched_at": "2026-10-18T07:06:24+00:00",
+    "jurisdiction": "Central"
   },
   "the_indian_penal_code_1860.pdf": {
     "title": "The Indian Penal Code, 1860",
@@ -484,7 +511,8 @@
     "pdf_url": "https://cdnbbsr.s3waas.gov.in/s3ec03a36b598abb934e4528412e5a2127/uploads/2023/09/2023091276.pdf",
     "sha256": "2bbc5b1a7b9567a1811fc376b0cec037f8fe7b90a680d8177abc6b06364fc76a",
     "note": "Repealed w.e.f. 1 July 2024 (replaced by BNS / BSA); kept for pending matters.",
-    "fetched_at": "2026-10-18T07:06:25+00:00"
+    "fetched_at": "2026-10-18T07:06:25+00:00",
+    "jurisdiction": "Central"
   },
   "the_constitution_of_india.pdf": {
     "title": "The Constitution of India",
@@ -502,7 +530,8 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/5266be94-8cd4-45e5-b0ab-bd36b8c01f4f/content",
     "sha256": "f7e4908b0e5e7dc166ade9d447a89c4261b895db12c94e128ca5bccb015fcd3b",
     "note": "",
-    "fetched_at": "2026-10-18T08:06:08+00:00"
+    "fetched_at": "2026-10-18T08:06:08+00:00",
+    "jurisdiction": "Central"
   },
   "the_motor_vehicles_act_1988.pdf": {
     "title": "The Motor Vehicles Act, 1988",
@@ -520,6 +549,7 @@
     "pdf_url": "https://indiacode.gov.in/server/api/core/bitstreams/031fe0a8-b3a6-4da2-b130-ec2e870fe4f2/content",
     "pdf_name": "A1988-59.pdf",
     "sha256": "c619755eabb2085ec5ef8068777724223f3ec7e1cc1170aee0dd1608216dc482",
-    "fetched_at": "2026-10-22T07:00:41+00:00"
+    "fetched_at": "2026-10-22T07:00:41+00:00",
+    "jurisdiction": "Central"
   }
 }

@@ -18,6 +18,8 @@ os.environ["NYAYA_DB"] = str(_TMP / "test.db")
 os.environ["NYAYA_HOME"] = str(_TMP / "home")
 os.environ.setdefault("OLLAMA_API_KEY", "test-key")
 os.environ["SYNC_ENABLED"] = "false"  # no background network sync during tests
+os.environ["REMINDERS_ENABLED"] = "false"  # tests run the reminder dispatcher by hand
+os.environ["SMTP_HOST"] = ""
 # The offline suite must never touch the real Supabase project configured in .env: these empty values take
 # precedence over .env (python-dotenv does not override existing variables). The opt-in live test sets them itself.
 for _k in ("SUPABASE_DB_URL", "SUPABASE_URL", "SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY",
@@ -25,7 +27,7 @@ for _k in ("SUPABASE_DB_URL", "SUPABASE_URL", "SUPABASE_SECRET_KEY", "SUPABASE_S
     os.environ[_k] = ""
 # Account settings from .env must not leak in either: tests choose the mode explicitly (local by default; the
 # security tests switch to Supabase mode against the fake Auth server).
-os.environ.update({"AUTH_MODE": "local", "SIGNUP_MODE": "invite_only", "MFA_REQUIRED_ROLES": "admin,auditor,advocate"})
+os.environ.update({"AUTH_MODE": "local", "SIGNUP_MODE": "invite_only", "MFA_REQUIRED_ROLES": "admin,advocate"})
 
 from nyaya import config, db, embeddings, llm  # noqa: E402
 

@@ -320,7 +320,9 @@ def _identity_for(row: dict, h: Handler) -> db.Identity:
     if p is None:
         raise Rejected("The account that started this job is no longer active.")
     try:
-        h.authorize(p, row.get("params") or {})
+        # The check reads case membership; with row-level security it must run as the owner, not as nobody.
+        with db.as_identity(p.identity()):
+            h.authorize(p, row.get("params") or {})
     except (authz.Denied, authz.NotFound) as exc:
         raise Rejected(f"Access to the item was withdrawn: {exc}") from None
     return p.identity()

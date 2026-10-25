@@ -84,9 +84,9 @@ def _insert_document(*, doc_id: str, case_id: str | None, collection: str, doc_t
     with db.tx() as c:
         c.execute(
             "INSERT INTO documents(id, case_id, collection, doc_type, title, filename, path, sha256, status, meta, created_at,"
-            " uploaded_by) VALUES(?,?,?,?,?,?,?,?, 'processing', ?, ?, ?)",
+            " uploaded_by, jurisdiction) VALUES(?,?,?,?,?,?,?,?, 'processing', ?, ?, ?, ?)",
             (doc_id, case_id, collection, doc_type, title, filename, stored, sha, json.dumps(meta), db.now(),
-             ident.user_id or ident.actor),
+             ident.user_id or ident.actor, meta.get("jurisdiction") or ""),
         )
 
 
@@ -290,12 +290,15 @@ def document_text(doc_id: str) -> tuple[list[tuple[int, int, str]], dict | None]
 def _library_files() -> list[tuple[Path, str, str, str, dict]]:
     """(path, collection, doc_type, title, meta) for every library file on disk."""
     items: list[tuple[Path, str, str, str, dict]] = []
-    manifest_path = config.BARE_ACTS_DIR / "manifest.json"
-    manifest = json.loads(manifest_path.read_text("utf-8")) if manifest_path.exists() else {}
-    for p in sorted(config.BARE_ACTS_DIR.glob("*.pdf")):
-        m = manifest.get(p.name, {})
+    from .indiacode import read_manifest
+    manifest = read_manifest()
+    # Central Acts sit at the top level; state / UT acts imported from India Code under states/<state>/.
+    for p in sorted(config.BARE_ACTS_DIR.rglob("*.pdf")):
+        m = manifest.get(p.relative_to(config.BARE_ACTS_DIR).as_posix(), {})
         title = m.get("title") or pretty_title(p.name)
-        items.append((p, "bare_act", "statute", title, {k: v for k, v in m.items() if k != "sha256"}))
+        meta = {k: v for k, v in m.items() if k != "sha256"}
+        meta.setdefault("jurisdiction", "Maharashtra" if title.startswith("The Maharashtra ") else "Central")
+        items.append((p, "bare_act", "statute", title, meta))
     for p in sorted(config.DRAFTS_DIR.rglob("*.md")):
         area = p.parent.name if p.parent != config.DRAFTS_DIR else "General"
         first = p.read_text("utf-8").split("\n", 1)[0].lstrip("# ").strip()

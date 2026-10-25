@@ -4,16 +4,16 @@ Every API endpoint declares the permission it needs; object endpoints also check
 case the object belongs to. Deny by default: a permission or case action that is not listed here is refused.
 The database enforces the same rules again with row-level security (supabase/migrations/…05).
 
-Roles (organisation level, assigned only by an administrator — never chosen by the user):
+Two personas (organisation roles). Public sign-up gives "advocate" (shown as Lawyer); only an administrator can
+make someone an administrator — a user never chooses their own role:
     guest     signed out, or signed in without access yet: public legal information only
-    client    matters an advocate has shared with them; general legal research
-    advocate  creates matters; works on the matters they are a member of; drafting
-    admin     manages users, roles, case assignments and settings; sees the organisation's case list, but not
-              case contents unless they are on the case (adding themselves is audited)
-    auditor   reads the audit log and security events; no case data
+    advocate  Lawyer: creates matters; works on the matters they are a member of; research, drafting, calendar
+    admin     Administrator: everything a lawyer can do, plus users, roles, case assignments, settings and the
+              audit log; sees the organisation's case list, but not case contents unless they are on the case
+              (adding themselves is audited)
 
-Case access (per matter, from case_members): owner > advocate > client, capped by the organisation role
-(a client is never more than 'client'; auditors and guests never have case access).
+Case access (per matter, from case_members): owner > advocate. Guests never have case access.
+The former "client" and "auditor" roles were retired (supabase/migrations/…07).
 """
 from __future__ import annotations
 
@@ -21,12 +21,12 @@ from dataclasses import dataclass, field
 
 from . import db
 
-ROLES = ("guest", "client", "advocate", "admin", "auditor")
-ASSIGNABLE_ROLES = ("client", "advocate", "admin", "auditor")
-CASE_ACCESS = ("owner", "advocate", "client")
+ROLES = ("guest", "advocate", "admin")
+ASSIGNABLE_ROLES = ("advocate", "admin")
+CASE_ACCESS = ("owner", "advocate")
 
-_SIGNED_IN = {"client", "advocate", "admin", "auditor"}
-_WORKERS = {"client", "advocate", "admin"}
+_SIGNED_IN = {"advocate", "admin"}
+_WORKERS = {"advocate", "admin"}
 
 PERMISSIONS: dict[str, set[str]] = {
     "library.read": {"guest", *_WORKERS},          # bare acts, awareness, limitation tool, news
@@ -34,29 +34,31 @@ PERMISSIONS: dict[str, set[str]] = {
     "notifications.read": _SIGNED_IN,
     "research.use": _WORKERS,                      # AI legal research on the library (+ cases they can access)
     "cases.list": _WORKERS,
-    "case.create": {"advocate", "admin"},
-    "drafting.use": {"advocate", "admin"},
-    "casesearch.use": {"advocate", "admin"},
-    "forum.edit": {"advocate", "admin"},
-    "directory.read": {"advocate", "admin"},       # look up colleagues/clients to add to a case
+    "case.create": _WORKERS,
+    "drafting.use": _WORKERS,
+    "casesearch.use": _WORKERS,
+    "forum.edit": _WORKERS,
+    "directory.read": _WORKERS,                    # look up colleagues to add to a case
+    "calendar.use": _WORKERS,                      # own hearings, deadlines and tasks with reminders
+    "library.import": _WORKERS,                    # add an official India Code act to the shared library
     "users.manage": {"admin"},
     "settings.manage": {"admin"},
     "integrations.manage": {"admin"},
     "integrations.read": _WORKERS,
-    "audit.read": {"admin", "auditor"},
+    "audit.read": {"admin"},                       # security logging stays; only administrators read it
 }
 
 CASE_ACTIONS: dict[str, set[str]] = {
-    "case.read": {"owner", "advocate", "client"},
+    "case.read": {"owner", "advocate"},
     "case.update": {"owner", "advocate"},
     "case.delete": {"owner"},
     "case.members": {"owner"},
     "notes": {"owner", "advocate"},
-    "documents.read": {"owner", "advocate", "client"},
-    "documents.upload": {"owner", "advocate", "client"},
+    "documents.read": {"owner", "advocate"},
+    "documents.upload": {"owner", "advocate"},
     "documents.delete": {"owner", "advocate"},
-    "documents.ai": {"owner", "advocate", "client"},
-    "chat": {"owner", "advocate", "client"},
+    "documents.ai": {"owner", "advocate"},
+    "chat": {"owner", "advocate"},
     "drafts": {"owner", "advocate"},
     "provisions": {"owner", "advocate"},
     "records": {"owner", "advocate"},
@@ -65,7 +67,7 @@ CASE_ACTIONS: dict[str, set[str]] = {
 ADMIN_CASE_ACTIONS = {"case.delete", "case.members", "case.meta"}
 
 # Roles that must use a second factor before reaching any data (Supabase Auth mode).
-MFA_REQUIRED_DEFAULT = ("admin", "auditor", "advocate")
+MFA_REQUIRED_DEFAULT = ("admin", "advocate")
 
 
 class Denied(Exception):
@@ -115,9 +117,9 @@ def require(p: Principal, permission: str) -> None:
 
 # ── Case access ──────────────────────────────────────────────────────────────
 def _cap(role: str, access: str | None) -> str | None:
-    if access is None or role not in _WORKERS:
+    if access is None or role not in _WORKERS or access not in CASE_ACCESS:
         return None
-    return "client" if role == "client" else access
+    return access
 
 
 def case_access(p: Principal, case_id: str | None) -> str | None:
@@ -182,9 +184,7 @@ def team_case_ids(p: Principal) -> list[str]:
 
 def compatible_access(role: str, access: str) -> bool:
     """Which case access levels a person with this organisation role may be given."""
-    if role == "client":
-        return access == "client"
-    return role in ("advocate", "admin") and access in CASE_ACCESS
+    return role in _WORKERS and access in CASE_ACCESS
 
 
 # ── Documents and other objects reached by id ───────────────────────────────

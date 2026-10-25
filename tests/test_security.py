@@ -149,35 +149,36 @@ def test_roles_come_only_from_invitations_never_from_the_user(fake, monkeypatch)
     r = guest().post("/api/auth/signup", json={"email": "x@example.com", "password": PW, "display_name": "X",
                                                "role": "admin"})
     assert r.status_code == 200
-    # Open sign-up gives the lowest role only.
+    # Open (public) sign-up: anyone becomes a Lawyer — never an administrator.
     monkeypatch.setattr(config, "SIGNUP_MODE", "open")
     fake.add_user("open@example.com", PW)
-    assert signed_in("open@example.com").get("/api/session").json()["role"] == "client"
+    s = signed_in("open@example.com").get("/api/session").json()
+    assert s["role"] == "advocate" and "case.create" in s["permissions"]
+    assert "users.manage" not in s["permissions"] and "audit.read" not in s["permissions"]
+    assert signed_in("open@example.com").get("/api/admin/users").status_code == 403
 
 
 def test_permission_matrix(fake, mock_feed):
-    for e, r in (("client@example.com", "client"), ("adv@example.com", "advocate"), ("admin@example.com", "admin"),
-                 ("audit@example.com", "auditor")):
+    for e, r in (("adv@example.com", "advocate"), ("admin@example.com", "admin")):
         person(fake, e, r)
-    client, adv, admin, auditor = (signed_in(e) for e in ("client@example.com", "adv@example.com", "admin@example.com",
-                                                          "audit@example.com"))
+    adv, admin = (signed_in(e) for e in ("adv@example.com", "admin@example.com"))
     case_body = {"title": "T", "case_type": "Civil", "client_name": "Asha Rao"}
-    assert client.post("/api/cases", json=case_body).status_code == 403          # clients do not open matters
-    assert auditor.post("/api/cases", json=case_body).status_code == 403
     assert adv.post("/api/cases", json=case_body).status_code == 200
-    assert client.get("/api/drafts").status_code == 403
-    assert client.post("/api/casesearch", json={"cnr_number": "MHPU010012342023"}).status_code == 403
-    assert auditor.get("/api/cases").status_code == 403                          # auditors never see case data
-    assert auditor.post("/api/chat", json={"message": "hello"}).status_code == 403
-    assert auditor.get("/api/audit").status_code == 200 and admin.get("/api/audit").status_code == 200
-    assert adv.get("/api/audit").status_code == 403 and client.get("/api/audit").status_code == 403
+    assert admin.post("/api/cases", json=case_body).status_code == 200
+    assert adv.get("/api/drafts").status_code == 200 and adv.get("/api/calendar/upcoming").status_code == 200
+    assert guest().get("/api/calendar/upcoming").status_code in (401, 403)
+    assert admin.get("/api/audit").status_code == 200 and adv.get("/api/audit").status_code == 403
+    # The retired personas cannot be given any more.
+    assert admin.post("/api/admin/invitations", json={"email": "c@example.com", "role": "client"}).status_code == 422
+    assert admin.post("/api/admin/invitations", json={"email": "c@example.com", "role": "auditor"}).status_code == 422
+    assert set(admin.get("/api/admin/users").json()["roles"]) == {"advocate", "admin"}
     assert adv.get("/api/admin/users").status_code == 403 and admin.get("/api/admin/users").status_code == 200
     assert adv.post("/api/integrations/livelaw/sync").status_code == 403
     assert admin.post("/api/integrations/livelaw/sync").status_code == 200
     assert adv.put("/api/prefs", json={"values": {"chat_retention_days": "30"}}).status_code == 403
     assert admin.put("/api/prefs", json={"values": {"chat_retention_days": "30"}}).status_code == 200
     assert adv.put("/api/prefs", json={"values": {"lang": "hi"}}).status_code == 200
-    assert client.get("/api/prefs").json()["lang"] == "en"                       # preferences are per user
+    assert admin.get("/api/prefs").json()["lang"] == "en"                        # preferences are per user
 
 
 def test_no_privilege_escalation(fake):
@@ -188,7 +189,7 @@ def test_no_privilege_escalation(fake):
     me_admin = admin.get("/api/session").json()["user"]["id"]
     assert adv.patch(f"/api/admin/users/{me_adv}", json={"role": "admin"}).status_code == 403
     assert adv.post("/api/admin/invitations", json={"email": "z@example.com", "role": "admin"}).status_code == 403
-    assert admin.patch(f"/api/admin/users/{me_admin}", json={"role": "client"}).status_code == 403   # not on self
+    assert admin.patch(f"/api/admin/users/{me_admin}", json={"role": "advocate"}).status_code == 403  # not on self
     assert admin.patch(f"/api/admin/users/{me_admin}", json={"status": "disabled"}).status_code == 403
     # Promotion is possible only by an administrator, and takes effect at once.
     assert admin.patch(f"/api/admin/users/{me_adv}", json={"role": "admin"}).status_code == 200
@@ -202,9 +203,11 @@ def test_role_change_and_disable_take_effect_immediately(fake):
     uid = adv.get("/api/session").json()["user"]["id"]
     case_id = new_case(adv)
     doc = upload(adv, case_id)
-    assert admin.patch(f"/api/admin/users/{uid}", json={"role": "client"}).status_code == 200
-    assert adv.post("/api/cases", json={"title": "x", "case_type": "Civil", "client_name": "Asha Rao"}).status_code == 403
-    assert adv.delete(f"/api/documents/{doc['id']}").status_code == 403          # case access capped at 'client'
+    assert admin.patch(f"/api/admin/users/{uid}", json={"role": "admin"}).status_code == 200
+    assert adv.get("/api/admin/users").status_code == 200                        # promotion: at once
+    assert admin.patch(f"/api/admin/users/{uid}", json={"role": "advocate"}).status_code == 200
+    assert adv.get("/api/admin/users").status_code == 403                        # demotion: at once
+    assert admin.patch(f"/api/admin/users/{uid}", json={"role": "client"}).status_code == 422   # retired persona
     assert adv.get(f"/api/documents/{doc['id']}").status_code == 200
     assert admin.patch(f"/api/admin/users/{uid}", json={"status": "disabled"}).status_code == 200
     assert adv.get("/api/cases").status_code == 401                              # signed out everywhere
@@ -261,29 +264,27 @@ def test_other_users_cannot_reach_a_case_by_id(fake, monkeypatch):
     assert a.get(f"/api/cases/{case_id}").status_code == 200 and a.get(f"/api/chats/{chat_id}").status_code == 200
 
 
-def test_sharing_a_case_with_a_client(fake):
+def test_sharing_a_case_with_a_colleague(fake):
     person(fake, "adv@example.com", "advocate")
-    person(fake, "client@example.com", "client")
-    adv, cl = signed_in("adv@example.com"), signed_in("client@example.com")
+    person(fake, "col@example.com", "advocate")
+    adv, col = signed_in("adv@example.com"), signed_in("col@example.com")
     case_id = new_case(adv)
     adv.post(f"/api/cases/{case_id}/notes", json={"content": "Internal strategy note"})
     doc = upload(adv, case_id)
-    assert cl.get(f"/api/cases/{case_id}").status_code == 404
-    # A client can only ever be given client access.
-    assert adv.post(f"/api/cases/{case_id}/members", json={"email": "client@example.com", "access": "owner"}).status_code == 403
-    assert adv.post(f"/api/cases/{case_id}/members", json={"email": "client@example.com", "access": "client"}).status_code == 200
-    c = cl.get(f"/api/cases/{case_id}").json()
-    assert c["access"] == "client" and c["notes"] == []                         # internal notes are not shown
-    assert cl.get(f"/api/documents/{doc['id']}/file").status_code == 200
-    assert cl.delete(f"/api/documents/{doc['id']}").status_code == 403
-    assert cl.post(f"/api/cases/{case_id}/notes", json={"content": "x"}).status_code == 403
-    assert cl.patch(f"/api/cases/{case_id}", json={"title": "x"}).status_code == 403
-    assert cl.get(f"/api/cases/{case_id}/provisions").status_code == 403
-    assert cl.post(f"/api/cases/{case_id}/members", json={"email": "adv@example.com", "access": "client"}).status_code == 403
-    assert "email" not in cl.get(f"/api/cases/{case_id}/members").json()["members"][0]
-    uid = cl.get("/api/session").json()["user"]["id"]
+    assert col.get(f"/api/cases/{case_id}").status_code == 404                # not on the case: not even its existence
+    # The retired 'client' access level cannot be given.
+    assert adv.post(f"/api/cases/{case_id}/members", json={"email": "col@example.com", "access": "client"}).status_code == 422
+    assert adv.post(f"/api/cases/{case_id}/members", json={"email": "col@example.com", "access": "advocate"}).status_code == 200
+    c = col.get(f"/api/cases/{case_id}").json()
+    assert c["access"] == "advocate" and c["notes"]                              # the case team sees notes
+    assert col.get(f"/api/documents/{doc['id']}/file").status_code == 200
+    assert col.post(f"/api/cases/{case_id}/notes", json={"content": "x"}).status_code == 200
+    assert col.delete(f"/api/cases/{case_id}").status_code == 403                # only an owner deletes a matter
+    assert col.post(f"/api/cases/{case_id}/members", json={"email": "adv@example.com", "access": "owner"}).status_code == 403
+    assert "email" not in col.get(f"/api/cases/{case_id}/members").json()["members"][0]
+    uid = col.get("/api/session").json()["user"]["id"]
     assert adv.delete(f"/api/cases/{case_id}/members/{uid}").status_code == 200
-    assert cl.get(f"/api/cases/{case_id}").status_code == 404
+    assert col.get(f"/api/cases/{case_id}").status_code == 404
 
 
 def test_admin_sees_case_list_but_not_contents_unless_on_the_case(fake):
@@ -597,7 +598,7 @@ def test_change_password_requires_current_and_signs_out_others(fake):
 # ── Audit, logs and errors ──────────────────────────────────────────────────
 def test_audit_log_records_actor_and_never_contents(fake):
     person(fake, "a@example.com", "advocate")
-    person(fake, "aud@example.com", "auditor")
+    person(fake, "aud@example.com", "admin")          # security logging is read by administrators
     a, aud = signed_in("a@example.com"), signed_in("aud@example.com")
     case_id = new_case(a)
     doc = upload(a, case_id, text="TOP SECRET CLIENT FACT: the safe code is 4417.\n" * 3)
@@ -609,7 +610,7 @@ def test_audit_log_records_actor_and_never_contents(fake):
     assert any(i["action"] == "document.open" for i in items)
     blob = json.dumps(items)
     assert "TOP SECRET" not in blob and "4417" not in blob and PW not in blob
-    assert aud.get(f"/api/documents/{doc['id']}").status_code in (403, 404)       # auditors read the log, not files
+    assert aud.get(f"/api/documents/{doc['id']}").status_code in (403, 404)       # the log, not the files
     assert not [r for r in app.routes if getattr(r, "path", "").startswith("/api/audit") and
                 ({"PUT", "PATCH", "DELETE", "POST"} & getattr(r, "methods", set()))]   # append-only (DB grants too)
 
@@ -733,8 +734,8 @@ def test_model_output_is_scanned_for_secrets_and_fabricated_citations(fake, offl
 
 def test_planner_cannot_pick_unlisted_tools_or_other_cases(fake, offline, monkeypatch):
     person(fake, "a@example.com", "advocate")
-    person(fake, "client@example.com", "client")
-    a, cl = signed_in("a@example.com"), signed_in("client@example.com")
+    person(fake, "other@example.com", "advocate")
+    a, cl = signed_in("a@example.com"), signed_in("other@example.com")
     case_id = new_case(a)
     monkeypatch.setattr(llm, "chat_json", lambda m, **k: {"intent": "delete_case", "case_id": case_id, "query": "x",
                                                           "doc_ref": "D99", "calc": {"cause": "x" * 500}})
@@ -743,9 +744,9 @@ def test_planner_cannot_pick_unlisted_tools_or_other_cases(fake, offline, monkey
     assert a.get(f"/api/cases/{case_id}").status_code == 200                      # nothing was deleted
     assert guardrails.validate_plan({"intent": "drafting", "doc_ref": "D2", "alt_queries": ["a", 3, "b", "c"]}, "m") \
         == {**guardrails.validate_plan({}, "m"), "intent": "drafting", "doc_ref": 2, "alt_queries": ["a", "b"]}
-    monkeypatch.setattr(llm, "chat_json", lambda m, **k: {"intent": "drafting", "query": "notice"})
-    _, ev = chat(cl, message="draft a legal notice")                              # clients cannot use drafting
-    assert next(e for e in ev if e["type"] == "meta")["intent"] == "research"
+    # A tool the caller may not use is downgraded to research (e.g. drafting on a case one is not on, or a guest).
+    assert guardrails.allowed_intent(authz.GUEST, "drafting", None) == "research"
+    assert guardrails.allowed_intent(authz.GUEST, "research", None) == "research"
 
 
 def test_identifiers_are_pseudonymised_before_reaching_the_llm(monkeypatch):

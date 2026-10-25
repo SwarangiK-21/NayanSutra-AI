@@ -18,9 +18,9 @@ export async function viewAwareness(main, r) {
       <select id="awState" style="max-width:240px">${res.states.filter((s) => s.code !== "central").map((s) => html`<option value="${s.code}" ${s.code === st ? raw("selected") : ""}>${s.name}</option>`)}</select>
       <span class="small muted">${t("aw.more_states")}</span></div>
     <div class="tabs" role="tablist"><a role="tab" class="tab ${subject ? "" : "active"}" href="#/awareness?state=${st}">${t("common.all")}</a>${res.subjects.map((s) => html`<a role="tab" class="tab ${s.id === subject ? "active" : ""}" href="#/awareness?state=${st}&subject=${s.id}">${t(`aw.s_${s.id}`, {}, s.label)}</a>`)}</div>
-    ${res.items.length ? html`<div class="stack">${res.items.map((i) => html`<article class="card aw ${i.id === focus ? "focus" : ""}" id="aw-${i.id}">
-      <div class="card-h"><h2>${i.title}</h2><span class="chip ${i.state === "central" ? "chip-wait" : "chip-ok"}">${i.jurisdiction}</span></div>
-      <div class="card-b">
+    ${res.items.length ? html`<div class="stack">${res.items.map((i) => html`<details class="panel aw ${i.id === focus ? "focus" : ""}" id="aw-${i.id}" ${i.id === focus || res.items.length === 1 ? raw("open") : ""}>
+      <summary><span>${i.title}</span><span class="s-aside"><span class="chip ${i.state === "central" ? "chip-wait" : "chip-ok"}">${i.jurisdiction}</span></span></summary>
+      <div class="panel-b">
         <div class="row small muted" style="margin-bottom:6px"><span>${t(`aw.kind_${i.kind}`, {}, i.kind)}</span> · <span>${t("aw.verified", { date: fmtDate(i.last_verified) })}</span></div>
         <p>${i.summary}</p>
         ${i.provisions.length ? html`<h3 class="mini">${t("aw.provisions")}</h3><div class="prov-list">${i.provisions.map((p) => p.found ? html`<details class="prov"><summary><strong>${p.label}</strong> — ${p.heading.split(" — ").slice(1).join(" — ")} <span class="chip chip-ok">${t("prov.verified")}</span></summary>
@@ -29,7 +29,7 @@ export async function viewAwareness(main, r) {
         ${i.links.length ? html`<h3 class="mini">${t("aw.official_links")}</h3><ul class="small">${i.links.map((l) => html`<li><a href="${l.url}" target="_blank" rel="noopener noreferrer">${l.title} ↗</a> <span class="muted">(${t("lookup.checked", { date: l.verified_on })})</span></li>`)}</ul>` : ""}
         ${i.kind === "state_notification" ? html`<h3 class="mini">${t("aw.updates")}</h3>${(i.updates || []).length ? html`<ul class="small">${i.updates.map((u) => html`<li>${u.date} — <a href="${u.url}" target="_blank" rel="noopener noreferrer">${u.title}</a></li>`)}</ul>` : html`<div class="small muted">${t("aw.no_updates")}</div>`}` : ""}
         ${i.faqs.length ? html`<h3 class="mini">${t("aw.faqs")}</h3>${i.faqs.map((f) => html`<details class="faq"><summary>${f.q}</summary><p class="small">${f.a}</p></details>`)}` : ""}
-      </div></article>`)}</div>` : html`<div class="empty">${t("aw.none")}</div>`}`);
+      </div></details>`)}</div>` : html`<div class="empty">${t("aw.none")}</div>`}`);
   $("#awState").onchange = (e) => { location.hash = `#/awareness?state=${encodeURIComponent(e.target.value)}`; };
   if (focus) document.getElementById(`aw-${focus}`)?.scrollIntoView();
 }

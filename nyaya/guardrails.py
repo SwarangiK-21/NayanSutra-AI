@@ -260,7 +260,7 @@ def validate_plan(raw: dict, message: str) -> dict:
 
 
 def allowed_intent(principal, intent: str, case_id: str | None) -> str:
-    """Downgrade a tool the caller may not use (e.g. a client asking for a draft gets a research answer)."""
+    """Downgrade a tool the caller may not use (e.g. drafting on a case the caller cannot draft on gets a research answer)."""
     from . import authz
 
     tool = TOOLS.get(intent) or TOOLS["research"]

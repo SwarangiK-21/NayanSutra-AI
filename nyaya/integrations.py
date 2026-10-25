@@ -179,7 +179,8 @@ class IndiaCodeUpdates(Adapter):
     API = "https://indiacode.gov.in/server/api/core/items/"
 
     def sync(self, state: dict) -> dict:
-        manifest = json.loads((config.BARE_ACTS_DIR / "manifest.json").read_text("utf-8"))
+        from .indiacode import read_manifest
+        manifest = read_manifest()
         new = updated = 0
         changed = []
         with client_factory() as client:
@@ -194,7 +195,7 @@ class IndiaCodeUpdates(Adapter):
                 data = {"lastModified": d.get("lastModified"), "withdrawn": d.get("withdrawn"), "file": fname}
                 res = upsert_record(self.id, uuid, kind="act_version", title=m["title"], url=m["item_url"],
                                     published_at=d.get("lastModified"), data=data, provenance="api",
-                                    jurisdiction="Maharashtra" if "Maharashtra" in m["title"] else "Central",
+                                    jurisdiction=m.get("jurisdiction") or ("Maharashtra" if "Maharashtra" in m["title"] else "Central"),
                                     verified_at=db.now())
                 new += res == "new"
                 if res == "updated":

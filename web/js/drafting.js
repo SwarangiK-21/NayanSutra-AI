@@ -1,6 +1,6 @@
 /* Modules 6, 9, 11 — document-aware drafting studio, legal notices, court/forum customisation, editor and export. */
-import { $, $$, aiConsent, api, confirmDialog, crumbs, download, fmtDateTime, formData, html, markdown, mount, pollJob,
-  progressBar, raw, spinner, state, toast } from "./core.js";
+import { $, $$, aiConsent, api, bindTabs, confirmDialog, crumbs, download, fmtDateTime, formData, html, markdown, mount, pollJob,
+  progressBar, raw, spinner, state, tabBar, tabPanel, toast } from "./core.js";
 import { lang, t } from "./i18n.js";
 
 const ORIGIN_CLS = { file: "o-file", user: "o-user", case: "o-case" };
@@ -18,7 +18,7 @@ export async function viewDrafting(main, r) {
   mount(main, html`
     <div class="row"><h1 class="page-title">${t("drafting.title")}</h1><span class="spacer"></span><a class="btn btn-ghost" href="#/notice${caseId ? `?case=${encodeURIComponent(caseId)}` : ""}">✉ ${t("qa.notice")}</a></div>
     <p class="page-lead">${t("drafting.lead")}</p>
-    <div class="notice" style="margin-bottom:14px">${t("drafting.review_label")}</div>
+    <div class="notice" style="margin-bottom:18px">${t("drafting.review_label")}</div>
     <div class="grid g-side">
       <form class="card" id="dForm" novalidate><div class="card-h"><h2>${t("drafting.setup")}</h2></div><div class="card-b stack">
         <div class="form-grid">
@@ -29,21 +29,21 @@ export async function viewDrafting(main, r) {
             <label class="small"><input type="checkbox" name="save_style" value="1"> ${t("drafting.remember_style")}</label></div>
           <div><label class="f" for="d_lang">${t("drafting.output_lang")}</label><select id="d_lang" name="lang"><option value="en">English</option><option value="hi" ${lang() === "hi" ? raw("selected") : ""}>हिंदी</option><option value="mr">मराठी</option></select></div>
         </div>
-        <fieldset class="fs"><legend>${t("drafting.base")}</legend>
+        <details class="panel" ${r.q.get("template") ? raw("open") : ""}><summary>${t("drafting.base")}</summary><div class="panel-b">
           <div class="form-grid">
             <div><label class="f" for="d_tpl">${t("drafting.template")}</label><select id="d_tpl" name="template_doc_id"><option value="">${t("drafting.auto_template")}</option>${lib.draft.map((x) => html`<option value="${x.id}" ${x.id === r.q.get("template") ? raw("selected") : ""}>${x.title}</option>`)}</select></div>
             <div class="span-2"><label class="f" for="d_base">${t("drafting.base_doc")}</label><select id="d_base" name="base_doc_id"><option value="">—</option></select></div>
             <div class="span-3"><label class="f" for="d_base_text">${t("drafting.paste")}</label><textarea id="d_base_text" name="base_text" rows="3" placeholder="${t("drafting.paste_ph")}"></textarea></div>
-          </div></fieldset>
+          </div></div></details>
         <fieldset class="fs"><legend>${t("drafting.supporting")}</legend><div id="d_docs" class="small">${t("drafting.choose_case_docs")}</div></fieldset>
         <fieldset class="fs"><legend>${t("drafting.known")}</legend><div id="d_known" class="form-grid"></div></fieldset>
         <div><label class="f" for="d_instr">${t("drafting.instructions")}</label><textarea id="d_instr" name="instructions" rows="4" placeholder="${t("drafting.instructions_ph")}"></textarea></div>
         <div class="row"><button class="btn btn-saffron" type="submit" id="genBtn">✍ ${t("drafting.generate")}</button></div>
         <div id="genBox" aria-live="polite"></div>
       </div></form>
-      <div class="stack"><div class="card"><div class="card-h"><h2>${t("drafting.forum_reqs")}</h2></div><div class="card-b" id="forumBox">${spinner()}</div></div>
-        <div class="card"><div class="card-h"><h2>${t("drafting.type_law")}</h2></div><div class="card-b" id="typeBox">${spinner()}</div></div>
-        <div class="card"><div class="card-h"><h2>${t("drafting.recent")}</h2></div><div class="card-b">${recentList(recent.drafts)}</div></div></div>
+      <div><details class="panel" open><summary>${t("drafting.recent")} <span class="s-aside">${recent.drafts.length || ""}</span></summary><div class="panel-b">${recentList(recent.drafts)}</div></details>
+        <details class="panel"><summary>${t("drafting.forum_reqs")}</summary><div class="panel-b" id="forumBox">${spinner()}</div></details>
+        <details class="panel"><summary>${t("drafting.type_law")}</summary><div class="panel-b" id="typeBox">${spinner()}</div></details></div>
     </div>`);
   bindStudio({ cases, kind: "draft" });
 }
@@ -159,9 +159,9 @@ export async function viewNotice(main, r) {
         <div><label class="f" for="d_instr">${t("drafting.instructions")}</label><textarea id="d_instr" name="instructions" rows="2"></textarea></div>
         <div class="row"><button class="btn btn-saffron" type="submit" id="genBtn">✉ ${t("notice.generate")}</button></div>
         <div id="genBox" aria-live="polite"></div></div></form>
-      <div class="stack"><div class="card"><div class="card-h"><h2>${t("drafting.type_law")}</h2></div><div class="card-b" id="typeBox">${spinner()}</div></div>
-        <div class="card hidden"><div class="card-b" id="forumBox"></div></div>
-        <div class="card"><div class="card-h"><h2>${t("notice.recent")}</h2></div><div class="card-b">${recentList(recent.drafts)}</div></div></div>
+      <div><details class="panel" open><summary>${t("notice.recent")} <span class="s-aside">${recent.drafts.length || ""}</span></summary><div class="panel-b">${recentList(recent.drafts)}</div></details>
+        <details class="panel"><summary>${t("drafting.type_law")}</summary><div class="panel-b" id="typeBox">${spinner()}</div></details>
+        <div class="hidden" id="forumBox"></div></div>
     </div>`);
   bindStudio({ kind: "notice" });
 }
@@ -178,11 +178,15 @@ async function viewEditor(main, id) {
   crumbs([[t("nav.drafting"), "#/drafting"], [d.title]]);
   const facts = Object.fromEntries((d.facts || []).map((f) => [f.id, f]));
   const ck = d.inputs?.checks || {};
+  const nIssues = (d.inputs?.inconsistencies || []).length + (d.inputs?.unsupported || []).length;
   mount(main, html`
-    <div class="row"><h1 class="page-title">${d.title}</h1><span class="chip">v${d.version}</span>${reviewChip(d)}<span class="spacer"></span>
+    <div class="page-head"><h1 class="page-title">${d.title}</h1><span class="chip">v${d.version}</span>${reviewChip(d)}<span class="head-actions">
       <button class="btn" id="saveBtn">💾 ${t("common.save")}</button>
-      <button class="btn btn-ghost" id="dlDocx">⬇ Word (.docx)</button><button class="btn btn-ghost" id="dlPdf">⬇ PDF</button>
-      <button class="btn btn-ghost" id="regenBtn">↻ ${t("drafting.regenerate")}</button><button class="btn btn-danger" id="delBtn">${t("common.delete")}</button></div>
+      <details class="menu"><summary class="btn btn-ghost">⬇ ${t("common.download")}</summary><div class="menu-list">
+        <button type="button" id="dlDocx">Word (.docx)</button><button type="button" id="dlPdf">PDF</button></div></details>
+      <details class="menu"><summary class="btn btn-ghost">${t("common.more")}</summary><div class="menu-list">
+        <button type="button" id="regenBtn">↻ ${t("drafting.regenerate")}</button><hr>
+        <button type="button" class="danger" id="delBtn">${t("common.delete")}</button></div></details></span></div>
     <div class="row small" style="margin-bottom:10px">
       <span class="chip ${ck.placeholders?.length ? "chip-warn" : "chip-ok"}">${t("drafting.placeholders", { n: ck.placeholders?.length || 0 })}</span>
       ${ck.invalid_citations?.length ? html`<span class="chip chip-err">${t("drafting.bad_cites", { list: ck.invalid_citations.join(", ") })}</span>` : ""}
@@ -192,37 +196,40 @@ async function viewEditor(main, id) {
       <div class="card"><div class="card-h"><h2>${t("drafting.edit")}</h2><span class="small muted">Markdown</span></div><textarea id="edText" class="ed-text" aria-label="${t("drafting.edit")}" spellcheck="true">${d.content}</textarea></div>
       <div class="card"><div class="card-h"><h2>${t("drafting.preview")}</h2></div><div class="card-b md doc-preview" id="edPrev"></div></div>
     </div>
-    <div class="grid g-2" style="margin-top:16px">
-      <div class="stack">
-        ${d.missing?.length ? html`<form class="card" id="missForm"><div class="card-h"><h2>${t("drafting.missing")}</h2></div><div class="card-b stack">
-          <p class="small muted">${t("drafting.missing_hint")}</p>
-          ${d.missing.map((m, i) => html`<div><label class="f" for="m_${i}">${m.question} ${m.essential ? html`<span class="chip chip-warn">${t("drafting.essential")}</span>` : ""}</label><input type="text" id="m_${i}" data-key="${m.key || `q${i}`}"></div>`)}
-          <div><button class="btn btn-saffron btn-sm" type="submit">↻ ${t("drafting.regen_answers")}</button></div><div id="regenBox"></div></div></form>` : ""}
-        ${(d.inputs?.inconsistencies || []).length || (d.inputs?.unsupported || []).length ? html`<div class="card"><div class="card-h"><h2>${t("drafting.issues")}</h2></div><div class="card-b small">
-          ${(d.inputs.inconsistencies || []).map((x) => html`<div class="notice notice-red" style="margin-bottom:6px">${t("drafting.inconsistency")}: ${x}</div>`)}
-          ${(d.inputs.unsupported || []).map((x) => html`<div class="notice" style="margin-bottom:6px">${t("drafting.unsupported")}: ${x}</div>`)}</div></div>` : ""}
-        <div class="card"><div class="card-h"><h2>${t("drafting.facts")}</h2><span class="small muted">${t("drafting.facts_n", { n: (d.facts || []).length })}</span></div><div class="table-wrap"><table class="gov compact"><thead><tr><th>#</th><th>${t("drafting.fact")}</th><th>${t("drafting.origin")}</th></tr></thead>
-          <tbody>${(d.facts || []).map((f) => html`<tr id="fact-${f.id}"><td><span class="fact ${ORIGIN_CLS[f.origin] || ""}">${f.id}</span></td><td>${f.text}</td><td class="small">${t(`origin.${f.origin}`, {}, f.origin)}${f.ref ? html`<br><span class="muted">${f.ref}</span>` : ""}</td></tr>`)}</tbody></table>
-          ${(d.facts || []).length ? "" : html`<div class="empty">${t("drafting.no_facts")}</div>`}</div></div>
-      </div>
-      <div class="stack">
-        <div class="card"><div class="card-h"><h2>${t("review.title")}</h2>${reviewChip(d)}</div><div class="card-b stack">
-          <p class="small muted">${t("review.hint")}</p>
+    <div id="edTabs" style="margin-top:20px">
+    ${tabBar("ed", [["review", html`${t("review.title")}`],
+      ...(d.missing?.length ? [["missing", html`${t("drafting.missing")}<span class="tab-n">${d.missing.length}</span>`]] : []),
+      ...(nIssues ? [["issues", html`${t("drafting.issues")}<span class="tab-n">${nIssues}</span>`]] : []),
+      ["facts", html`${t("drafting.facts")}<span class="tab-n">${(d.facts || []).length}</span>`], ["sources", t("drafting.sources")],
+      ["confirm", t("drafting.confirm")], ["versions", html`${t("drafting.versions")}<span class="tab-n">${(d.versions || []).length}</span>`]], t("drafting.details"))}
+    ${tabPanel("ed", "review", html`<div class="card" style="max-width:760px"><div class="card-b stack">
+          <div class="row">${reviewChip(d)}<span class="small muted">${t("review.hint")}</span></div>
           ${d.review_note ? html`<div class="notice small">${t("review.note")}: ${d.review_note}</div>` : ""}
           <textarea id="revNote" rows="2" maxlength="1000" placeholder="${t("review.note_ph")}" aria-label="${t("review.note")}"></textarea>
           <div class="row">${d.review_status === "approved" && d.approved_version === d.version
             ? html`<button class="btn btn-ghost btn-sm" data-review="reopen">${t("review.reopen")}</button>`
             : html`<button class="btn btn-sm" data-review="approve">✓ ${t("review.approve", { v: d.version })}</button>
-                   <button class="btn btn-ghost btn-sm" data-review="request_changes">${t("review.request_changes")}</button>`}</div></div></div>
-        <div class="card"><div class="card-h"><h2>${t("drafting.sources")}</h2></div><div class="card-b">${(d.sources || []).length ? html`<ol class="small">${d.sources.map((s) => html`<li>${s.citation} — <a href="/api/documents/${encodeURIComponent(s.doc_id)}/file#page=${s.page || 1}" target="_blank" rel="noopener">${t("acts.open_pdf")} ↗</a></li>`)}</ol>` : html`<div class="empty">${t("drafting.no_sources")}</div>`}</div></div>
-        <div class="card"><div class="card-h"><h2>${t("drafting.confirm")}</h2></div><div class="card-b small">
+                   <button class="btn btn-ghost btn-sm" data-review="request_changes">${t("review.request_changes")}</button>`}</div></div></div>`)}
+    ${d.missing?.length ? tabPanel("ed", "missing", html`<form class="card" id="missForm" style="max-width:760px"><div class="card-b stack">
+          <p class="small muted">${t("drafting.missing_hint")}</p>
+          ${d.missing.map((m, i) => html`<div><label class="f" for="m_${i}">${m.question} ${m.essential ? html`<span class="chip chip-warn">${t("drafting.essential")}</span>` : ""}</label><input type="text" id="m_${i}" data-key="${m.key || `q${i}`}"></div>`)}
+          <div><button class="btn btn-saffron btn-sm" type="submit">↻ ${t("drafting.regen_answers")}</button></div><div id="regenBox"></div></div></form>`) : ""}
+    ${nIssues ? tabPanel("ed", "issues", html`<div class="card"><div class="card-b small">
+          ${(d.inputs.inconsistencies || []).map((x) => html`<div class="notice notice-red" style="margin-bottom:6px">${t("drafting.inconsistency")}: ${x}</div>`)}
+          ${(d.inputs.unsupported || []).map((x) => html`<div class="notice" style="margin-bottom:6px">${t("drafting.unsupported")}: ${x}</div>`)}</div></div>`) : ""}
+    ${tabPanel("ed", "facts", html`<div class="card"><div class="table-wrap"><table class="gov compact"><thead><tr><th>#</th><th>${t("drafting.fact")}</th><th>${t("drafting.origin")}</th></tr></thead>
+          <tbody>${(d.facts || []).map((f) => html`<tr id="fact-${f.id}"><td><span class="fact ${ORIGIN_CLS[f.origin] || ""}">${f.id}</span></td><td>${f.text}</td><td class="small">${t(`origin.${f.origin}`, {}, f.origin)}${f.ref ? html`<br><span class="muted">${f.ref}</span>` : ""}</td></tr>`)}</tbody></table>
+          ${(d.facts || []).length ? "" : html`<div class="empty">${t("drafting.no_facts")}</div>`}</div></div>`)}
+    ${tabPanel("ed", "sources", html`<div class="card"><div class="card-b">${(d.sources || []).length ? html`<ol class="small">${d.sources.map((s) => html`<li>${s.citation} — <a href="/api/documents/${encodeURIComponent(s.doc_id)}/file#page=${s.page || 1}" target="_blank" rel="noopener">${t("acts.open_pdf")} ↗</a></li>`)}</ol>` : html`<div class="empty">${t("drafting.no_sources")}</div>`}</div></div>`)}
+    ${tabPanel("ed", "confirm", html`<div class="card"><div class="card-b small">
           ${(d.inputs?.forum_confirm || []).map((c) => html`<div class="notice" style="margin-bottom:6px">⚠ ${c}</div>`)}
           ${(d.inputs?.formalities || []).map((c) => html`<div class="notice" style="margin-bottom:6px">⚖ ${c}</div>`)}
           ${(d.inputs?.forum_official || []).map((o) => html`<div><a href="${o.url}" target="_blank" rel="noopener noreferrer">${o.title} ↗</a></div>`)}
-          ${d.inputs?.template ? html`<div class="muted" style="margin-top:6px">${t("drafting.based_on", { title: d.inputs.template.title })}</div>` : ""}</div></div>
-        <div class="card"><div class="card-h"><h2>${t("drafting.versions")}</h2></div><div class="card-b"><ul class="list-plain small">${(d.versions || []).map((v) => html`<li>v${v.version} · ${t(`drafting.note_${v.note}`, {}, v.note)} · ${fmtDateTime(v.created_at)} <button type="button" class="btn btn-ghost btn-sm" data-ver="${v.version}">${t("drafting.load")}</button></li>`)}</ul></div></div>
-      </div>
+          ${d.inputs?.template ? html`<div class="muted" style="margin-top:6px">${t("drafting.based_on", { title: d.inputs.template.title })}</div>` : ""}
+          ${(d.inputs?.forum_confirm || []).length || (d.inputs?.formalities || []).length || (d.inputs?.forum_official || []).length || d.inputs?.template ? "" : html`<div class="empty">—</div>`}</div></div>`)}
+    ${tabPanel("ed", "versions", html`<div class="card" style="max-width:760px"><div class="card-b"><ul class="list-plain small">${(d.versions || []).map((v) => html`<li>v${v.version} · ${t(`drafting.note_${v.note}`, {}, v.note)} · ${fmtDateTime(v.created_at)} <button type="button" class="btn btn-ghost btn-sm" data-ver="${v.version}">${t("drafting.load")}</button></li>`)}</ul></div></div>`)}
     </div>`);
+  const showTab = bindTabs($("#edTabs"), "ed", "draftTab", d.missing?.length ? "missing" : null);
   const prev = () => {
     mount($("#edPrev"), markdown($("#edText").value));
     $$(".fact", $("#edPrev")).forEach((b) => { const f = facts[b.dataset.fact]; b.classList.add(ORIGIN_CLS[f?.origin] || "o-unknown"); b.title = f ? `${f.text} — ${t(`origin.${f.origin}`, {}, f.origin)} ${f.ref || ""}` : t("drafting.unknown_fact"); });
@@ -231,7 +238,7 @@ async function viewEditor(main, id) {
   let dirty = false, timer;
   $("#edText").addEventListener("input", () => { dirty = true; clearTimeout(timer); timer = setTimeout(prev, 250); });
   $("#edPrev").addEventListener("click", (e) => {
-    const f = e.target.closest(".fact"); if (f) { document.getElementById(`fact-${f.dataset.fact}`)?.scrollIntoView({ behavior: "smooth", block: "center" }); return; }
+    const f = e.target.closest(".fact"); if (f) { showTab("facts"); document.getElementById(`fact-${f.dataset.fact}`)?.scrollIntoView({ behavior: "smooth", block: "center" }); return; }
     const c = e.target.closest("button.cite"); if (c) { const s = (d.sources || []).find((x) => String(x.n) === c.dataset.cite); if (s) window.open(`/api/documents/${encodeURIComponent(s.doc_id)}/file#page=${s.page || 1}`, "_blank", "noopener"); }
   });
   const save = async () => {

@@ -486,6 +486,68 @@ MIGRATIONS: list[str] = [
     ALTER TABLE drafts ADD COLUMN approved_version INTEGER;
     ALTER TABLE drafts ADD COLUMN review_note TEXT DEFAULT '';
     """,
+    # 4 — two personas, library jurisdiction, research history, calendar + reminders (mirrors supabase/migrations/…07;
+    #     SQLite keeps the old CHECK lists — the app only ever writes the two remaining roles)
+    """
+    UPDATE memberships SET role = 'advocate' WHERE role IN ('client', 'auditor');
+    UPDATE invitations SET role = 'advocate' WHERE role IN ('client', 'auditor');
+    DELETE FROM case_members WHERE access = 'client';
+
+    ALTER TABLE documents ADD COLUMN jurisdiction TEXT NOT NULL DEFAULT '';
+    UPDATE documents SET jurisdiction = 'Central' WHERE collection = 'bare_act' AND jurisdiction = '';
+    UPDATE documents SET jurisdiction = 'Maharashtra' WHERE collection = 'bare_act' AND title LIKE 'The Maharashtra %';
+    CREATE INDEX IF NOT EXISTS ix_documents_jurisdiction ON documents(collection, jurisdiction);
+
+    CREATE TABLE IF NOT EXISTS search_history (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        org_id TEXT,
+        query TEXT NOT NULL,
+        filters TEXT DEFAULT '{}',
+        results INTEGER,
+        created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS ix_search_history_user ON search_history(user_id, created_at);
+
+    CREATE TABLE IF NOT EXISTS calendar_events (
+        id TEXT PRIMARY KEY,
+        org_id TEXT,
+        owner_id TEXT NOT NULL,
+        case_id TEXT REFERENCES cases(id) ON DELETE SET NULL,
+        kind TEXT NOT NULL CHECK (kind IN ('hearing', 'deadline', 'follow_up', 'submission', 'meeting', 'task')),
+        title TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        event_date TEXT NOT NULL,
+        event_time TEXT,
+        timezone TEXT NOT NULL,
+        starts_at_utc TEXT NOT NULL,
+        priority TEXT NOT NULL DEFAULT 'normal' CHECK (priority IN ('low', 'normal', 'high')),
+        status TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'completed', 'cancelled')),
+        reminders TEXT DEFAULT '[]',
+        email_reminders INTEGER NOT NULL DEFAULT 0,
+        completed_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS ix_events_owner_date ON calendar_events(owner_id, event_date);
+    CREATE INDEX IF NOT EXISTS ix_events_case ON calendar_events(case_id);
+
+    CREATE TABLE IF NOT EXISTS event_reminders (
+        id TEXT PRIMARY KEY,
+        event_id TEXT NOT NULL REFERENCES calendar_events(id) ON DELETE CASCADE,
+        owner_id TEXT NOT NULL,
+        rule TEXT NOT NULL,
+        channel TEXT NOT NULL CHECK (channel IN ('in_app', 'email')),
+        remind_at_utc TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sending', 'sent', 'failed', 'skipped')),
+        attempts INTEGER NOT NULL DEFAULT 0,
+        locked_until TEXT,
+        sent_at TEXT,
+        error TEXT,
+        UNIQUE (event_id, rule, channel)
+    );
+    CREATE INDEX IF NOT EXISTS ix_reminders_due ON event_reminders(status, remind_at_utc);
+    """,
 ]
 
 _local = threading.local()
@@ -495,7 +557,7 @@ write_lock = threading.RLock()
 
 # Postgres schema version this code expects (supabase/migrations/*). The app never runs DDL against Postgres:
 # migrations are applied by the project owner (Supabase CLI / dashboard / MCP), and the app checks the version.
-PG_SCHEMA_VERSION = 3
+PG_SCHEMA_VERSION = 4
 DEFAULT_ORG = "org_default"
 
 

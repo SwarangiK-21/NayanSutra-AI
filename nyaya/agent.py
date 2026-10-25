@@ -74,9 +74,17 @@ def _case_docs(case_id: str | None) -> list[dict]:
         "WHERE case_id=? AND status='ready' ORDER BY created_at", (case_id,))]
 
 
+def _kind(h: retrieval.Hit) -> str:
+    """Source type as the model sees it; statutes say whose law they are (central, or one state's)."""
+    if h.collection == "bare_act" and h.jurisdiction:
+        return "BARE ACT — CENTRAL LAW" if h.jurisdiction == "Central" else f"BARE ACT — STATE LAW: {h.jurisdiction.upper()}"
+    return KIND.get(h.collection, h.collection)
+
+
 def _source_items(hits: list[retrieval.Hit]) -> list[dict]:
     return [{"n": i, "chunk_id": h.chunk_id, "doc_id": h.doc_id, "title": h.title, "collection": h.collection,
-             "kind": KIND.get(h.collection, h.collection), "label": h.label, "page": h.page_start,
+             "kind": KIND.get(h.collection, h.collection), "jurisdiction": h.jurisdiction if h.collection == "bare_act" else "",
+             "label": h.label, "page": h.page_start,
              "citation": h.citation(), "snippet": h.text[:320], "exact": h.exact,
              "injection_suspected": guardrails.is_suspicious(h.text)}
             for i, h in enumerate(hits, 1)]
@@ -84,7 +92,7 @@ def _source_items(hits: list[retrieval.Hit]) -> list[dict]:
 
 def _context(hits: list[retrieval.Hit]) -> str:
     """Numbered sources, each inside delimiters the passage text cannot close (see guardrails.wrap_source)."""
-    return "\n\n".join(guardrails.wrap_source(i, KIND.get(h.collection, h.collection),
+    return "\n\n".join(guardrails.wrap_source(i, _kind(h),
                                               f"[{i}] {h.header}{f' | p. {h.page_start}' if h.page_start else ''}", h.text)
                        for i, h in enumerate(hits, 1))
 
@@ -150,7 +158,8 @@ def _stream_llm(messages: list[dict], parts: list[str], model: str | None = None
 # ── Main entry ───────────────────────────────────────────────────────────────
 def run(*, message: str, chat_id: str | None = None, case_id: str | None = None, scope: str = "all",
         doc_id: str | None = None, task: str | None = None, lang: str = "en",
-        principal: authz.Principal | None = None) -> Iterator[dict]:
+        principal: authz.Principal | None = None, jurisdiction: str | None = None) -> Iterator[dict]:
+    """`jurisdiction`: None = the case's state (if any); 'all' = no state filter; else a state / UT name."""
     t0 = time.time()
     rule = prompts.language_rule(lang)
     message = guardrails.normalise(message).strip()[:6000]
@@ -167,7 +176,8 @@ def run(*, message: str, chat_id: str | None = None, case_id: str | None = None,
     docs = _case_docs(case_id)
     answer: list[str] = []
     sources: list[dict] = []
-    meta: dict = {"scope": scope, "lang": lang}
+    jur = "" if jurisdiction == "all" else (jurisdiction or (case or {}).get("state") or "")
+    meta: dict = {"scope": scope, "lang": lang, "jurisdiction": jur or "all"}
     # The server authorised the case, document and chat before this generator was created.
     _step(meta, "authorize", case=bool(case_id), documents=len(docs))
     try:
@@ -213,7 +223,7 @@ def run(*, message: str, chat_id: str | None = None, case_id: str | None = None,
             yield from _analyze(message, p, docs, doc_id, case_id, answer, sources, meta, rule)
 
         else:
-            yield from _research(message, p, case, docs, scope, hist, answer, sources, meta, rule)
+            yield from _research(message, p, case, docs, scope, hist, answer, sources, meta, rule, jur)
 
     except llm.LLMError as exc:
         err = str(exc)
@@ -328,7 +338,7 @@ def _analyze(message: str, p: dict, docs: list[dict], doc_id: str | None, case_i
 
 
 def _research(message: str, p: dict, case: dict | None, docs: list[dict], scope: str, hist: list[dict],
-              answer: list[str], sources: list[dict], meta: dict, rule: str = "") -> Iterator[dict]:
+              answer: list[str], sources: list[dict], meta: dict, rule: str = "", jur: str = "") -> Iterator[dict]:
     case_id = case["id"] if case else None
     drafting = p["intent"] == "drafting"
     where = {"case": "this case's documents", "library": "the law library"}.get(scope, "case documents and the law library")
@@ -337,9 +347,10 @@ def _research(message: str, p: dict, case: dict | None, docs: list[dict], scope:
     query = p["query"]
     ctx = (case or {}).get("acts_sections") or ""
     hits, diag = retrieval.search(query, scope=scope, case_id=case_id, extra_queries=p["alt_queries"], hint=message,
-                                  context=ctx)
+                                  context=ctx, jurisdiction=jur)
     weak = diag.get("confidence") is not None and diag["confidence"] < config.RELEVANCE_FLOOR and not diag["exact_hits"]
-    _step(meta, "retrieve", "weak" if (not hits or weak) else "ok", passages=len(hits), scope=scope)
+    _step(meta, "retrieve", "weak" if (not hits or weak) else "ok", passages=len(hits), scope=scope,
+          jurisdiction=jur or "all")
     if (not hits or weak) and not drafting:
         yield {"type": "status", "step": "rewrite", "text": "Weak matches — refining the search…"}
         info: dict = {}
@@ -351,7 +362,7 @@ def _research(message: str, p: dict, case: dict | None, docs: list[dict], scope:
         _step(meta, "rewrite_query", "ok" if q2 else "skipped", **_model_info(info))
         if q2:
             hits2, diag2 = retrieval.search(q2, scope=scope, case_id=case_id, extra_queries=[query], hint=message,
-                                            context=ctx)
+                                            context=ctx, jurisdiction=jur)
             if hits2 and (diag2.get("confidence") or -99) > (diag.get("confidence") or -99):
                 hits, diag, query = hits2, diag2, q2
         weak = diag.get("confidence") is not None and diag["confidence"] < config.RELEVANCE_FLOOR and not diag["exact_hits"]

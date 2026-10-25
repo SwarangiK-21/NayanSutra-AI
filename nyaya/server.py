@@ -22,11 +22,11 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Upload
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from . import (accounts, agent, authz, awareness, cases, casesearch, citations, config, db, docintel, drafting,
-               embeddings, export, filescan, ingest, integrations, jobs, llm, ocr, privacy, provisions, reference,
-               retrieval, search, security, sessions, storage, tasks, tools)
+               embeddings, events, export, filescan, indiacode, ingest, integrations, jobs, llm, mailer, ocr, privacy,
+               provisions, reference, retrieval, search, security, sessions, storage, tasks, tools)
 from . import supabase_auth as sb
 from .authz import Principal
 from .vectorindex import index
@@ -77,6 +77,8 @@ def _apply_retention() -> None:
             with db.tx() as c:
                 n = c.execute("DELETE FROM chats WHERE COALESCE(org_id, ?) = ? AND updated_at < ?",
                               (db.DEFAULT_ORG, r["org_id"], cutoff)).rowcount
+                n += c.execute("DELETE FROM search_history WHERE COALESCE(org_id, ?) = ? AND created_at < ?",
+                               (db.DEFAULT_ORG, r["org_id"], cutoff)).rowcount
             if n:
                 db.audit("retention.purge_chats", "chat", None, deleted=n, older_than_days=int(r["value"]))
         sessions.purge_expired()
@@ -111,6 +113,8 @@ async def lifespan(app: FastAPI):
         ).fetchall():
             ingest.queue(r["id"], owner=r["uploaded_by"])
     jobs.start_workers()
+    if config.REMINDERS_ENABLED:
+        events.start_dispatcher()   # calendar reminders are delivered whether or not anyone has the app open
     threading.Thread(target=_warm, daemon=True).start()
     if config.SYNC_ENABLED:
         _scheduler = integrations.Scheduler()
@@ -118,6 +122,7 @@ async def lifespan(app: FastAPI):
     yield
     if _scheduler:
         _scheduler.stop.set()
+    events.stop_dispatcher()
     jobs.stop_workers()
     db.close_pool()
 
@@ -552,7 +557,7 @@ def admin_users(p: Principal = Depends(need("users.manage"))):
 
 
 class UserUpdateIn(BaseModel):
-    role: Literal["client", "advocate", "admin", "auditor"] | None = None
+    role: Literal["advocate", "admin"] | None = None
     status: Literal["active", "disabled"] | None = None
 
 
@@ -596,7 +601,7 @@ def admin_update_user(user_id: str, body: UserUpdateIn, p: Principal = Depends(n
 
 class InviteIn(BaseModel):
     email: str = Field(max_length=254)
-    role: Literal["client", "advocate", "admin", "auditor"]
+    role: Literal["advocate", "admin"]
 
 
 @app.get("/api/admin/invitations")
@@ -628,7 +633,7 @@ def directory(q: str = "", p: Principal = Depends(need("directory.read"))):
     like = f"%{q.strip()[:80]}%"
     rows = db.conn().execute(
         "SELECT p.user_id, p.display_name, p.email, m.role FROM memberships m JOIN profiles p ON p.user_id = m.user_id "
-        "WHERE m.org_id=? AND p.status='active' AND m.role IN ('client','advocate','admin') "
+        "WHERE m.org_id=? AND p.status='active' AND m.role IN ('advocate','admin') "
         "AND (p.display_name LIKE ? OR p.email LIKE ?) ORDER BY p.display_name LIMIT 50", (p.org_id, like, like))
     return {"people": [dict(r) for r in rows]}
 
@@ -676,12 +681,10 @@ def dashboard(p: Principal = Depends(need("cases.list"))):
         (*mine, today.isoformat(), (today + timedelta(days=45)).isoformat()))]
     by_type = {r["case_type"]: r["n"] for r in db.conn().execute(
         f"SELECT case_type, COUNT(*) n FROM cases WHERE id IN ({ph}) GROUP BY case_type", mine)}
-    recent = [dict(r) for r in db.conn().execute(
-        "SELECT ch.id, ch.title, ch.case_id, ch.updated_at, c.title AS case_title FROM chats ch "
-        "LEFT JOIN cases c ON c.id = ch.case_id WHERE ch.user_id = ? ORDER BY ch.updated_at DESC LIMIT 6", (p.user_id,))]
     lib = {r["collection"]: r["n"] for r in db.conn().execute(
         "SELECT collection, COUNT(*) n FROM documents WHERE status='ready' AND collection <> 'case' GROUP BY collection")}
-    return {"upcoming": upcoming, "by_type": by_type, "recent_chats": recent, "library": lib,
+    # Research history lives on the Legal Research page (Recent History), not here.
+    return {"upcoming": upcoming, "by_type": by_type, "library": lib,
             "total_cases": sum(by_type.values())}
 
 
@@ -878,7 +881,7 @@ def case_members(case_id: str, p: Principal = P):
     if not authz.can_case(p, case_id, "case.members"):
         authz.require_case(p, case_id, "case.read")
     members = _members(case_id)
-    if not authz.can_case(p, case_id, "case.members"):   # clients see names and roles, not e-mail addresses
+    if not authz.can_case(p, case_id, "case.members"):   # other team members see names and roles, not e-mails
         members = [{k: v for k, v in m.items() if k != "email"} for m in members]
     return {"members": members, "can_manage": authz.can_case(p, case_id, "case.members")}
 
@@ -886,7 +889,7 @@ def case_members(case_id: str, p: Principal = P):
 class MemberIn(BaseModel):
     user_id: str | None = Field(None, max_length=64)
     email: str | None = Field(None, max_length=254)
-    access: Literal["owner", "advocate", "client"] = "advocate"
+    access: Literal["owner", "advocate"] = "advocate"
 
 
 @app.post("/api/cases/{case_id}/members")
@@ -904,8 +907,7 @@ def add_case_member(case_id: str, body: MemberIn, p: Principal = P):
     if not who:
         raise authz.NotFound("No active member of your organisation has that account.")
     if not authz.compatible_access(who["role"], body.access):
-        raise authz.Denied("That person's role does not allow this level of access "
-                           "(clients can only be given client access; auditors cannot be added to cases).")
+        raise authz.Denied("That person's role does not allow this level of access.")
     with db.tx() as c:
         c.execute("INSERT INTO case_members(case_id, user_id, access, added_by, created_at) VALUES(?,?,?,?,?) "
                   "ON CONFLICT(case_id, user_id) DO UPDATE SET access=excluded.access",
@@ -934,7 +936,8 @@ def remove_case_member(case_id: str, user_id: str, p: Principal = P):
 
 
 # ── Documents ────────────────────────────────────────────────────────────────
-DOC_FIELDS = "id, case_id, collection, doc_type, title, filename, pages, chars, n_chunks, status, error, meta, created_at"
+DOC_FIELDS = ("id, case_id, collection, doc_type, title, filename, pages, chars, n_chunks, status, error, meta, created_at, "
+              "jurisdiction")
 
 
 @app.get("/api/documents")
@@ -1336,6 +1339,43 @@ def _own_chat(p: Principal, chat_id: str) -> dict:
     return dict(chat)
 
 
+# ── Recent history (Legal Research → Recent History): the caller's own conversations and searches ──
+@app.get("/api/history")
+def research_history(limit: int = 30, p: Principal = Depends(need("research.use"))):
+    limit = max(1, min(limit, 100))
+    chats_ = [dict(r) for r in db.conn().execute(
+        "SELECT ch.id, ch.title, ch.case_id, ch.updated_at, c.title AS case_title FROM chats ch "
+        "LEFT JOIN cases c ON c.id = ch.case_id WHERE ch.user_id = ? ORDER BY ch.updated_at DESC LIMIT ?",
+        (p.user_id, limit * 2))]
+    # a conversation about a matter the caller has since lost access to is not offered
+    chats_ = [c for c in chats_ if not c["case_id"] or authz.can_case(p, c["case_id"], "chat")][:limit]
+    searches = [db.row_to_dict(r) for r in db.conn().execute(
+        "SELECT id, query, filters, results, created_at FROM search_history WHERE user_id = ? "
+        "ORDER BY created_at DESC LIMIT ?", (p.user_id, limit))]
+    for s in searches:
+        try:
+            s["filters"] = json.loads(s["filters"] or "{}")
+        except (TypeError, ValueError):
+            s["filters"] = {}
+    return {"chats": chats_, "searches": searches}
+
+
+@app.delete("/api/history/searches")
+def clear_search_history(p: Principal = Depends(need("research.use"))):
+    with db.tx() as c:
+        n = c.execute("DELETE FROM search_history WHERE user_id = ?", (p.user_id,)).rowcount
+    return {"deleted": n}
+
+
+@app.delete("/api/history/searches/{sid}")
+def delete_search(sid: str, p: Principal = Depends(need("research.use"))):
+    with db.tx() as c:
+        n = c.execute("DELETE FROM search_history WHERE id = ? AND user_id = ?", (sid[:40], p.user_id)).rowcount
+    if not n:
+        raise authz.NotFound("Search not found")
+    return {"ok": True}
+
+
 @app.get("/api/chats/{chat_id}")
 def chat_messages(chat_id: str, p: Principal = Depends(need("research.use"))):
     chat = _own_chat(p, chat_id)
@@ -1361,6 +1401,15 @@ class ChatIn(BaseModel):
     task: Literal["summary", "timeline", "issues", "parties", "arguments", "custom"] | None = None
     lang: Literal["en", "hi", "mr"] = "en"
     input_mode: Literal["text", "voice"] = "text"
+    # None/"" = the case's state; "all" = central law and every state's acts; else a state / Union Territory
+    jurisdiction: str | None = Field(None, max_length=60)
+
+    @field_validator("jurisdiction")
+    @classmethod
+    def _known_jurisdiction(cls, v: str | None) -> str | None:
+        if v in (None, "", "all") or v in reference.STATES:
+            return v or None
+        raise ValueError("Unknown state or Union Territory")
 
 
 @app.post("/api/chat", dependencies=[Depends(rate(config.CHAT_RATE_PER_MIN, "chat"))])
@@ -1381,7 +1430,8 @@ def chat(body: ChatIn, p: Principal = Depends(need("research.use"))):
     def events():
         try:
             for evt in agent.run(message=body.message, chat_id=body.chat_id, case_id=body.case_id, scope=body.scope,
-                                 doc_id=body.doc_id, task=body.task, lang=body.lang, principal=p):
+                                 doc_id=body.doc_id, task=body.task, lang=body.lang, principal=p,
+                                 jurisdiction=body.jurisdiction):
                 yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
         except Exception:
             log.exception("chat stream failed")
@@ -1708,6 +1758,42 @@ def provisions_update(prov_id: str, body: ProvUpdateIn, p: Principal = P):
     return pr
 
 
+# ── All-India law: jurisdictions and the official India Code catalogue ───────
+@app.get("/api/jurisdictions")
+def jurisdictions(p: Principal = Depends(need("library.read"))):
+    counts = {r["jurisdiction"]: r["n"] for r in db.conn().execute(
+        "SELECT jurisdiction, COUNT(*) AS n FROM documents WHERE collection='bare_act' AND status <> 'superseded' "
+        "GROUP BY jurisdiction")}
+    uts = set(reference.STATES[reference.STATES.index("Andaman and Nicobar Islands"):])
+    return {"central": {"name": indiacode.CENTRAL, "in_library": counts.get(indiacode.CENTRAL, 0)},
+            "states": [{"name": s, "union_territory": s in uts, "in_library": counts.get(s, 0)} for s in reference.STATES],
+            "source": "India Code — Legislative Department, Ministry of Law and Justice", "source_url": indiacode.SITE}
+
+
+@app.get("/api/library/indiacode", dependencies=[Depends(rate(30, "indiacode"))])
+def indiacode_catalogue(state: str = "", q: str = "", page: int = 0, p: Principal = Depends(need("library.read"))):
+    """Live search of the official India Code record (Central Acts, or one state's / UT's acts)."""
+    if state and state != indiacode.CENTRAL and state not in reference.STATES:
+        raise HTTPException(400, "Unknown state or Union Territory.")
+    try:
+        return indiacode.catalogue(state or None, q[:120], max(0, min(page, 500)))
+    except indiacode.IndiaCodeError as exc:
+        raise HTTPException(502, str(exc)) from None
+
+
+class ImportActIn(BaseModel):
+    uuid: str = Field(min_length=36, max_length=36)
+
+
+@app.post("/api/library/indiacode/import", dependencies=[Depends(rate(10, "indiacode_import"))])
+def indiacode_import(body: ImportActIn, p: Principal = Depends(need("library.import"))):
+    """Add one official act to the shared library; it becomes citable once indexed (a background job)."""
+    try:
+        return indiacode.import_act(body.uuid, owner=p.user_id)
+    except indiacode.IndiaCodeError as exc:
+        raise HTTPException(502, str(exc)) from None
+
+
 @app.get("/api/library/provision")
 def library_provision(act: str, ref: str, p: Principal = Depends(need("library.read"))):
     from . import library
@@ -1831,8 +1917,81 @@ def awareness_list(state: str = "MH", subject: str | None = None, q: str = "", p
 def unified_search(q: str = "", types: str = "", court: str = "", state: str = "", year: str = "", case_type: str = "",
                    doc_type: str = "", source: str = "", p: Principal = Depends(need("library.read"))):
     t = {x for x in types.split(",") if x} or None
-    return search.search(q, types=t, court=court[:100], state=state[:60], year=year[:4], case_type=case_type[:20],
-                         doc_type=doc_type[:20], source=source[:40], principal=p)
+    res = search.search(q, types=t, court=court[:100], state=state[:60], year=year[:4], case_type=case_type[:20],
+                        doc_type=doc_type[:20], source=source[:40], principal=p)
+    if p.signed_in and q.strip():   # personal search history (Legal Research → Recent History)
+        filters = {k: v for k, v in (("types", types), ("court", court), ("state", state), ("year", year),
+                                     ("case_type", case_type), ("doc_type", doc_type), ("source", source)) if v}
+        with db.tx() as c:
+            c.execute("INSERT INTO search_history(id, user_id, org_id, query, filters, results, created_at) "
+                      "VALUES(?,?,?,?,?,?,?)", (db.new_id("srch_"), p.user_id, p.org_id, q.strip()[:500],
+                                                json.dumps(filters)[:1000], len(res.get("results", [])), db.now()))
+            c.execute("DELETE FROM search_history WHERE user_id = ? AND id NOT IN (SELECT id FROM search_history "
+                      "WHERE user_id = ? ORDER BY created_at DESC LIMIT 200)", (p.user_id, p.user_id))
+    return res
+
+
+# ── Calendar: hearings, deadlines and tasks with reminders (private to each lawyer) ──
+class EventIn(BaseModel):
+    title: str | None = Field(None, max_length=200)
+    kind: Literal["hearing", "deadline", "follow_up", "submission", "meeting", "task"] | None = None
+    description: str | None = Field(None, max_length=4000)
+    case_id: str | None = Field(None, max_length=40)
+    event_date: str | None = Field(None, max_length=10)
+    event_time: str | None = Field(None, max_length=5)
+    timezone: str | None = Field(None, max_length=64)
+    priority: Literal["low", "normal", "high"] | None = None
+    reminders: list[Literal["at_time", "1h", "day_of", "1d", "7d"]] | None = Field(None, max_length=5)
+    email_reminders: bool | None = None
+    status: Literal["scheduled", "completed", "cancelled"] | None = None
+
+
+def _event_call(fn, *args):
+    try:
+        return fn(*args)
+    except events.EventError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+
+@app.get("/api/calendar/config")
+def calendar_config(p: Principal = Depends(need("calendar.use"))):
+    return {"kinds": list(events.KINDS), "priorities": list(events.PRIORITIES), "reminders": list(events.RULES),
+            "email_available": mailer.configured(), "default_timezone": config.DEFAULT_TIMEZONE,
+            "default_reminders": ["day_of", "1d"]}
+
+
+@app.get("/api/calendar/events")
+def calendar_events(start: str, end: str, p: Principal = Depends(need("calendar.use"))):
+    return {"events": _event_call(events.list_range, p, start[:10], end[:10])}
+
+
+@app.get("/api/calendar/upcoming")
+def calendar_upcoming(tz: str = "", days: int = 30, limit: int = 12, p: Principal = Depends(need("calendar.use"))):
+    return _event_call(events.upcoming, p, tz[:64] or None, days, max(1, min(limit, 50)))
+
+
+@app.get("/api/calendar/events/{event_id}")
+def calendar_event(event_id: str, p: Principal = Depends(need("calendar.use"))):
+    return events.get_own(p, event_id[:40])
+
+
+@app.post("/api/calendar/events", dependencies=[Depends(rate(60, "calendar"))])
+def calendar_create(body: EventIn, p: Principal = Depends(need("calendar.use"))):
+    data = body.model_dump()
+    if data.get("reminders") is None:
+        data["reminders"] = ["day_of", "1d"]
+    return _event_call(events.create, p, data)
+
+
+@app.patch("/api/calendar/events/{event_id}", dependencies=[Depends(rate(120, "calendar"))])
+def calendar_update(event_id: str, body: EventIn, p: Principal = Depends(need("calendar.use"))):
+    return _event_call(events.update, p, event_id[:40], body.model_dump(exclude_unset=True))
+
+
+@app.delete("/api/calendar/events/{event_id}")
+def calendar_delete(event_id: str, p: Principal = Depends(need("calendar.use"))):
+    events.delete(p, event_id[:40])
+    return {"ok": True}
 
 
 app.mount("/static", StaticFiles(directory=config.WEB_DIR), name="static")

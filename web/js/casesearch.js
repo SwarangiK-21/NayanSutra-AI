@@ -17,12 +17,15 @@ export async function viewCaseSearch(main, r) {
         ${f("cnr_number", t("form.cnr"), { ph: "MHPU010012342023" })}${f("case_number", t("form.case_number"))}${f("filing_number", t("form.filing_number"))}
         ${f("fir_number", t("form.fir"), { ph: "123/2024" })}
         ${f("court", t("form.court"), { list: "cs_courts", ph: t("form.search_ph") })}
-        ${f("case_type", t("form.case_type"), { list: "cs_types", ph: t("form.search_ph") })}
-        <div><label class="f" for="cs_state">${t("form.state")}</label><select id="cs_state" name="state"><option value="">—</option>${ref.states.map((s) => html`<option>${s}</option>`)}</select></div>
-        <div id="cs_dist"></div>
-        ${f("police_station", t("form.police_station"))}
-        <div><label class="f" for="cs_filing_year">${t("form.filing_year")}</label><select id="cs_filing_year" name="filing_year"><option value="">—</option>${Array.from({ length: year - 1949 }, (_, i) => year - i).map((y) => html`<option>${y}</option>`)}</select></div>
-        ${f("petitioner", t("lookup.petitioner"))}${f("respondent", t("lookup.respondent"))}
+        <details class="span-3 more-filters" ${["case_type", "state", "police_station", "filing_year", "petitioner", "respondent"].some((k) => r.q.get(k)) ? raw("open") : ""}>
+          <summary>${t("lookup.more_filters")}</summary><div class="form-grid" style="margin-top:12px">
+          ${f("case_type", t("form.case_type"), { list: "cs_types", ph: t("form.search_ph") })}
+          <div><label class="f" for="cs_state">${t("form.state")}</label><select id="cs_state" name="state"><option value="">—</option>${ref.states.map((s) => html`<option>${s}</option>`)}</select></div>
+          <div id="cs_dist"></div>
+          ${f("police_station", t("form.police_station"))}
+          <div><label class="f" for="cs_filing_year">${t("form.filing_year")}</label><select id="cs_filing_year" name="filing_year"><option value="">—</option>${Array.from({ length: year - 1949 }, (_, i) => year - i).map((y) => html`<option>${y}</option>`)}</select></div>
+          ${f("petitioner", t("lookup.petitioner"))}${f("respondent", t("lookup.respondent"))}
+        </div></details>
       </div>
       <datalist id="cs_courts">${ref.courts.map((c) => html`<option value="${c.name}">`)}</datalist>
       <datalist id="cs_types">${Object.values(ref.case_types).flat().map((c) => html`<option value="${c}">`)}</datalist>
@@ -51,7 +54,7 @@ function renderResults(res, query) {
   const out = $("#csResults");
   if (!res.ok) {
     mount(out, html`<div class="notice notice-red" role="alert"><strong>${t("lookup.fix")}</strong><ul>${res.errors.map((e) => html`<li>${t(`err.${e.code}`, {}, e.message)}</li>`)}</ul></div>`);
-    const first = res.errors.find((e) => e.field); if (first) $(`#cs_${first.field}`)?.focus();
+    const first = res.errors.find((e) => e.field); const el = first && $(`#cs_${first.field}`); if (el) { el.closest("details")?.setAttribute("open", ""); el.focus(); }
     return;
   }
   const j = res.jurisdiction;

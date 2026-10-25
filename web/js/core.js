@@ -138,6 +138,27 @@ export function markdown(src) {
 export function crumbs(items) {
   mount($("#crumbs"), html`<a href="#/dashboard">${t("nav.home")}</a>${items.map(([x, href]) => html` › ${href ? html`<a href="${href}">${x}</a>` : x}`)}`);
 }
+/** In-page tabs. `items` is [[key, label], …]; panels are elements with data-panel="key" inside the same root. */
+export const tabBar = (prefix, items, label = "") => html`<div class="tabs" role="tablist" aria-label="${label}">${items.map(([k, text]) =>
+  html`<button type="button" role="tab" id="${prefix}-tab-${k}" data-tab="${k}" aria-controls="${prefix}-panel-${k}">${text}</button>`)}</div>`;
+/** Wire a tabBar to its panels (arrow keys move between tabs); the last tab chosen is remembered under storeKey. */
+export function bindTabs(root, prefix, storeKey, initial) {
+  const tabs = $$(`[id^="${prefix}-tab-"]`, root); if (!tabs.length) return () => {};
+  const show = (name, focus = false) => {
+    if (!tabs.some((b) => b.dataset.tab === name)) name = tabs[0].dataset.tab;
+    tabs.forEach((b) => { const on = b.dataset.tab === name; b.classList.toggle("active", on); b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; if (on && focus) b.focus(); });
+    tabs.forEach((b) => { const p = $(`#${prefix}-panel-${b.dataset.tab}`, root); if (p) p.hidden = b.dataset.tab !== name; });
+    if (storeKey) store.set(storeKey, name);
+  };
+  tabs.forEach((b, i) => {
+    b.onclick = () => show(b.dataset.tab);
+    b.onkeydown = (e) => { const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key]; if (d) { e.preventDefault(); show(tabs[(i + d + tabs.length) % tabs.length].dataset.tab, true); } };
+  });
+  show(initial || (storeKey && store.get(storeKey, null)) || tabs[0].dataset.tab);
+  return show;
+}
+/** The panel that belongs to tab `key` of a tabBar. */
+export const tabPanel = (prefix, key, body) => html`<div role="tabpanel" id="${prefix}-panel-${key}" aria-labelledby="${prefix}-tab-${key}" tabindex="0" hidden>${body}</div>`;
 export function bindRowLinks(el) { $$("tr[data-href]", el).forEach((tr) => { tr.onclick = () => { location.hash = tr.dataset.href; }; }); }
 export function showDrawer(title) { if (title) $("#drawerTitle").textContent = title; const d = $("#drawer"); d.hidden = false; $("#drawerClose").focus(); }
 export function hideDrawer() { $("#drawer").hidden = true; }

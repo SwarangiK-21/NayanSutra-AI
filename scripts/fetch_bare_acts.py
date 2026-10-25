@@ -1,7 +1,7 @@
 """Download official bare acts (English PDFs) from India Code (indiacode.gov.in).
 
 India Code is the Legislative Department's official repository of Central and
-State Acts. This script uses its public DSpace REST API, downloads only from
+State Acts. This script (the core Central Acts) uses its public DSpace REST API, downloads only from
 that host, checks every file really is a PDF, and records provenance in
 data/library/bare_acts/manifest.json.
 
@@ -187,6 +187,7 @@ def main() -> int:
                 sha = download(c, url, OUT / fname)
                 manifest[fname] = {
                     "title": title, "short": short, "areas": areas,
+                    "jurisdiction": "Central" if prefix == "AC_CEN" else "Maharashtra" if prefix == "AC_MH" else prefix,
                     "act_number": md["dc.identifier.act_number"], "year": md["dc.date.act_year"],
                     "enforcement_date": md["dc.date.enforcement_date"],
                     "repealed": md["dc.identifier.repealed"] == "true",
@@ -216,7 +217,7 @@ def main() -> int:
                 repealed = short == "IPC"
                 manifest[fname] = {
                     "title": title, "short": short, "areas": areas, "act_number": act_no, "year": year,
-                    "repealed": repealed, "source": source, "pdf_url": url, "sha256": sha,
+                    "jurisdiction": "Central", "repealed": repealed, "source": source, "pdf_url": url, "sha256": sha,
                     "note": "Repealed w.e.f. 1 July 2024 (replaced by BNS); kept for pending matters." if repealed else "",
                     "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 }

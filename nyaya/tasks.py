@@ -40,6 +40,9 @@ def ingest_task(params: dict, ctx: jobs.Ctx) -> dict:
     if row["status"] != "processing":
         return {"skipped": f"The document is {row['status']}."}
     res = ingest.process(doc_id, progress=ctx, raise_transient=True)
+    if not row["case_id"] and res.get("status") == "ready":   # a new library act (e.g. imported from India Code)
+        from . import library
+        library.clear_cache()
     return {"doc_id": doc_id, "status": res.get("status"), "passages": res.get("n_chunks"), "error": res.get("error")}
 
 

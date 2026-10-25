@@ -2,10 +2,12 @@
 import { $, $$, api, crumbs, fmtDateTime, html, mount, num, spinner, toast } from "./core.js";
 import { t } from "./i18n.js";
 import { can } from "./auth.js";
+import { desktopAlerts } from "./calendar.js";
 
 export async function refreshBell() {
   try {
-    const { unread } = await api("/api/notifications?unread=1&limit=1");
+    const { unread, items } = await api("/api/notifications?unread=1&limit=5");
+    desktopAlerts(items);   // calendar reminders as desktop alerts, if the person turned them on
     const b = $("#bellCount");
     b.textContent = unread ? (unread > 99 ? "99+" : String(unread)) : "";
     b.hidden = !unread;
@@ -36,11 +38,11 @@ async function notifications(el) {
 
 async function sources(el) {
   const { integrations, scheduler, can_manage: manage } = await api("/api/integrations");
-  mount(el, html`<div class="notice" style="margin-bottom:12px"><strong>${t("sync.modes")}</strong><ul>
+  mount(el, html`<details class="panel" style="margin-bottom:16px"><summary>${t("sync.modes")} <span class="s-aside">${scheduler ? t("sync.scheduler_on") : t("sync.scheduler_off")}</span></summary>
+      <div class="panel-b small"><ul style="margin:0;padding-left:18px">
       <li><strong>${t("sync.live")}</strong> — ${t("sync.live_desc")}</li>
       <li><strong>${t("sync.periodic")}</strong> — ${t("sync.periodic_desc")}</li>
-      <li><strong>${t("sync.manual")}</strong> — ${t("sync.manual_desc")}</li></ul>
-      <div class="small">${scheduler ? t("sync.scheduler_on") : t("sync.scheduler_off")}</div></div>
+      <li><strong>${t("sync.manual")}</strong> — ${t("sync.manual_desc")}</li></ul></div></details>
     <div class="grid g-2">${integrations.map((s) => html`<div class="card"><div class="card-h"><h2>${s.name}</h2>
         <span class="chip ${s.mode === "periodic" ? "chip-ok" : "chip-warn"}">${s.mode === "periodic" ? t("sync.periodic_every", { n: s.interval_minutes >= 1440 ? `${s.interval_minutes / 1440} ${t("sync.days")}` : `${s.interval_minutes} ${t("sync.minutes")}` }) : t("sync.manual")}</span></div>
       <div class="card-b small">
