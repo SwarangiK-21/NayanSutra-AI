@@ -1,6 +1,6 @@
 /* NyaySutra AI — frontend entry: router, chrome, and the core views (dashboard, cases, research, library).
    Feature views live in /static/js/*.js. No external libraries (CSP: script-src 'self'). */
-import { $, $$, api, bindRowLinks, bindTabs, COLL_LABEL, crumbs, daysTo, fieldError, fmtDate, formData, hideDrawer, html,
+import { $, $$, ACCEPT_UPLOADS, api, bindRowLinks, bindTabs, COLL_LABEL, crumbs, daysTo, fieldError, fmtDate, formData, hideDrawer, html,
   initSession, markdown, mount, num, raw, reference, setUnauthenticatedHandler, showDrawer, spinner, state, store,
   tabBar, tabPanel, toast, TYPE_BADGE } from "./js/core.js";
 import { applyStatic, initialLang, lang, LANGS, setLang, t } from "./js/i18n.js";
@@ -216,7 +216,7 @@ function caseFormFields(c, statuses, ref, isNew) {
     </div></fieldset>
     ${txt("acts_sections", t("form.acts"), { cls: "span-3", hint: t("form.acts_hint") })}
     <div class="span-3"><label class="f" for="f_description">${t("form.description")}</label><textarea id="f_description" name="description" rows="4">${c.description || ""}</textarea></div>
-    ${isNew ? html`<div class="span-3"><label class="f" for="f_files">${t("form.supporting_docs")}</label><input type="file" id="f_files" multiple accept=".pdf,.docx,.doc,.txt,.md,.png,.jpg,.jpeg,.tif,.tiff,.webp"><div class="hint">${t("form.supporting_docs_hint")}</div></div>` : ""}
+    ${isNew ? html`<div class="span-3"><label class="f" for="f_files">${t("form.supporting_docs")}</label><input type="file" id="f_files" multiple accept="${ACCEPT_UPLOADS}"><div class="hint">${t("form.supporting_docs_hint")}</div></div>` : ""}
     <datalist id="dl_courts">${ref.courts.map((x) => html`<option value="${x.name}">`)}</datalist>
     <datalist id="dl_case_types"></datalist>
   </div>`;
@@ -314,7 +314,7 @@ async function viewCase(main, r) {
           <div class="card-b">
             ${may["documents.upload"] ? html`<div class="row" style="margin-bottom:10px"><label class="f" for="docType" style="margin:0">${t("case.doc_type")}</label>
               <select id="docType" style="max-width:260px"><option value="auto">${t("case.detect")}</option>${Object.entries(types).filter(([k]) => k !== "template").map(([k, v]) => html`<option value="${k}">${v}</option>`)}</select></div>
-            <label class="dropzone" id="drop"><input type="file" id="fileInput" multiple accept=".pdf,.docx,.doc,.txt,.md,.png,.jpg,.jpeg,.tif,.tiff,.webp">
+            <label class="dropzone" id="drop"><input type="file" id="fileInput" multiple accept="${ACCEPT_UPLOADS}">
               <strong>${t("case.drop")}</strong><br><span class="small muted">${t("case.drop_hint")}</span></label>` : ""}
             <div id="docList" style="margin-top:8px"></div>
           </div></div>`)}

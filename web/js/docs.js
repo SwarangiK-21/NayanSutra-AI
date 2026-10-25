@@ -1,8 +1,8 @@
 /* Module 5 — multilingual documents: viewer (original / extracted text / English translation / summaries) and batch upload. */
-import { $, $$, aiConsent, api, crumbs, fmtDate, fmtDateTime, html, markdown, mount, pollJob, progressBar, raw, spinner, state, toast } from "./core.js";
+import { $, $$, ACCEPT_UPLOADS, aiConsent, api, crumbs, fmtDate, fmtDateTime, html, markdown, mount, pollJob, progressBar, raw, spinner, state, toast } from "./core.js";
 import { lang, t } from "./i18n.js";
 
-const ACCEPT = ".pdf,.docx,.doc,.txt,.md,.png,.jpg,.jpeg,.tif,.tiff,.webp";
+const ACCEPT = ACCEPT_UPLOADS;
 export function openDocument(id) { location.hash = `#/doc/${encodeURIComponent(id)}`; }
 
 export async function viewDocument(main, r) {

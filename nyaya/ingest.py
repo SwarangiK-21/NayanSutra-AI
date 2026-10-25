@@ -128,7 +128,7 @@ def process(doc_id: str, progress=None, raise_transient: bool = False) -> dict:
     try:
         step(0, 4, "Reading the file")
         with storage.local_copy(row["path"]) as local:   # Storage objects are parsed from a temporary download
-            parsed = parsing.extract(local)
+            parsed = parsing.extract(local, progress=step)
         q = quality.assess(parsed.pages, parsed.meta)
         if q["verdict"] == "quarantine":
             raise parsing.ParseError(q["reason"])

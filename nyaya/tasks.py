@@ -28,7 +28,7 @@ def _ingest_retry(params: dict) -> None:
                   (params.get("doc_id"),))
 
 
-@jobs.handler("ingest", lane="ingest", max_attempts=config.INGEST_MAX_ATTEMPTS, timeout=config.JOB_TIMEOUT_SECONDS,
+@jobs.handler("ingest", lane="ingest", max_attempts=config.INGEST_MAX_ATTEMPTS, timeout=config.INGEST_TIMEOUT_SECONDS,
               on_finish=_ingest_finished, on_retry=_ingest_retry)
 def ingest_task(params: dict, ctx: jobs.Ctx) -> dict:
     doc_id = params.get("doc_id")

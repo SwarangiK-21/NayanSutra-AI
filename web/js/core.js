@@ -22,6 +22,8 @@ export const store = {
 export const state = { csrf: null, status: null, caseId: store.get("caseId", null), chatId: null, scope: store.get("scope", "all"),
   streaming: false, pollTimer: null, msgSources: new Map(), msgSeq: 0, prefs: {}, ref: null, session: null };
 
+// Upload formats (the server checks each file's content, not just its name — see nyaya/security.py).
+export const ACCEPT_UPLOADS = ".pdf,.docx,.doc,.rtf,.odt,.txt,.md,.csv,.tsv,.xlsx,.xls,.ods,.pptx,.png,.jpg,.jpeg,.tif,.tiff,.webp,.bmp,.gif";
 export const TYPE_BADGE = { Civil: "b-civil", Criminal: "b-criminal", Family: "b-family", Revenue: "b-revenue", Consumer: "b-consumer", Writ: "b-writ" };
 export const COLL_LABEL = () => ({ case: t("coll.case"), bare_act: t("coll.bare_act"), judgment: t("coll.judgment"), draft: t("coll.draft") });
 const LOCALE = { en: "en-IN", hi: "hi-IN", mr: "mr-IN" };

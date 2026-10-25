@@ -68,6 +68,9 @@ DOC_ANALYSIS_MAX_CHARS = 90000  # whole-document analysis in one call below this
 # ── Document intelligence ───────────────────────────────────────────────────
 # Optional OCR engine for scanned PDFs / images (Tesseract with eng+hin+mar data). Empty = auto-detect.
 TESSERACT_CMD = _env("TESSERACT_CMD")
+# OCR for scanned PDFs / images: auto (Tesseract if installed, else RapidOCR) | rapidocr | tesseract | off
+OCR_ENGINE = _env("OCR_ENGINE", default="auto").lower()
+OCR_DOWNLOAD = _bool("OCR_DOWNLOAD", True)   # allow RapidOCR to fetch its Hindi/Marathi model on first use
 OCR_MAX_PAGES = int(_env("OCR_MAX_PAGES", default="60"))
 # Whole-document translation / summaries send document text to the LLM; the UI asks first.
 DOC_LLM_MAX_CHARS = int(_env("DOC_LLM_MAX_CHARS", default="120000"))
@@ -138,6 +141,8 @@ INGEST_WORKERS = int(_env("INGEST_WORKERS", default="1"))   # parse/OCR/embed is
 JOB_WORKERS = int(_env("JOB_WORKERS", default="2"))         # translation, summaries, drafts (mostly waiting on the LLM)
 INGEST_MAX_ATTEMPTS = int(_env("INGEST_MAX_ATTEMPTS", default="3"))
 JOB_TIMEOUT_SECONDS = int(_env("JOB_TIMEOUT_SECONDS", default="900"))
+# Reading a document, including OCR of long scans (~5-20 s per scanned page on a CPU)
+INGEST_TIMEOUT_SECONDS = int(_env("INGEST_TIMEOUT_SECONDS", default="3600"))
 BATCH_MAX_FILES = int(_env("BATCH_MAX_FILES", default="50"))
 BATCH_MAX_TOTAL_MB = int(_env("BATCH_MAX_TOTAL_MB", default="500"))
 

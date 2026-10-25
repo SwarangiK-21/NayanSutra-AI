@@ -20,6 +20,8 @@ os.environ.setdefault("OLLAMA_API_KEY", "test-key")
 os.environ["SYNC_ENABLED"] = "false"  # no background network sync during tests
 os.environ["REMINDERS_ENABLED"] = "false"  # tests run the reminder dispatcher by hand
 os.environ["SMTP_HOST"] = ""
+os.environ["OCR_DOWNLOAD"] = "false"   # OCR uses only the models bundled with RapidOCR (English)
+os.environ["OCR_ENGINE"] = "rapidocr"
 # The offline suite must never touch the real Supabase project configured in .env: these empty values take
 # precedence over .env (python-dotenv does not override existing variables). The opt-in live test sets them itself.
 for _k in ("SUPABASE_DB_URL", "SUPABASE_URL", "SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY",

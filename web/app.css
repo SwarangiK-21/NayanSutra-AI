@@ -415,7 +415,8 @@ details.menu > summary::after { content: " \25BE"; font-size: .75em; }
 .card > .tabs { padding: 4px 10px 0; margin-bottom: 0; }
 .rs-welcome { padding: 44px 16px 20px; line-height: 1.7; }
 .rs-welcome .suggest { justify-content: center; margin: 18px auto 0; max-width: 760px; }
-.dropzone { padding: 16px; }
+.dropzone { display: block; padding: 18px 16px; }
+.dropzone strong { color: var(--navy); }
 details.more-filters > summary { cursor: pointer; color: var(--link); font-weight: 600; font-size: .86rem; padding: 2px 0; width: fit-content; }
 .case-meta { display: flex; flex-wrap: wrap; gap: 4px 20px; font-size: .86rem; color: var(--muted); margin: 0 0 18px; }
 .case-meta strong { color: var(--text); font-weight: 600; }

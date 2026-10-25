@@ -27,16 +27,27 @@ from pathlib import Path
 
 from . import config
 
-ALLOWED_EXT = {".pdf", ".docx", ".doc", ".txt", ".md", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp"}
+ALLOWED_EXT = {".pdf", ".docx", ".doc", ".txt", ".md", ".rtf", ".odt",
+               ".csv", ".tsv", ".xlsx", ".xls", ".ods", ".pptx",
+               ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".bmp", ".gif"}
 MIME = {
     ".pdf": "application/pdf",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ".doc": "application/msword",
     ".txt": "text/plain; charset=utf-8",
     ".md": "text/plain; charset=utf-8",
+    ".rtf": "application/rtf",
+    ".odt": "application/vnd.oasis.opendocument.text",
+    ".csv": "text/csv; charset=utf-8", ".tsv": "text/tab-separated-values; charset=utf-8",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".xls": "application/vnd.ms-excel",
+    ".ods": "application/vnd.oasis.opendocument.spreadsheet",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-    ".tif": "image/tiff", ".tiff": "image/tiff", ".webp": "image/webp",
+    ".tif": "image/tiff", ".tiff": "image/tiff", ".webp": "image/webp", ".bmp": "image/bmp", ".gif": "image/gif",
 }
+# Opened in the browser; every other type is downloaded (office files are never rendered by the app's origin).
+INLINE_EXT = {".pdf", ".txt", ".md", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".bmp", ".gif"}
 
 # Inline style *attributes* are allowed (layout tweaks in templates); inline <style>/<script> are not.
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; "
@@ -139,10 +150,16 @@ def sniff_ok(path: Path, ext: str) -> bool:
         head = f.read(4096)
     if ext == ".pdf":
         return head.lstrip()[:5] == b"%PDF-"
-    if ext == ".docx":
-        return head[:4] == b"PK\x03\x04"
-    if ext == ".doc":
+    if ext in (".docx", ".xlsx", ".pptx", ".odt", ".ods"):
+        return head[:4] == b"PK\x03\x04"   # zip container (contents checked in filescan / the parser)
+    if ext in (".doc", ".xls"):
         return head[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"  # OLE compound file
+    if ext == ".rtf":
+        return head.lstrip()[:5] == b"{\\rtf"
+    if ext == ".bmp":
+        return head[:2] == b"BM"
+    if ext == ".gif":
+        return head[:6] in (b"GIF87a", b"GIF89a")
     if ext == ".png":
         return head[:8] == b"\x89PNG\r\n\x1a\n"
     if ext in (".jpg", ".jpeg"):
@@ -151,7 +168,7 @@ def sniff_ok(path: Path, ext: str) -> bool:
         return head[:4] in (b"II*\x00", b"MM\x00*")
     if ext == ".webp":
         return head[:4] == b"RIFF" and head[8:12] == b"WEBP"
-    if ext in (".txt", ".md"):
+    if ext in (".txt", ".md", ".csv", ".tsv"):
         # Plain text: UTF-16 (has a BOM) or text without NUL bytes (rules out binaries renamed .txt).
         return head[:2] in (b"\xff\xfe", b"\xfe\xff") or b"\x00" not in head
     return False

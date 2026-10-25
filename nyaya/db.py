@@ -557,7 +557,7 @@ write_lock = threading.RLock()
 
 # Postgres schema version this code expects (supabase/migrations/*). The app never runs DDL against Postgres:
 # migrations are applied by the project owner (Supabase CLI / dashboard / MCP), and the app checks the version.
-PG_SCHEMA_VERSION = 4
+PG_SCHEMA_VERSION = 5
 DEFAULT_ORG = "org_default"
 
 

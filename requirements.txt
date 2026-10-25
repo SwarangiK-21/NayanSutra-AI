@@ -7,6 +7,11 @@ numpy==2.5.4
 fastembed==0.9.0          # local ONNX embeddings + cross-encoder reranker
 pypdfium2==5.14.0         # PDF text extraction (PDFium)
 python-docx==1.2.0
+openpyxl==3.1.5           # Excel .xlsx (cell values only; formulas and macros never run)
+xlrd==2.0.2               # Excel 97-2003 .xls
+python-pptx==1.0.2        # PowerPoint .pptx
+striprtf==0.0.35          # RTF
+rapidocr==3.10.0          # OCR for scanned PDFs / images on ONNX Runtime (no system install; models download once)
 python-dotenv==1.2.4
 python-dateutil==2.9.0.post0
 fpdf2==2.8.9              # PDF export of drafts / notices

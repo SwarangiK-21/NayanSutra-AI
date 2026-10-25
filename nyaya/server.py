@@ -1214,7 +1214,7 @@ def document_file(doc_id: str, p: Principal = P):
     if collection == "case":
         db.audit("document.open", "document", doc_id, case_id=case_id)
     ext = Path(row["filename"]).suffix.lower() or Path(row["path"]).suffix.lower()
-    disposition = "attachment" if ext in (".docx", ".doc") else "inline"
+    disposition = "inline" if ext in security.INLINE_EXT else "attachment"
     media = security.MIME.get(ext, "application/octet-stream")
     if storage.is_remote(row["path"]):
         # Streamed through the backend: the browser never gets a storage URL or key, and the CSP below applies.

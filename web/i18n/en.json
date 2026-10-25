@@ -61,7 +61,7 @@
   "form.status_dates": "Status & dates", "form.filing_date": "Filing date", "form.next_hearing": "Next hearing",
   "form.acts": "Relevant Acts / sections", "form.acts_hint": "Type them, or use “Identify applicable provisions” on the case page (verified against the bare acts)",
   "form.description": "Case description / facts", "form.supporting_docs": "Supporting documents",
-  "form.supporting_docs_hint": "PDF, Word, text or scanned images — uploaded after the case is saved",
+  "form.supporting_docs_hint": "PDF (also scanned), Word, Excel, CSV, PowerPoint, text or images — uploaded after the case is saved",
 
   "role.Plaintiff": "Plaintiff", "role.Defendant": "Defendant", "role.Appellant": "Appellant", "role.Respondent": "Respondent", "role.Petitioner": "Petitioner",
   "role.Applicant": "Applicant", "role.Opponent": "Opponent", "role.Complainant": "Complainant", "role.Accused": "Accused",
@@ -70,8 +70,8 @@
   "case.research_this": "Research this case", "case.no_number": "No case number", "case.no_court": "Court not set",
   "case.draft_notice": "This case is saved as a draft. Edit it to complete the required details.", "case.dossier": "Case dossier", "case.facts": "Facts",
   "case.save_complete": "Save & mark complete", "case.delete": "Delete case", "case.documents": "Case documents",
-  "case.doc_formats": "PDF · DOC/DOCX · TXT · MD · images — up to 40 MB each", "case.doc_type": "Document type", "case.detect": "Detect automatically",
-  "case.drop": "Drop files here or click to upload", "case.drop_hint": "Files are read, language-detected and indexed by the NyaySutra server. Scanned pages use OCR when it is installed.",
+  "case.doc_formats": "PDF (incl. scans) · Word · Excel · CSV · PowerPoint · OpenDocument · RTF · text · images — up to 40 MB each", "case.doc_type": "Document type", "case.detect": "Detect automatically",
+  "case.drop": "Drop files here or click to upload", "case.drop_hint": "Files are read, language-detected and indexed on the NyaySutra server. Scanned PDFs and photos are read with OCR (English, Hindi and Marathi).",
   "case.notes": "Notes & orders", "case.note_ph": "e.g. Court issued notice returnable on 28 Nov; reply in 2 weeks.", "case.new_note": "New note",
   "case.add_note": "Add note", "case.no_notes": "No notes yet.", "case.ask": "Ask about this case",
   "case.q1": "What are the strongest grounds for my client?", "case.q2": "What defences can the opposite party raise?",
@@ -223,7 +223,7 @@
   "activity.none": "No activity recorded yet.",
 
   "upload.lead": "Upload one or many files in any language. Each is read on the server, its language detected, and it opens in the document viewer for translation and summaries.",
-  "upload.case": "Add to case", "upload.new_case": "＋ Create a new draft case for these files", "upload.formats": "PDF (including scans, with OCR), DOC/DOCX, TXT/MD, PNG/JPG/TIFF/WEBP — up to 40 MB each",
+  "upload.case": "Add to case", "upload.new_case": "＋ Create a new draft case for these files", "upload.formats": "PDF (including scanned PDFs — read with OCR), Word (DOC/DOCX), Excel (XLSX/XLS), CSV/TSV, PowerPoint (PPTX), OpenDocument (ODT/ODS), RTF, TXT/MD, images (PNG/JPG/TIFF/WEBP/BMP/GIF) — up to 40 MB each",
   "upload.privacy": "Files are stored privately for this case. Nothing is sent to the AI service until you ask for a translation or summary and confirm.",
   "upload.progress": "Processing", "upload.none": "No files uploaded yet.", "upload.uploading": "Uploading…", "upload.ready": "Ready", "upload.open_summarise": "Open & summarise",
 

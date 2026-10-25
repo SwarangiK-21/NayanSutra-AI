@@ -92,7 +92,7 @@ stray membership row existed.
 | Harmful requests (forging documents/evidence, tampering, witness/judge intimidation or bribery, absconding, false complaints, hacking, violence) | `screen_request()` — refused before any model call, with lawful alternatives; questions about the law, rights and defences pass (tested both ways, English and Hindi) |
 | Direct prompt injection, system-prompt/secret extraction | `screen_request()` refuses override and extraction attempts; no secret is ever placed in a prompt |
 | Indirect prompt injection in documents | Detection at ingestion (`instruction_like_text`, shown to users) and on every retrieved passage (`injection_suspected`); each source wrapped in `<source>` delimiters the text cannot close; flagged passages carry a warning for the model |
-| Unauthorised tool use / cross-user data | The planner may only choose an allow-listed tool with schema-validated arguments; the case, documents and chat are authorised by the server before the agent runs and never come from model output; clients asking for drafting get research |
+| Unauthorised tool use / cross-user data | The planner may only choose an allow-listed tool with schema-validated arguments; the case, documents and chat are authorised by the server before the agent runs and never come from model output; a tool the caller may not use is downgraded to research |
 | Fabricated citations | Every section/article/order reference and case citation in an answer must appear in the retrieved sources (or the user's question / case dossier); otherwise flagged and the answer marked not grounded — in addition to the model-based audit |
 | Leakage in output | `scan_output()` removes configured secrets, key/JWT/database-URL patterns and verbatim system-prompt text before the answer is stored; the UI replaces the streamed text |
 | Personal data sent to the LLM | Aadhaar (Verhoeff-checked), PAN, phone, e-mail, UPI, card (Luhn), bank account and passport numbers replaced by placeholders at the single LLM boundary and restored in the reply |
@@ -139,6 +139,10 @@ that removes secrets, tokens and e-mail addresses.
   MFA brute force; password change; audit actor/IP/outcome without contents; log redaction and generic 500s; malicious
   PDF/Word uploads; harmful/extraction requests refused without a model call; injection flagged and delimited; secret
   and fabricated-citation filtering; planner cannot pick unlisted tools; identifiers masked before the LLM.
+* `tests/test_formats.py`: every accepted format (PDF scans via OCR, Word, Excel, CSV, PowerPoint, OpenDocument, RTF,
+  images); refusal of macros, embedded objects and external links in Excel / PowerPoint / OpenDocument / RTF, and
+  of renamed or binary files (content signature checked, not the file name). Office files are always downloaded,
+  never rendered by the app's origin.
 * `tests/test_live_security.py` (opt-in, real Supabase project, synthetic accounts deleted afterwards): RLS isolation
   with real claims (other user, anonymous, self-escalation, forged audit actor, append-only audit, Vault access) and the
   real Supabase Auth flow (password sign-in, TOTP enrolment and challenge to AAL2, tokens in Vault, sign-out).

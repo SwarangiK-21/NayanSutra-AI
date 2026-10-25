@@ -61,7 +61,7 @@
   "form.status_dates": "स्थिति व तिथियाँ", "form.filing_date": "फ़ाइलिंग तिथि", "form.next_hearing": "अगली सुनवाई",
   "form.acts": "संबंधित अधिनियम / धाराएँ", "form.acts_hint": "स्वयं लिखें, या केस पृष्ठ पर “लागू प्रावधान पहचानें” का उपयोग करें (मूल अधिनियमों से सत्यापित)",
   "form.description": "केस विवरण / तथ्य", "form.supporting_docs": "सहायक दस्तावेज़",
-  "form.supporting_docs_hint": "PDF, Word, टेक्स्ट या स्कैन की गई छवियाँ — केस सहेजने के बाद अपलोड होंगी",
+  "form.supporting_docs_hint": "PDF (स्कैन किए गए भी), Word, Excel, CSV, PowerPoint, टेक्स्ट या छवियाँ — केस सहेजने के बाद अपलोड होंगी",
 
   "role.Plaintiff": "वादी", "role.Defendant": "प्रतिवादी", "role.Appellant": "अपीलार्थी", "role.Respondent": "प्रत्यर्थी", "role.Petitioner": "याचिकाकर्ता",
   "role.Applicant": "आवेदक", "role.Opponent": "विरोधी पक्ष", "role.Complainant": "शिकायतकर्ता", "role.Accused": "अभियुक्त",
@@ -73,8 +73,8 @@
   "case.research_this": "इस केस पर अनुसंधान", "case.no_number": "केस संख्या नहीं", "case.no_court": "न्यायालय तय नहीं",
   "case.draft_notice": "यह केस ड्राफ़्ट के रूप में सहेजा गया है। आवश्यक विवरण पूरे करने के लिए इसे संपादित करें।", "case.dossier": "केस डोज़ियर", "case.facts": "तथ्य",
   "case.save_complete": "सहेजें और पूर्ण चिह्नित करें", "case.delete": "केस हटाएँ", "case.documents": "केस दस्तावेज़",
-  "case.doc_formats": "PDF · DOC/DOCX · TXT · MD · छवियाँ — प्रत्येक 40 MB तक", "case.doc_type": "दस्तावेज़ का प्रकार", "case.detect": "स्वतः पहचानें",
-  "case.drop": "फ़ाइलें यहाँ छोड़ें या अपलोड करने के लिए क्लिक करें", "case.drop_hint": "फ़ाइलें NyaySutra सर्वर पर पढ़ी, भाषा-पहचानी और अनुक्रमित की जाती हैं। स्कैन किए पृष्ठों के लिए OCR (स्थापित होने पर) उपयोग होता है।",
+  "case.doc_formats": "PDF (स्कैन सहित) · Word · Excel · CSV · PowerPoint · OpenDocument · RTF · टेक्स्ट · छवियाँ — प्रत्येक 40 MB तक", "case.doc_type": "दस्तावेज़ का प्रकार", "case.detect": "स्वतः पहचानें",
+  "case.drop": "फ़ाइलें यहाँ छोड़ें या अपलोड करने के लिए क्लिक करें", "case.drop_hint": "फ़ाइलें NyaySutra सर्वर पर पढ़ी, भाषा-पहचानी और अनुक्रमित की जाती हैं। स्कैन किए गए PDF और फ़ोटो OCR से पढ़े जाते हैं (अंग्रेज़ी, हिंदी और मराठी)।",
   "case.notes": "टिप्पणियाँ व आदेश", "case.note_ph": "जैसे: न्यायालय ने 28 नवंबर को नोटिस जारी किया; 2 सप्ताह में जवाब।", "case.new_note": "नई टिप्पणी",
   "case.add_note": "टिप्पणी जोड़ें", "case.no_notes": "अभी कोई टिप्पणी नहीं।", "case.ask": "इस केस के बारे में पूछें",
   "case.q1": "मेरे मुवक्किल के सबसे मज़बूत आधार क्या हैं?", "case.q2": "विरोधी पक्ष कौन-से बचाव उठा सकता है?",
@@ -226,7 +226,7 @@
   "activity.none": "अभी कोई गतिविधि दर्ज नहीं।",
 
   "upload.lead": "किसी भी भाषा में एक या कई फ़ाइलें अपलोड करें। हर फ़ाइल सर्वर पर पढ़ी जाती है, उसकी भाषा पहचानी जाती है, और वह अनुवाद व सारांश के लिए दस्तावेज़ दर्शक में खुलती है।",
-  "upload.case": "केस में जोड़ें", "upload.new_case": "＋ इन फ़ाइलों के लिए नया ड्राफ़्ट केस बनाएँ", "upload.formats": "PDF (स्कैन सहित, OCR के साथ), DOC/DOCX, TXT/MD, PNG/JPG/TIFF/WEBP — प्रत्येक 40 MB तक",
+  "upload.case": "केस में जोड़ें", "upload.new_case": "＋ इन फ़ाइलों के लिए नया ड्राफ़्ट केस बनाएँ", "upload.formats": "PDF (स्कैन किए गए PDF सहित — OCR से पढ़े जाते हैं), Word (DOC/DOCX), Excel (XLSX/XLS), CSV/TSV, PowerPoint (PPTX), OpenDocument (ODT/ODS), RTF, TXT/MD, छवियाँ (PNG/JPG/TIFF/WEBP/BMP/GIF) — प्रत्येक 40 MB तक",
   "upload.privacy": "फ़ाइलें इस केस के लिए निजी रूप से संग्रहीत होती हैं। जब तक आप अनुवाद या सारांश माँगकर पुष्टि नहीं करते, AI सेवा को कुछ नहीं भेजा जाता।",
   "upload.progress": "प्रसंस्करण", "upload.none": "अभी कोई फ़ाइल अपलोड नहीं हुई।", "upload.uploading": "अपलोड हो रहा है…", "upload.ready": "तैयार", "upload.open_summarise": "खोलें और सारांश",
 

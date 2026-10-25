@@ -37,7 +37,7 @@ e-mail links: [docs/SECURITY.md](docs/SECURITY.md).
 |---|---|
 | Case files | Civil / Criminal / Family / Revenue / Consumer / Writ matters; party roles that follow the category; CNR, case, filing and FIR numbers, police station, state → district, court (searchable), filing year; save incomplete cases as drafts |
 | Case search | Any combination of identifiers; validates CNR / FIR requirements, infers jurisdiction, searches your workspace, lists the official portal and exact values to enter, imports what you find (change-detected) |
-| Documents | PDF (incl. scans via optional OCR), DOC/DOCX, TXT/MD, images; language + script detection (English, Hindi, Marathi, other Indian scripts); original, extracted text, English translation and summaries side by side; batch upload with progress |
+| Documents | PDF (incl. scanned PDFs, read with built-in OCR), Word (DOC/DOCX), Excel (XLSX/XLS), CSV/TSV, PowerPoint (PPTX), OpenDocument (ODT/ODS), RTF, TXT/MD, images (PNG/JPG/TIFF/WEBP/BMP/GIF); language + script detection (English, Hindi, Marathi, other Indian scripts); original, extracted text, English translation and summaries side by side; batch upload with progress |
 | Document intelligence | English translation (indexed, so English questions find Hindi/Marathi files), structured summary — parties, dates, case numbers, facts, claims, relief, provisions, deadlines, action items — each linked to its page and checked against the text; summaries in Hindi / Marathi |
 | Legal research | Streaming answers with `[n]` citations and citation audit, in English or Hindi; voice input (hi-IN / mr-IN / en-IN) with editable transcription; read-aloud; focus on one case document |
 | Applicable provisions | Suggests acts / sections / articles chosen only from the official library, with page links, temporal checks (IPC→BNS on 1 July 2024), accept / reject / edit |
@@ -62,10 +62,13 @@ e-mail links: [docs/SECURITY.md](docs/SECURITY.md).
 
 No source offers webhooks to a local app, so nothing is labelled "live". CAPTCHAs, logins and rate limits are never bypassed.
 
-## Optional: OCR for scanned documents
-Install Tesseract with **eng, hin and mar** language data (Windows: UB-Mannheim build, tick Hindi and Marathi), then
-restart. It is detected automatically, or set `TESSERACT_CMD` in `.env`. Without it, scanned PDFs and images are rejected
-with a clear message — text is never guessed. Low-confidence OCR words are shown as `[?word]`.
+## OCR for scanned documents
+Built in: **RapidOCR** (installed with `requirements.txt`, runs on ONNX Runtime — no system install or admin rights).
+Its models (English and Hindi/Marathi, about 40 MB) are downloaded once on first use, or ahead of time with
+`python -m nyaya.ocr download` (Hindi/Marathi kept in `~/.nyaysutra/models/rapidocr`). Mixed English/Hindi/Marathi pages are read line
+by line with whichever model is more confident. Low-confidence OCR words are shown as `[?word]`; text is never guessed.
+Optional: if **Tesseract** (with eng, hin, mar data) is installed it is used instead (`OCR_ENGINE=auto|rapidocr|tesseract|off`,
+`TESSERACT_CMD`).
 
 ## Database migrations
 `nyaya/db.py` applies versioned, additive migrations at start-up (`meta.schema_version`); new columns are added only when
@@ -82,7 +85,8 @@ on the **Jobs** page. Details: [docs/RELIABILITY.md](docs/RELIABILITY.md).
 
 ## Known limitations
 * Security limits and open items are listed in [docs/SECURITY.md](docs/SECURITY.md) (section "Remaining risks").
-* OCR requires Tesseract (not bundled). Legacy `.doc` needs `antiword` on PATH.
+* OCR runs on the CPU (roughly 5–20 s per scanned page). Legacy `.doc` needs `antiword` on PATH; `.xls` macros and
+  Office/OpenDocument files with macros, embedded objects or external links are refused.
 * Court-specific formatting rules (paper, margins, fonts) are not assumed — forums list official sources and "confirm"
   items; you can add requirements you verified (with source URL and date).
 * Legal-awareness content and backend notices are in English; the interface is English / Hindi; Marathi is partial.
