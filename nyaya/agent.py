@@ -6,7 +6,16 @@
           ├─ drafting ─────► template lookup + law retrieval → generate draft (stream)
           ├─ analyze_document ► whole document (or map-reduce if huge) → stream analysis
           ├─ calculation ──► deterministic limitation tool (no LLM arithmetic)
+          ├─ time ─────────► clock (server clock cross-checked against network time; no LLM)
+          ├─ news ─────────► LiveLaw feed (dated) + live web search → answer with publication dates
+          ├─ out_of_scope ─► fixed redirect to legal help (coding, maths, …); a legal angle overrides it
+          ├─ clarify ──────► one short question back
           └─ chitchat ─────► short reply
+
+Research falls back to a live web search (official and legal sources ranked first) when the local library has no
+reliable passage, and adds web sources when the planner says the question is about a specific real event, case or
+person the statute library cannot contain (e.g. the 26/11 attacks and the Kasab trial). Only the redacted search query
+is sent to the web — never case documents — and "case documents only" scope never searches the web.
 
 Each step yields events that the server streams to the browser (Server-Sent Events),
 so the advocate sees progress immediately and tokens as they are generated.
@@ -23,14 +32,15 @@ import logging
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date
 from typing import Iterator
 
-from . import authz, cases, config, db, guardrails, ingest, llm, prompts, retrieval, tools
+from . import (authz, cases, clock, config, db, guardrails, ingest, integrations, intents, llm, prompts, retrieval,
+               tools, websearch)
 
 log = logging.getLogger(__name__)
 
-KIND = {"case": "CASE FILE", "bare_act": "BARE ACT", "judgment": "JUDGMENT", "draft": "TEMPLATE"}
+KIND = {"case": "CASE FILE", "bare_act": "BARE ACT", "judgment": "JUDGMENT", "draft": "TEMPLATE", "web": "WEB",
+        "news": "NEWS"}
 
 
 # ── Chat persistence ─────────────────────────────────────────────────────────
@@ -78,6 +88,8 @@ def _kind(h: retrieval.Hit) -> str:
     """Source type as the model sees it; statutes say whose law they are (central, or one state's)."""
     if h.collection == "bare_act" and h.jurisdiction:
         return "BARE ACT — CENTRAL LAW" if h.jurisdiction == "Central" else f"BARE ACT — STATE LAW: {h.jurisdiction.upper()}"
+    if h.collection in ("web", "news"):
+        return f"{KIND[h.collection]} — {h.extra.get('domain', '')} ({h.extra.get('reliability', '')})"
     return KIND.get(h.collection, h.collection)
 
 
@@ -86,7 +98,9 @@ def _source_items(hits: list[retrieval.Hit]) -> list[dict]:
              "kind": KIND.get(h.collection, h.collection), "jurisdiction": h.jurisdiction if h.collection == "bare_act" else "",
              "label": h.label, "page": h.page_start,
              "citation": h.citation(), "snippet": h.text[:320], "exact": h.exact,
-             "injection_suspected": guardrails.is_suspicious(h.text)}
+             "injection_suspected": guardrails.is_suspicious(h.text),
+             **({"url": h.extra.get("url"), "published": h.extra.get("published"), "domain": h.extra.get("domain"),
+                 "reliability": h.extra.get("reliability")} if h.collection in ("web", "news") else {})}
             for i, h in enumerate(hits, 1)]
 
 
@@ -110,7 +124,7 @@ def plan(message: str, hist: list[dict], docs: list[dict], info: dict | None = N
                          for i, d in enumerate(docs, 1)) or "(none uploaded)"
     raw = llm.chat_json(
         [{"role": "user", "content": prompts.PLANNER.format(
-            docs=doc_list, keys=", ".join(tools.LIMITATION), today=date.today().isoformat(),
+            docs=doc_list, keys=", ".join(tools.LIMITATION), today=clock.stamp(),
             history=_hist_text(hist), message=message)}],
         model=config.FAST_LLM_MODEL,
         default={"intent": "research", "query": message},
@@ -192,11 +206,24 @@ def run(*, message: str, chat_id: str | None = None, case_id: str | None = None,
             p = None
         elif task and doc_id:
             p = {"intent": "analyze_document", "analysis": task, "query": message, "calc": {}, "alt_queries": []}
+        elif intents.clock_question(message):   # decided by code: the time is never left to a model
+            p = {"intent": "time", "query": message, "clock": intents.clock_question(message)}
+            _step(meta, "classify", "rule", intent="time")
         else:
             yield {"type": "status", "step": "plan", "text": "Understanding the question…"}
             info: dict = {}
             p = plan(message, hist, docs, info)
             _step(meta, "classify", "ok" if info.get("ok") else "default", intent=p["intent"], **_model_info(info))
+            if p["intent"] == "out_of_scope" and intents.has_legal_angle(message):
+                # Never turn away a question with a legal angle (cybercrime, IT Act, a famous trial…).
+                _step(meta, "scope_check", "overridden", requested="out_of_scope", used="research")
+                p["intent"] = "research"
+            elif p["intent"] == "news" and not intents.asks_for_recent(message):
+                _step(meta, "scope_check", "overridden", requested="news", used="research")
+                p["intent"], p["external"] = "research", True   # a past event: research it, with web sources
+            elif not info.get("ok") and intents.looks_like_code_request(message):
+                p["intent"] = "out_of_scope"   # planner unavailable: an obvious coding request still gets the redirect
+                _step(meta, "scope_check", "rule", requested="research", used="out_of_scope")
         if p is not None:
             if principal is not None:
                 allowed = guardrails.allowed_intent(principal, p["intent"], case_id)
@@ -212,6 +239,27 @@ def run(*, message: str, chat_id: str | None = None, case_id: str | None = None,
             msgs = [{"role": "system", "content": prompts.CHAT_SYSTEM + rule}, *_prior_turns(hist, 2),
                     {"role": "user", "content": message}]
             yield from _stream_llm(msgs, answer, model=config.FAST_LLM_MODEL, meta=meta)
+
+        elif p["intent"] == "time":
+            text, now = clock.answer(p.get("clock") or "time", lang)
+            meta["clock"] = {"verified": now.verified, "source": now.source, "tz": now.tz_name, "at": now.dt.isoformat()}
+            _step(meta, "clock", "ok" if now.verified else "unverified")
+            answer.append(text)
+            yield {"type": "token", "text": text}
+
+        elif p["intent"] == "out_of_scope":
+            text = intents.OFF_TOPIC.get(lang, intents.OFF_TOPIC["en"])
+            _step(meta, "redirect")
+            answer.append(text)
+            yield {"type": "token", "text": text}
+
+        elif p["intent"] == "clarify":
+            text = (p.get("clarify_question") or "").strip() or intents.CLARIFY_DEFAULT
+            answer.append(text)
+            yield {"type": "token", "text": text}
+
+        elif p["intent"] == "news":
+            yield from _news(message, p, answer, sources, meta, rule)
 
         elif p["intent"] == "calculation":
             text = _calculation(p.get("calc") or {})
@@ -366,6 +414,18 @@ def _research(message: str, p: dict, case: dict | None, docs: list[dict], scope:
             if hits2 and (diag2.get("confidence") or -99) > (diag.get("confidence") or -99):
                 hits, diag, query = hits2, diag2, q2
         weak = diag.get("confidence") is not None and diag["confidence"] < config.RELEVANCE_FLOOR and not diag["exact_hits"]
+
+    # Live web search when the library has nothing reliable, or when the question is about a specific real event,
+    # case or person that a statute library cannot contain. Never for drafting or a "case documents only" search.
+    if not drafting and scope != "case" and (not hits or weak or p.get("external")):
+        yield {"type": "status", "step": "web", "text": "Searching reliable web sources…"}
+        web, why = websearch.search(intents.strip_parties(p["query"], case))
+        _step(meta, "web_search", "ok" if web else "empty" if why == websearch.NO_RESULT else "unavailable",
+              results=len(web))
+        meta["web"] = {"results": len(web), "domains": [r.domain for r in web], "reason": why or None}
+        if web:
+            library = [] if (not hits or weak) else hits[: max(config.CONTEXT_PASSAGES - len(web), 3)]
+            hits, weak = library + _web_hits(web), False
     meta["retrieval"] = {k: diag.get(k) for k in ("confidence", "refs", "acts", "candidates", "exact_hits")}
     meta["query"] = query
 
@@ -394,11 +454,7 @@ def _research(message: str, p: dict, case: dict | None, docs: list[dict], scope:
             hits = [template] + hits
 
     if not hits or (weak and not drafting):
-        text = (f"I searched {where} for **“{query}”** but found no passage that answers this reliably, "
-                "so I won't guess.\n\n**What helps:**\n"
-                "- Upload the relevant judgment, petition or agreement to the case (Case documents).\n"
-                "- Name the provision precisely, e.g. *Section 138 NI Act* or *Order XXXIX Rule 1 CPC*.\n"
-                "- Switch the search scope to **Case + Library** if it is set narrower.")
+        text = _no_answer(query, where, scope, meta.get("web"))
         answer.append(text)
         meta["abstained"] = True
         yield {"type": "token", "text": text}
@@ -409,15 +465,19 @@ def _research(message: str, p: dict, case: dict | None, docs: list[dict], scope:
     yield {"type": "status", "step": "generate", "text": "Drafting…" if drafting else "Writing a cited answer…"}
 
     dossier = cases.dossier(case, docs) if case else "(no case selected — general research)"
-    user = (f"CASE DOSSIER:\n{guardrails.neutralise(dossier)}\n\nSOURCES:\n{_context(hits)}\n\n"
-            f"{'DRAFTING REQUEST' if drafting else 'QUESTION'}: {message}")
+    user = (f"TODAY: {clock.stamp()}\n\nCASE DOSSIER:\n{guardrails.neutralise(dossier)}\n\n"
+            f"SOURCES:\n{_context(hits)}\n\n{'DRAFTING REQUEST' if drafting else 'QUESTION'}: {message}")
     msgs = [{"role": "system", "content": (prompts.DRAFT_SYSTEM if drafting else prompts.ANSWER_SYSTEM) + rule},
             *_prior_turns(hist), {"role": "user", "content": user}]
     yield from _stream_llm(msgs, answer, meta=meta)
 
     if drafting:
         return
-    # Citation audit: deterministic check for out-of-range numbers + LLM check of support.
+    yield from _audit(message, hits, answer, meta, f"{message}\n{dossier}")
+
+
+def _audit(message: str, hits: list[retrieval.Hit], answer: list[str], meta: dict, allowed_text: str) -> Iterator[dict]:
+    """Citation audit: deterministic check for out-of-range numbers + LLM check of support."""
     text = normalise_citations("".join(answer))
     cited = {int(n) for n in re.findall(r"\[(\d{1,2})\]", text)}
     invalid = sorted(n for n in cited if n < 1 or n > len(hits))
@@ -431,7 +491,7 @@ def _research(message: str, p: dict, case: dict | None, docs: list[dict], scope:
     # Deterministic check, independent of the model: every section/article and case citation must be in a source.
     fabricated = guardrails.verify_citations(
         text, [f"{h.label or ''} {h.title}\n{h.header}\n{h.text}" for h in hits],
-        allowed_text=f"{message}\n{dossier}")
+        allowed_text=allowed_text)
     unsupported += fabricated
     grounded = (v.get("grounded") is not False) and not invalid and not unsupported
     if not cited:
@@ -443,3 +503,103 @@ def _research(message: str, p: dict, case: dict | None, docs: list[dict], scope:
     _step(meta, "verify_citations", "ok" if grounded else "issues" if meta["verify"]["checked"] else "partial",
           issues=len(unsupported), model_check=meta["verify"]["checked"], **_model_info(info))
     yield {"type": "verify", **meta["verify"]}
+
+
+# ── Live sources ─────────────────────────────────────────────────────────────
+def _web_hits(results: list[websearch.WebResult]) -> list[retrieval.Hit]:
+    return [retrieval.Hit(chunk_id=None, doc_id="", title=r.title, collection="web", doc_type="web",
+                          header=f"{r.title} — {r.domain}", text=r.text, label=r.domain, section=None,
+                          page_start=None, page_end=None,
+                          extra={"url": r.url, "domain": r.domain, "published": r.published,
+                                 "reliability": websearch.TIER_LABEL.get(r.tier, "other website")})
+            for r in results]
+
+
+_NEWS_STOP = {"latest", "recent", "news", "legal", "law", "india", "indian", "today", "todays", "current", "update",
+              "updates", "development", "developments", "what", "are", "the", "in", "of", "and", "on", "this", "week",
+              "new", "any", "tell", "me", "about", "headlines", "happening", "s"}
+
+
+def _feed_hits(query: str, limit: int = 6) -> list[retrieval.Hit]:
+    """Dated items from the LiveLaw feed (synced hourly by integrations); topic words narrow them when given."""
+    try:
+        rows = integrations.news(limit=80)
+    except Exception:   # the feed is optional for answering; the web search still runs
+        log.exception("Reading the news feed failed")
+        return []
+    words = {w for w in re.findall(r"[a-z0-9]+", query.lower()) if w not in _NEWS_STOP and len(w) > 2}
+    if words:
+        rows = [r for r in rows if words & set(re.findall(r"[a-z0-9]+", (r.get("title") or "").lower()))]
+    out = []
+    for r in rows[:limit]:
+        pub = (r.get("published_at") or "")[:10] or None
+        cats = ", ".join((r.get("data") or {}).get("categories") or [])
+        out.append(retrieval.Hit(chunk_id=None, doc_id="", title=r["title"], collection="news", doc_type="news",
+                                 header=f"{r['title']} — livelaw.in", label="livelaw.in", section=None,
+                                 page_start=None, page_end=None,
+                                 text=f"Headline: {r['title']}" + (f"\nTopics: {cats}" if cats else ""),
+                                 extra={"url": r.get("url"), "domain": "livelaw.in", "published": pub,
+                                        "reliability": "legal publisher"}))
+    return out
+
+
+def _dated_context(hits: list[retrieval.Hit]) -> str:
+    return "\n\n".join(guardrails.wrap_source(
+        i, _kind(h), f"[{i}] {h.header} | " + (f"published {h.extra['published']}" if h.extra.get("published")
+                                               else "publication date not stated by the source"), h.text)
+        for i, h in enumerate(hits, 1))
+
+
+def _news(message: str, p: dict, answer: list[str], sources: list[dict], meta: dict, rule: str = "") -> Iterator[dict]:
+    general = p.get("news_scope") == "general"
+    query = p.get("query") or message
+    if general:   # outside the app's purpose: offer legal news instead of general headlines
+        note = ("I focus on legal news, so I don't report general headlines. Here are the latest legal developments "
+                "I could find:\n\n")
+        answer.append(note)
+        yield {"type": "token", "text": note}
+        query = "latest legal news India Supreme Court High Court"
+    yield {"type": "status", "step": "news", "text": "Checking current legal news…"}
+    feed = _feed_hits("" if general else query)
+    web, why = websearch.search(query if re.search(r"\bnews\b", query, re.I) else f"{query} India legal news")
+    hits = (feed[:5] + _web_hits(web))[: config.CONTEXT_PASSAGES]
+    _step(meta, "news_search", "ok" if hits else "empty", feed=len(feed), web=len(web))
+    meta["web"] = {"results": len(web), "domains": [r.domain for r in web], "reason": why or None}
+    if not hits:
+        text = ("I couldn't retrieve current news right now" + (f" ({why})" if why else "")
+                + ", so I won't describe recent events from memory — that could be out of date or wrong.\n\n"
+                "You can check the latest directly on the Supreme Court website (sci.gov.in), India Code "
+                "(indiacode.nic.in) or LiveLaw, or ask me again in a few minutes. I can still answer questions about "
+                "the law itself.")
+        answer.append(text)
+        meta["abstained"] = True
+        yield {"type": "token", "text": text}
+        return
+    sources.extend(_source_items(hits))
+    yield {"type": "sources", "items": sources}
+    yield {"type": "status", "step": "generate", "text": "Summarising the news…"}
+    msgs = [{"role": "system", "content": prompts.NEWS_SYSTEM.format(today=clock.stamp()) + rule},
+            {"role": "user", "content": f"SOURCES:\n{_dated_context(hits)}\n\nREQUEST: {message}"}]
+    yield from _stream_llm(msgs, answer, meta=meta)
+    if why and why != websearch.NO_RESULT:   # say what was not checked
+        note = f"\n\n*The web search was unavailable ({why}); these items come only from the LiveLaw feed.*"
+        answer.append(note)
+        yield {"type": "token", "text": note}
+    yield from _audit(message, hits, answer, meta, message)
+
+
+def _no_answer(query: str, where: str, scope: str, web: dict | None) -> str:
+    """Transparent "not found": what was searched, what was not, and what to do next — never a guess."""
+    text = f"I searched {where} for **“{query}”** but found no passage that answers this reliably, so I won't guess."
+    if scope == "case":
+        text += (" The search scope is set to *case documents only*, so the law library and the web were not "
+                 "searched.")
+    elif web is not None and web.get("reason") == websearch.NO_RESULT:
+        text += " I also searched the web but found no reliable source for it."
+    elif web is not None and web.get("reason"):
+        text += f" I could not check web sources either ({web['reason']})."
+    return (text + "\n\n**What helps:**\n"
+            "- Upload the relevant judgment, petition or agreement to the case (Case documents).\n"
+            "- Name the provision, case or event precisely, e.g. *Section 138 NI Act* or *State v. Kasab (2012)*.\n"
+            "- Switch the search scope to **Case + Library** if it is set narrower.\n\n"
+            "Would you like me to try a different wording or another source?")

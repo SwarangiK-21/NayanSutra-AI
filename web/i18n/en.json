@@ -43,7 +43,7 @@
 
   "cat.Civil": "Civil", "cat.Criminal": "Criminal", "cat.Family": "Family", "cat.Revenue": "Revenue", "cat.Consumer": "Consumer", "cat.Writ": "Writ",
   "cat.General": "General",
-  "coll.case": "Case file", "coll.bare_act": "Bare Act", "coll.judgment": "Judgment", "coll.draft": "Template",
+  "coll.case": "Case file", "coll.web": "Web source", "coll.news": "News", "coll.bare_act": "Bare Act", "coll.judgment": "Judgment", "coll.draft": "Template",
 
   "cases.lead": "Each matter keeps its own documents, notes and research history. Documents of one case are never used to answer questions about another.",
   "cases.register": "Register a new matter", "cases.create": "Create case", "cases.save_draft": "Save as draft", "cases.created": "Case created",
@@ -109,11 +109,11 @@
   "research.audit_ok": "Citation audit passed — every cited claim was checked against its source.", "research.audit_warn": "Citation audit: please verify these points.",
   "research.disclaimer": "AI research aid, not legal advice — verify citations in the primary source.", "research.loading_passage": "Loading passage…",
   "research.open_original": "Open original document", "research.source": "Source", "research.starting": "Starting…", "research.writing": "Writing…",
-  "intent.research": "Research", "intent.drafting": "Draft", "intent.analyze_document": "Document analysis", "intent.calculation": "Limitation tool", "intent.chitchat": "Chat",
+  "intent.research": "Research", "intent.drafting": "Draft", "intent.analyze_document": "Document analysis", "intent.calculation": "Limitation tool", "intent.chitchat": "Chat", "intent.news": "Legal news", "intent.time": "Clock", "intent.out_of_scope": "Outside legal scope", "intent.clarify": "Clarification",
   "step.plan": "Understanding the question…", "step.retrieve": "Searching local case files and the law library…", "step.rewrite": "Weak matches — refining the search…",
   "step.template": "Finding the closest draft template…", "step.generate": "Writing a cited answer…", "step.verify": "Checking citations against sources…",
   "step.read": "Reading the document in parts…",
-  "origin.answered_from": "Answered from {where}", "origin.case_files": "your case files", "origin.library": "the local law library",
+  "origin.answered_from": "Answered from {where}", "origin.case_files": "your case files", "origin.library": "the local law library", "origin.web": "live web sources", "origin.hint_web": "Part of this answer comes from a live web search (official and legal sources ranked first). Only the search query was sent — never your case documents.", "clock.verified": "Verified time", "clock.unverified": "Time not verified", "research.published": "published {date}", "research.date_unknown": "publication date not stated", "research.open_web": "Open the original page",
   "origin.hint": "Retrieved from your workspace's own data (case files and the law library); no external website was searched for this answer.",
   "origin.file": "Uploaded file", "origin.user": "Your input", "origin.case": "Case dossier",
 
@@ -388,8 +388,8 @@
   "trace.passages": "{n} passages", "trace.issues": "{n} issue(s)", "trace.step_authorize": "Access check", "trace.step_screen": "Request screening",
   "trace.step_classify": "Understanding the request", "trace.step_tool_policy": "Tool policy", "trace.step_retrieve": "Search of authorised sources",
   "trace.step_rewrite_query": "Search refined", "trace.step_generate": "Answer written", "trace.step_verify_citations": "Citation check",
-  "trace.step_calculate": "Deterministic calculation", "trace.step_read_parts": "Document read in parts", "trace.step_output_check": "Output check",
-  "trace.st_ok": "done", "trace.st_blocked": "refused", "trace.st_default": "used the default (model unavailable)", "trace.st_weak": "weak matches",
+  "trace.step_calculate": "Deterministic calculation", "trace.step_clock": "Clock (no AI)", "trace.step_redirect": "Outside legal scope", "trace.step_scope_check": "Scope check", "trace.step_web_search": "Live web search", "trace.step_news_search": "News search (LiveLaw feed + web)", "trace.step_read_parts": "Document read in parts", "trace.step_output_check": "Output check",
+  "trace.st_ok": "done", "trace.st_rule": "decided by a fixed rule", "trace.st_overridden": "kept as a legal question", "trace.st_unverified": "not verified", "trace.st_unavailable": "unavailable", "trace.st_empty": "nothing reliable found", "trace.st_blocked": "refused", "trace.st_default": "used the default (model unavailable)", "trace.st_weak": "weak matches",
   "trace.st_skipped": "skipped", "trace.st_fallback": "done by the fallback model", "trace.st_partial": "incomplete", "trace.st_failed": "failed",
   "trace.st_issues": "issues found", "trace.st_downgraded": "limited by your role", "trace.st_filtered": "something removed",
   "acts.version": "v{v} · updated {date}", "acts.version_hint": "A revised text was imported; earlier versions are kept for reference.",

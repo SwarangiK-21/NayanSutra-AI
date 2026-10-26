@@ -152,6 +152,16 @@ LLM_FALLBACK_MODEL = _env("LLM_FALLBACK_MODEL", default="gpt-oss:20b")  # used (
 LLM_BREAKER_FAILURES = int(_env("LLM_BREAKER_FAILURES", default="4"))   # consecutive failures that open the circuit
 LLM_BREAKER_SECONDS = int(_env("LLM_BREAKER_SECONDS", default="60"))    # how long calls to that model are skipped
 
+# ── Live information (current time, web search) ─────────────────────────────
+# Time questions are answered from the server clock in DEFAULT_TIMEZONE, cross-checked against the Date header of a
+# trusted HTTPS server (no model involved). Empty TIME_CHECK_URL = no cross-check (the answer then says so).
+TIME_CHECK_URL = _env("TIME_CHECK_URL", default="https://ollama.com" if OLLAMA_API_KEY else "")
+# Web search for current legal news and for questions the local library cannot answer (e.g. 26/11, famous trials).
+# Uses Ollama's web-search API with the same OLLAMA_API_KEY; only the search query is sent, never case documents.
+WEB_SEARCH_ENABLED = _bool("WEB_SEARCH_ENABLED", bool(OLLAMA_API_KEY))
+WEB_SEARCH_URL = _env("WEB_SEARCH_URL", default="https://ollama.com/api/web_search")
+WEB_SEARCH_TIMEOUT = float(_env("WEB_SEARCH_TIMEOUT", default="20"))
+
 # ── Server / security ───────────────────────────────────────────────────────
 APP_HOST = _env("APP_HOST", default="127.0.0.1")
 APP_PORT = int(_env("APP_PORT", default="8000"))

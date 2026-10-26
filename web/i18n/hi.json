@@ -43,7 +43,7 @@
 
   "cat.Civil": "सिविल", "cat.Criminal": "आपराधिक", "cat.Family": "पारिवारिक", "cat.Revenue": "राजस्व", "cat.Consumer": "उपभोक्ता", "cat.Writ": "रिट",
   "cat.General": "सामान्य",
-  "coll.case": "केस फ़ाइल", "coll.bare_act": "मूल अधिनियम", "coll.judgment": "निर्णय", "coll.draft": "टेम्पलेट",
+  "coll.case": "केस फ़ाइल", "coll.web": "वेब स्रोत", "coll.news": "समाचार", "coll.bare_act": "मूल अधिनियम", "coll.judgment": "निर्णय", "coll.draft": "टेम्पलेट",
 
   "cases.lead": "हर मामले के अपने दस्तावेज़, टिप्पणियाँ और अनुसंधान इतिहास होते हैं। एक केस के दस्तावेज़ कभी दूसरे केस के प्रश्नों के उत्तर में उपयोग नहीं होते।",
   "cases.register": "नया मामला दर्ज करें", "cases.create": "केस बनाएँ", "cases.save_draft": "ड्राफ़्ट के रूप में सहेजें", "cases.created": "केस बनाया गया",
@@ -112,11 +112,11 @@
   "research.audit_ok": "उद्धरण जाँच सफल — हर उद्धृत कथन को उसके स्रोत से मिलाया गया।", "research.audit_warn": "उद्धरण जाँच: कृपया इन बिंदुओं का सत्यापन करें।",
   "research.disclaimer": "AI अनुसंधान सहायक, विधिक सलाह नहीं — मूल स्रोत में उद्धरण जाँचें।", "research.loading_passage": "अंश लोड हो रहा है…",
   "research.open_original": "मूल दस्तावेज़ खोलें", "research.source": "स्रोत", "research.starting": "शुरू हो रहा है…", "research.writing": "लिखा जा रहा है…",
-  "intent.research": "अनुसंधान", "intent.drafting": "प्रारूप", "intent.analyze_document": "दस्तावेज़ विश्लेषण", "intent.calculation": "परिसीमा टूल", "intent.chitchat": "बातचीत",
+  "intent.research": "अनुसंधान", "intent.drafting": "प्रारूप", "intent.analyze_document": "दस्तावेज़ विश्लेषण", "intent.calculation": "परिसीमा टूल", "intent.chitchat": "बातचीत", "intent.news": "कानूनी समाचार", "intent.time": "घड़ी", "intent.out_of_scope": "कानूनी दायरे से बाहर", "intent.clarify": "स्पष्टीकरण",
   "step.plan": "प्रश्न समझा जा रहा है…", "step.retrieve": "स्थानीय केस फ़ाइलें और विधि पुस्तकालय खोजे जा रहे हैं…", "step.rewrite": "कमज़ोर मिलान — खोज सुधारी जा रही है…",
   "step.template": "सबसे निकट प्रारूप टेम्पलेट खोजा जा रहा है…", "step.generate": "स्रोत-सहित उत्तर लिखा जा रहा है…", "step.verify": "स्रोतों से उद्धरण जाँचे जा रहे हैं…",
   "step.read": "दस्तावेज़ हिस्सों में पढ़ा जा रहा है…",
-  "origin.answered_from": "{where} से उत्तर", "origin.case_files": "आपकी केस फ़ाइलों", "origin.library": "स्थानीय विधि पुस्तकालय",
+  "origin.answered_from": "{where} से उत्तर", "origin.case_files": "आपकी केस फ़ाइलों", "origin.library": "स्थानीय विधि पुस्तकालय", "origin.web": "लाइव वेब स्रोतों", "origin.hint_web": "इस उत्तर का कुछ भाग लाइव वेब खोज से है (आधिकारिक और कानूनी स्रोत पहले)। केवल खोज वाक्य भेजा गया — आपके केस दस्तावेज़ कभी नहीं।", "clock.verified": "सत्यापित समय", "clock.unverified": "समय सत्यापित नहीं", "research.published": "प्रकाशित {date}", "research.date_unknown": "प्रकाशन तिथि नहीं दी गई", "research.open_web": "मूल पेज खोलें",
   "origin.hint": "आपके कार्यक्षेत्र के अपने डेटा (केस फ़ाइलें और विधि पुस्तकालय) से लिया गया; इस उत्तर के लिए कोई बाहरी वेबसाइट नहीं खोजी गई।",
   "origin.file": "अपलोड की गई फ़ाइल", "origin.user": "आपका इनपुट", "origin.case": "केस डोज़ियर",
 
@@ -389,8 +389,8 @@
   "trace.audit_code_only_hint": "AI उद्धरण जाँच नहीं चल सकी; धाराएँ और केस नाम फिर भी कोड द्वारा स्रोतों से मिलाए गए।", "trace.passages": "{n} अंश",
   "trace.issues": "{n} समस्या", "trace.step_authorize": "पहुँच जाँच", "trace.step_screen": "अनुरोध जाँच", "trace.step_classify": "अनुरोध समझना",
   "trace.step_tool_policy": "टूल नीति", "trace.step_retrieve": "अधिकृत स्रोतों में खोज", "trace.step_rewrite_query": "खोज सुधारी गई",
-  "trace.step_generate": "उत्तर लिखा गया", "trace.step_verify_citations": "उद्धरण जाँच", "trace.step_calculate": "निश्चित गणना",
-  "trace.step_read_parts": "दस्तावेज़ भागों में पढ़ा गया", "trace.step_output_check": "आउटपुट जाँच", "trace.st_ok": "पूर्ण", "trace.st_blocked": "अस्वीकृत",
+  "trace.step_generate": "उत्तर लिखा गया", "trace.step_verify_citations": "उद्धरण जाँच", "trace.step_calculate": "निश्चित गणना", "trace.step_clock": "घड़ी (AI नहीं)", "trace.step_redirect": "कानूनी दायरे से बाहर", "trace.step_scope_check": "दायरा जाँच", "trace.step_web_search": "लाइव वेब खोज", "trace.step_news_search": "समाचार खोज",
+  "trace.step_read_parts": "दस्तावेज़ भागों में पढ़ा गया", "trace.step_output_check": "आउटपुट जाँच", "trace.st_ok": "पूर्ण", "trace.st_rule": "निश्चित नियम से तय", "trace.st_overridden": "कानूनी प्रश्न माना गया", "trace.st_unverified": "सत्यापित नहीं", "trace.st_unavailable": "उपलब्ध नहीं", "trace.st_empty": "विश्वसनीय कुछ नहीं मिला", "trace.st_blocked": "अस्वीकृत",
   "trace.st_default": "डिफ़ॉल्ट उपयोग (मॉडल उपलब्ध नहीं)", "trace.st_weak": "कमज़ोर मिलान", "trace.st_skipped": "छोड़ा गया",
   "trace.st_fallback": "वैकल्पिक मॉडल द्वारा", "trace.st_partial": "अधूरा", "trace.st_failed": "विफल", "trace.st_issues": "समस्याएँ मिलीं",
   "trace.st_downgraded": "आपकी भूमिका से सीमित", "trace.st_filtered": "कुछ हटाया गया", "acts.version": "v{v} · अद्यतन {date}",

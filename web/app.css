@@ -107,6 +107,7 @@ h1.page-title { font-size: 1.4rem; color: var(--navy); margin: 6px 0 4px; paddin
 .b-family { background: #efe6fb; color: #5b2aa6; } .b-revenue { background: #fff1dc; color: #8a4b00; }
 .b-case { background: #e8f0fe; color: #0b4aa2; } .b-bare_act { background: #fff1dc; color: #8a4b00; }
 .b-judgment { background: #efe6fb; color: #5b2aa6; } .b-draft { background: var(--green-l); color: #0c5a05; }
+.b-web { background: #e6f4f1; color: #0d5c4f; } .b-news { background: #fdecea; color: #8c1d18; }
 
 table.gov { width: 100%; border-collapse: collapse; font-size: .88rem; }
 table.gov th { background: var(--navy); color: #fff; text-align: left; padding: 9px 12px; font-weight: 600; font-size: .84rem; }

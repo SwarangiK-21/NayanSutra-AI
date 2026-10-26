@@ -25,7 +25,7 @@ export const state = { csrf: null, status: null, caseId: store.get("caseId", nul
 // Upload formats (the server checks each file's content, not just its name — see nyaya/security.py).
 export const ACCEPT_UPLOADS = ".pdf,.docx,.doc,.rtf,.odt,.txt,.md,.csv,.tsv,.xlsx,.xls,.ods,.pptx,.png,.jpg,.jpeg,.tif,.tiff,.webp,.bmp,.gif";
 export const TYPE_BADGE = { Civil: "b-civil", Criminal: "b-criminal", Family: "b-family", Revenue: "b-revenue", Consumer: "b-consumer", Writ: "b-writ" };
-export const COLL_LABEL = () => ({ case: t("coll.case"), bare_act: t("coll.bare_act"), judgment: t("coll.judgment"), draft: t("coll.draft") });
+export const COLL_LABEL = () => ({ case: t("coll.case"), bare_act: t("coll.bare_act"), judgment: t("coll.judgment"), draft: t("coll.draft"), web: t("coll.web"), news: t("coll.news") });
 const LOCALE = { en: "en-IN", hi: "hi-IN", mr: "mr-IN" };
 export const locale = () => LOCALE[document.documentElement.lang] || "en-IN";
 export const fmtDate = (d) => { if (!d) return "—"; const x = new Date(d); return isNaN(x) ? d : x.toLocaleDateString(locale(), { day: "2-digit", month: "short", year: "numeric" }); };

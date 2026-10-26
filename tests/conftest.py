@@ -18,6 +18,8 @@ os.environ["NYAYA_DB"] = str(_TMP / "test.db")
 os.environ["NYAYA_HOME"] = str(_TMP / "home")
 os.environ.setdefault("OLLAMA_API_KEY", "test-key")
 os.environ["SYNC_ENABLED"] = "false"  # no background network sync during tests
+os.environ["WEB_SEARCH_ENABLED"] = "false"   # no live web search in the offline suite (tests patch it in)
+os.environ["TIME_CHECK_URL"] = ""           # no network time check (tests patch it in)
 os.environ["REMINDERS_ENABLED"] = "false"  # tests run the reminder dispatcher by hand
 os.environ["SMTP_HOST"] = ""
 os.environ["OCR_DOWNLOAD"] = "false"   # OCR uses only the models bundled with RapidOCR (English)
@@ -72,7 +74,9 @@ class FakeLLM:
     def __init__(self):
         self.calls = []
 
-    def chat_json(self, messages, model=None, default=None, **kw):
+    def chat_json(self, messages, model=None, default=None, info=None, **kw):
+        if info is not None:
+            info["ok"] = True
         text = messages[-1]["content"]
         self.calls.append(("json", text[:60]))
         if "audit" in text.lower():

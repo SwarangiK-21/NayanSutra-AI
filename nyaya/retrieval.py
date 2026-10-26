@@ -217,6 +217,35 @@ def _merge_parts(hits: list[Hit]) -> list[Hit]:
     return out
 
 
+# Everyday words → the wording statutes actually use. Bare acts never say "FIR" or "cheque bounce", so without this a
+# plain question misses the provision that answers it. Used only to widen the search and the re-ranking query.
+LAY_TERMS: list[tuple[re.Pattern, str]] = [(re.compile(p, re.I), t) for p, t in [
+    (r"\bf\.?i\.?r\b|first\s+information\s+report|एफआईआर",
+     "information relating to the commission of a cognizable offence given to an officer in charge of a police station"),
+    (r"police\s+(?:refus\w*|won'?t|will\s+not|did\s+not|didn'?t|not)\s+(?:register|record|file|lodge)|"
+     r"police\s+mana|refus\w*\s+to\s+(?:register|record)",
+     "officer in charge of a police station refuses to record information; substance sent in writing to the "
+     "Superintendent of Police; complaint to Magistrate"),
+    (r"anticipatory\s+bail|pre-?arrest\s+bail", "direction for grant of bail to person apprehending arrest"),
+    (r"\bbail\b|जमानत", "when bail may be taken in case of non-bailable offence; release on bail"),
+    (r"cheque\s+bounce|bounced\s+cheque|dishono\w*\s+(?:of\s+)?(?:a\s+)?cheque",
+     "dishonour of cheque for insufficiency of funds in the account"),
+    (r"charge-?\s?sheet", "report of police officer on completion of investigation"),
+    (r"\bdivorce\b", "dissolution of marriage by a decree of divorce"),
+    (r"\bmaintenance\b|\balimony\b", "order for maintenance of wives, children and parents"),
+    (r"cyber\s*(?:attack|crime|fraud)|\bhack\w*|ransomware|malware|data\s+breach",
+     "computer related offences; unauthorised access to computer resource; damage to computer system; "
+     "cyber terrorism"),
+    (r"\bterror\w*|\b26/11\b", "terrorist act; waging war against the Government of India; unlawful activities"),
+    (r"\bdowry\b", "dowry death; cruelty by husband or relatives of husband"),
+    (r"\bdefam\w*", "defamation; imputation harming reputation"),
+]]
+
+
+def expand_lay_terms(text: str) -> list[str]:
+    return list(dict.fromkeys(t for pat, t in LAY_TERMS if pat.search(text or "")))[:3]
+
+
 def search(query: str, *, scope: str = "all", case_id: str | None = None, doc_ids: set[str] | None = None,
            k: int = config.CONTEXT_PASSAGES, extra_queries: list[str] | None = None,
            exclude: frozenset[str] = frozenset({"draft"}), hint: str = "",
@@ -238,6 +267,11 @@ def search(query: str, *, scope: str = "all", case_id: str | None = None, doc_id
     # `context` = provisions noted on the case file: a moderate signal, not a guarantee.
     ctx_refs = [r for r in citations.parse_refs(context) if r.act and r not in refs] if context else []
     qv = embeddings.embed_query(query)
+    lay = expand_lay_terms(f"{query} {hint}")
+    # Re-rank on what the user actually asked (when it is English) plus the statutory wording: a planner rewrite such
+    # as "procedure to file an FIR under the BNSS" otherwise pulls in every generic "procedure" section.
+    base = hint if hint and hint.isascii() and len(hint) < 400 else query
+    rq = f"{base} ({'; '.join(lay)})" if lay else query
     colls = _collections(scope, exclude)
     inc_case = scope in ("all", "case")
     jur = jurisdiction or None
@@ -247,6 +281,11 @@ def search(query: str, *, scope: str = "all", case_id: str | None = None, doc_id
                                              doc_ids=doc_ids, include_case_docs=inc_case, skip_doc_ids=skip)]
     lists: list[tuple[list[int], float]] = [
         (dense, 1.0), (lexical(query, config.CANDIDATES, scope, case_id, doc_ids, exclude, jur), 1.0)]
+    for phrase in lay:
+        lists.append(([cid for cid, _ in index.search(embeddings.embed_query(phrase), 20, case_id=case_id,
+                                                      collections=colls, doc_ids=doc_ids, include_case_docs=inc_case,
+                                                      skip_doc_ids=skip)], 2.0))   # as strong as a named act
+        lists.append((lexical(phrase, 20, scope, case_id, doc_ids, exclude, jur), 1.0))
     exact_ids = exact(refs, scope, case_id, doc_ids, jurisdiction=jur)
     if exact_ids:
         lists.append((exact_ids, 3.0))
@@ -272,8 +311,8 @@ def search(query: str, *, scope: str = "all", case_id: str | None = None, doc_id
     for h in hits:
         h.exact = h.chunk_id in exact_set
 
-    q_terms = _terms(query + " " + hint)
-    scores = embeddings.rerank(query, [h.header + "\n" + _best_window(h.text, q_terms) for h in hits])
+    q_terms = _terms(rq + " " + hint)
+    scores = embeddings.rerank(rq, [h.header + "\n" + _best_window(h.text, q_terms) for h in hits])
     if scores is not None:
         n = max(1, len(hits))
         for rank, (h, s) in enumerate(zip(hits, scores)):

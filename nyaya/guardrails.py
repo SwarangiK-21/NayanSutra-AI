@@ -202,13 +202,17 @@ class CalcArgs(BaseModel):
 
 class Plan(BaseModel):
     """What the planner model may ask for. Anything else in its output is discarded."""
-    intent: Literal["research", "analyze_document", "drafting", "calculation", "chitchat"] = "research"
+    intent: Literal["research", "analyze_document", "drafting", "calculation", "news", "time", "out_of_scope", "clarify",
+                    "chitchat"] = "research"
     query: str = Field("", max_length=500)
     alt_queries: list[str] = Field(default_factory=list, max_length=2)
     doc_ref: int | None = Field(None, ge=1, le=200)
     analysis: Literal["summary", "timeline", "issues", "parties", "arguments", "custom"] | None = None
     draft_kind: str | None = Field(None, max_length=120)
     calc: CalcArgs | None = None
+    external: bool = False
+    news_scope: Literal["legal", "general"] | None = None
+    clarify_question: str | None = Field(None, max_length=500)
 
     @field_validator("alt_queries", mode="before")
     @classmethod
@@ -223,7 +227,12 @@ class Plan(BaseModel):
         m = re.fullmatch(r"\s*[Dd]?(\d{1,3})\s*", str(v))
         return int(m.group(1)) if m else None
 
-    @field_validator("query", "draft_kind", mode="before")
+    @field_validator("external", mode="before")
+    @classmethod
+    def _flag(cls, v):
+        return v is True or str(v).strip().lower() == "true"
+
+    @field_validator("query", "draft_kind", "clarify_question", mode="before")
     @classmethod
     def _text(cls, v):
         return None if v is None else normalise(str(v))[:500]
@@ -237,6 +246,10 @@ TOOLS: dict[str, dict] = {
     "drafting": {"permission": "drafting.use", "case_action": "drafts"},
     "calculation": {"permission": "research.use", "case_action": None},
     "chitchat": {"permission": "research.use", "case_action": None},
+    "news": {"permission": "research.use", "case_action": None},          # public news + web search; no case data
+    "time": {"permission": "research.use", "case_action": None},          # clock only, no model
+    "out_of_scope": {"permission": "research.use", "case_action": None},  # fixed redirect, no model
+    "clarify": {"permission": "research.use", "case_action": None},
 }
 
 
@@ -317,7 +330,7 @@ def verify_citations(answer: str, source_texts: list[str], allowed_text: str = "
 
 # ── 6. Output scanning ───────────────────────────────────────────────────────
 _SYSTEM_TEXTS = [prompts.ANSWER_SYSTEM, prompts.ANALYZE_SYSTEM, prompts.DRAFT_SYSTEM, prompts.CHAT_SYSTEM,
-                 prompts.PLANNER, prompts.VERIFY]
+                 prompts.PLANNER, prompts.VERIFY, prompts.NEWS_SYSTEM]
 _SYSTEM_LINES = sorted({_norm(line) for t in _SYSTEM_TEXTS for line in re.split(r"[\n]|(?<=[.!?])\s", t)
                         if len(_norm(line)) >= 60 and "{" not in line}, key=len, reverse=True)
 _SECRET_PATTERNS = [

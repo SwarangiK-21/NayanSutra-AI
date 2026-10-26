@@ -614,12 +614,17 @@ function addAiMsg() {
   const el = document.createElement("div"); el.className = "msg msg-ai"; el.dataset.mid = String(++state.msgSeq);
   $("#thread").appendChild(el); return el;
 }
-const INTENT = () => ({ research: t("intent.research"), drafting: t("intent.drafting"), analyze_document: t("intent.analyze_document"), calculation: t("intent.calculation"), chitchat: t("intent.chitchat") });
-// Where the answer came from: everything the chat uses is local (case files + library); the only network call is the LLM.
+const INTENT = () => ({ research: t("intent.research"), drafting: t("intent.drafting"), analyze_document: t("intent.analyze_document"), calculation: t("intent.calculation"), chitchat: t("intent.chitchat"),
+  news: t("intent.news"), time: t("intent.time"), out_of_scope: t("intent.out_of_scope"), clarify: t("intent.clarify") });
+// Intents whose reply is not legal research (no jurisdiction chip, no "not legal advice" line).
+const NON_RESEARCH = ["chitchat", "blocked", "calculation", "time", "out_of_scope", "clarify"];
+// Where the answer came from: case files and the library are local; web/news sources come from a live search.
+const LIVE = ["web", "news"];
 const ORIGIN = (sources) => {
   const kinds = new Set((sources || []).map((s) => s.collection));
   if (!kinds.size) return "";
-  return [kinds.has("case") && t("origin.case_files"), [...kinds].some((k) => k !== "case") && t("origin.library")].filter(Boolean).join(" + ");
+  return [kinds.has("case") && t("origin.case_files"), [...kinds].some((k) => k !== "case" && !LIVE.includes(k)) && t("origin.library"),
+    LIVE.some((k) => kinds.has(k)) && t("origin.web")].filter(Boolean).join(" + ");
 };
 
 function renderAi(el, content, sources, meta, live = null) {
@@ -628,8 +633,9 @@ function renderAi(el, content, sources, meta, live = null) {
   const origin = ORIGIN(sources);
   const metaRow = html`<div class="msg-meta">
     ${meta.intent ? html`<span class="chip">${INTENT()[meta.intent] || meta.intent}</span>` : ""}
-    ${meta.jurisdiction && meta.jurisdiction !== "all" && meta.intent && !["chitchat", "blocked", "calculation"].includes(meta.intent) ? html`<span class="chip" title="${t("research.jur_hint")}">⚖ ${t("research.jur_state_short", { state: meta.jurisdiction })}</span>` : ""}
-    ${origin ? html`<span class="chip" title="${t("origin.hint")}">📂 ${t("origin.answered_from", { where: origin })}</span>` : ""}
+    ${meta.jurisdiction && meta.jurisdiction !== "all" && meta.intent && ![...NON_RESEARCH, "news"].includes(meta.intent) ? html`<span class="chip" title="${t("research.jur_hint")}">⚖ ${t("research.jur_state_short", { state: meta.jurisdiction })}</span>` : ""}
+    ${origin ? html`<span class="chip" title="${t((sources || []).some((s) => LIVE.includes(s.collection)) ? "origin.hint_web" : "origin.hint")}">📂 ${t("origin.answered_from", { where: origin })}</span>` : ""}
+    ${meta.clock ? html`<span class="chip ${meta.clock.verified ? "chip-ok" : "chip-warn"}" title="${meta.clock.source}">🕒 ${t(meta.clock.verified ? "clock.verified" : "clock.unverified")}</span>` : ""}
     ${sources && sources.length ? html`<span class="chip">${t("research.n_sources", { n: sources.length })}</span>` : ""}
     ${meta.fallback_used ? html`<span class="chip chip-warn" title="${t("trace.fallback_hint")}">${t("trace.fallback")}</span>` : ""}
     ${meta.partial ? html`<span class="chip chip-err">${t("trace.partial")}</span>` : ""}
@@ -643,7 +649,7 @@ function renderAi(el, content, sources, meta, live = null) {
     ? html`<div class="verify verify-ok">✓ ${t("research.audit_ok")}</div>`
     : html`<div class="verify verify-warn">⚠ ${t("research.audit_warn")}${v.unsupported && v.unsupported.length ? html`<ul>${v.unsupported.map((u) => html`<li>${u}</li>`)}</ul>` : ""}</div>`) : "";
   const err = meta.error && meta.error !== "internal" && !content.includes(meta.error) ? html`<div class="notice notice-red">${meta.error}</div>` : "";
-  const disclaimer = !live && meta.intent && meta.intent !== "chitchat" ? html`<div class="small muted">${t("research.disclaimer")}</div>` : "";
+  const disclaimer = !live && meta.intent && !NON_RESEARCH.includes(meta.intent) ? html`<div class="small muted">${t("research.disclaimer")}</div>` : "";
   mount(el, html`${metaRow}<div class="md">${markdown(content)}</div>${status}<div class="msg-foot">${err}${verify}${disclaimer}${trace}</div>`);
 }
 
@@ -655,7 +661,9 @@ function renderSourcesPanel(sources) {
     <div><span class="src-n">${s.n}</span><span class="badge b-${s.collection}">${L[s.collection] || s.kind}</span>
       ${s.jurisdiction ? html` <span class="chip ${s.jurisdiction === "Central" ? "" : "chip-wait"}" title="${t("research.jur_chip_hint")}">${s.jurisdiction === "Central" ? t("research.central_law") : s.jurisdiction}</span>` : ""} ${s.exact ? html`<span class="chip chip-ok" title="${t("research.exact_hint")}">${t("research.exact")}</span>` : ""}${s.injection_suspected ? html` <span class="chip chip-warn" title="${t("guard.injection_hint")}">${t("guard.injection")}</span>` : ""}</div>
     <div class="src-title" style="margin-top:4px">${s.title}</div>
-    <div class="small muted">${[s.label, s.page && !/^pp?\./.test(s.label || "") ? `p. ${s.page}` : ""].filter(Boolean).join(" · ")}</div>
+    <div class="small muted">${LIVE.includes(s.collection)
+      ? [s.domain, s.reliability, s.published ? t("research.published", { date: s.published }) : t("research.date_unknown")].filter(Boolean).join(" · ")
+      : [s.label, s.page && !/^pp?\./.test(s.label || "") ? `p. ${s.page}` : ""].filter(Boolean).join(" · ")}</div>
     <div class="src-snip">${s.snippet}</div></div>`)}` : html`<div class="empty">${t("research.no_sources")}</div>`);
 }
 
@@ -669,6 +677,15 @@ function onCiteClick(e) {
 export async function openSource(s) {
   const body = $("#drawerBody");
   const L = COLL_LABEL();
+  if (LIVE.includes(s.collection)) {   // a live web/news source: show the extract and link to the publisher
+    const safe = /^https?:\/\//.test(s.url || "") ? s.url : "";
+    mount(body, html`<h3 style="margin-top:0;color:var(--navy)">${s.title}</h3>
+      <p class="small muted">${[s.domain, s.reliability, s.published ? t("research.published", { date: s.published }) : t("research.date_unknown")].filter(Boolean).join(" · ")}</p>
+      <pre class="passage">${s.snippet}</pre>
+      ${safe ? html`<div class="row" style="margin-top:12px"><a class="btn" href="${safe}" target="_blank" rel="noopener noreferrer">${t("research.open_web")} ↗</a></div>` : ""}`);
+    showDrawer(`${t("research.source")} [${s.n ?? "•"}] — ${L[s.collection] || s.kind || ""}`);
+    return;
+  }
   const fileLink = `/api/documents/${encodeURIComponent(s.doc_id)}/file${s.page ? `#page=${s.page}` : ""}`;
   mount(body, html`<h3 style="margin-top:0;color:var(--navy)">${s.title}</h3><p class="small muted">${[s.label, s.page ? `p. ${s.page}` : ""].filter(Boolean).join(" · ")}</p>
     <div id="passage">${spinner(t("research.loading_passage"))}</div>
