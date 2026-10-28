@@ -34,8 +34,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Iterator
 
-from . import (authz, cases, clock, config, db, guardrails, ingest, integrations, intents, llm, prompts, retrieval,
-               tools, websearch)
+from . import (authz, cases, clock, config, db, guardrails, ingest, integrations, intents, judgments, llm, prompts,
+               retrieval, tools, websearch)
 
 log = logging.getLogger(__name__)
 
@@ -90,6 +90,8 @@ def _kind(h: retrieval.Hit) -> str:
         return "BARE ACT — CENTRAL LAW" if h.jurisdiction == "Central" else f"BARE ACT — STATE LAW: {h.jurisdiction.upper()}"
     if h.collection in ("web", "news"):
         return f"{KIND[h.collection]} — {h.extra.get('domain', '')} ({h.extra.get('reliability', '')})"
+    if h.collection == "judgment" and h.doc_type == judgments.CATALOGUE_TYPE:
+        return "JUDGMENT SUMMARY — SUPREME COURT OF INDIA (official headnote, abridged; full text not loaded)"
     return KIND.get(h.collection, h.collection)
 
 
@@ -100,8 +102,18 @@ def _source_items(hits: list[retrieval.Hit]) -> list[dict]:
              "citation": h.citation(), "snippet": h.text[:320], "exact": h.exact,
              "injection_suspected": guardrails.is_suspicious(h.text),
              **({"url": h.extra.get("url"), "published": h.extra.get("published"), "domain": h.extra.get("domain"),
-                 "reliability": h.extra.get("reliability")} if h.collection in ("web", "news") else {})}
+                 "reliability": h.extra.get("reliability")} if h.collection in ("web", "news") else {}),
+             **(_catalogue_item(h) if h.doc_type == judgments.CATALOGUE_TYPE else {})}
             for i, h in enumerate(hits, 1)]
+
+
+def _catalogue_item(h: retrieval.Hit) -> dict:
+    """A Supreme Court catalogue entry: the official PDF in the open dataset, and whether its full text is loaded."""
+    path = h.section or ""
+    full = judgments.full_text_doc(path)
+    return {"catalogue": True, "dataset_path": path, "kind": "JUDGMENT SUMMARY",
+            "url": judgments.pdf_url(path, path[:4]) if path[:4].isdigit() else None,
+            "full_text": (full or {}).get("status")}
 
 
 def _context(hits: list[retrieval.Hit]) -> str:
@@ -474,6 +486,25 @@ def _research(message: str, p: dict, case: dict | None, docs: list[dict], scope:
     if drafting:
         return
     yield from _audit(message, hits, answer, meta, f"{message}\n{dossier}")
+    _follow_up_judgments(hits, answer, meta)
+
+
+def _follow_up_judgments(hits: list[retrieval.Hit], answer: list[str], meta: dict) -> None:
+    """Supreme Court judgments the answer cited from the catalogue get their full text fetched in the background, so
+    the next question about them is answered from the judgment itself; full texts that are used are kept longest."""
+    try:
+        cited = {int(n) for n in re.findall(r"\[(\d{1,2})\]", normalise_citations("".join(answer)))}
+        used = [h for i, h in enumerate(hits, 1) if i in cited and h.collection == "judgment"]
+        for h in used:
+            if h.doc_type != judgments.CATALOGUE_TYPE:
+                judgments.touch(h.doc_id)
+        if config.SC_AUTO_FETCH:
+            queued = judgments.queue_fetch([h.section for h in used if h.doc_type == judgments.CATALOGUE_TYPE][:2])
+            if queued:
+                meta["judgments_queued"] = queued
+                _step(meta, "judgment_fetch", "queued", count=len(queued))
+    except Exception:   # housekeeping must never break an answer
+        log.exception("Judgment follow-up failed")
 
 
 def _audit(message: str, hits: list[retrieval.Hit], answer: list[str], meta: dict, allowed_text: str) -> Iterator[dict]:

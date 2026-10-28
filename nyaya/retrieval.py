@@ -188,11 +188,14 @@ def load_hits(ids: list[int]) -> list[Hit]:
     if not ids:
         return []
     rows = db.conn().execute(
-        f"SELECT c.id, c.doc_id, c.header, c.text, c.label, c.section, c.page_start, c.page_end, "
+        f"SELECT c.id, c.doc_id, c.header, c.text, c.label, c.section, c.page_start, c.page_end, c.title AS chunk_title, "
         f"d.title, d.collection, d.doc_type, d.jurisdiction FROM chunks c JOIN documents d ON d.id=c.doc_id "
         f"WHERE c.id IN ({','.join('?' * len(ids))}) AND d.status='ready'", ids).fetchall()   # never superseded text
     by_id = {r["id"]: r for r in rows}
-    return [Hit(chunk_id=r["id"], doc_id=r["doc_id"], title=r["title"], collection=r["collection"],
+    # A Supreme Court catalogue entry is titled by its own case, not by the catalogue that holds it.
+    return [Hit(chunk_id=r["id"], doc_id=r["doc_id"],
+                title=(r["chunk_title"] or r["title"]) if r["doc_type"] == "catalogue" else r["title"],
+                collection=r["collection"],
                 doc_type=r["doc_type"], header=r["header"], text=r["text"], label=r["label"], section=r["section"],
                 page_start=r["page_start"], page_end=r["page_end"], jurisdiction=r["jurisdiction"] or "")
             for i in ids if (r := by_id.get(i))]
@@ -217,6 +220,8 @@ def _merge_parts(hits: list[Hit]) -> list[Hit]:
     return out
 
 
+CATALOGUE_PER_ANSWER = 4   # judgments from the Supreme Court catalogue (one entry each) per answer
+
 # Everyday words → the wording statutes actually use. Bare acts never say "FIR" or "cheque bounce", so without this a
 # plain question misses the provision that answers it. Used only to widen the search and the re-ranking query.
 LAY_TERMS: list[tuple[re.Pattern, str]] = [(re.compile(p, re.I), t) for p, t in [
@@ -228,7 +233,9 @@ LAY_TERMS: list[tuple[re.Pattern, str]] = [(re.compile(p, re.I), t) for p, t in 
      "Superintendent of Police; complaint to Magistrate"),
     (r"anticipatory\s+bail|pre-?arrest\s+bail", "direction for grant of bail to person apprehending arrest"),
     (r"\bbail\b|जमानत", "when bail may be taken in case of non-bailable offence; release on bail"),
-    (r"cheque\s+bounce|bounced\s+cheque|dishono\w*\s+(?:of\s+)?(?:a\s+)?cheque",
+    # "check" too: the planner sometimes writes the American spelling ("bounced check"); either word order.
+    (r"(?:cheque|check)s?\s+(?:bounc\w*|dishono\w*|return\w*)|bounc\w*\s+(?:cheque|check)|"
+     r"dishono\w*\s+(?:of\s+)?(?:a\s+)?(?:cheque|check)|चेक\s*(?:का\s+)?(?:बाउंस|बाउन्स|अनादर)",
      "dishonour of cheque for insufficiency of funds in the account"),
     (r"charge-?\s?sheet", "report of police officer on completion of investigation"),
     (r"\bdivorce\b", "dissolution of marriage by a decree of divorce"),
@@ -267,7 +274,7 @@ def search(query: str, *, scope: str = "all", case_id: str | None = None, doc_id
     # `context` = provisions noted on the case file: a moderate signal, not a guarantee.
     ctx_refs = [r for r in citations.parse_refs(context) if r.act and r not in refs] if context else []
     qv = embeddings.embed_query(query)
-    lay = expand_lay_terms(f"{query} {hint}")
+    lay = expand_lay_terms(f"{query} {hint} {' '.join(extra_queries or [])}")
     # Re-rank on what the user actually asked (when it is English) plus the statutory wording: a planner rewrite such
     # as "procedure to file an FIR under the BNSS" otherwise pulls in every generic "procedure" section.
     base = hint if hint and hint.isascii() and len(hint) < 400 else query
@@ -340,7 +347,9 @@ def search(query: str, *, scope: str = "all", case_id: str | None = None, doc_id
     for h in hits:
         if len(picked) >= k:
             break
-        if not single_doc and per_doc.get(h.doc_id, 0) >= config.MAX_PER_DOC:
+        # The Supreme Court catalogue is one document holding a separate entry per judgment: allow a few more.
+        cap = CATALOGUE_PER_ANSWER if h.doc_type == "catalogue" else config.MAX_PER_DOC
+        if not single_doc and per_doc.get(h.doc_id, 0) >= cap:
             continue
         if used + len(h.text) > config.CONTEXT_CHAR_BUDGET and picked:
             continue

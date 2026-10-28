@@ -285,8 +285,29 @@ def test_websearch_ranks_and_filters(monkeypatch):
     ])
     websearch._cache.clear()
     res, why = websearch.search("Kasab judgment, call me on 9876543210 or a@b.com")
-    assert why == "" and [r.domain for r in res] == ["main.sci.gov.in", "thehindu.com", "someblog.example"]
+    assert why == "" and [r.domain for r in res] == ["main.sci.gov.in", "thehindu.com"]   # unknown blog dropped
     assert "9876543210" not in sent[0] and "a@b.com" not in sent[0]
+    res, _ = websearch.search("Kasab judgment", max_tier=4)                                # floor can be relaxed
+    assert [r.domain for r in res] == ["main.sci.gov.in", "thehindu.com", "someblog.example"]
+
+
+def test_only_unknown_websites_means_no_web_sources(monkeypatch):
+    """Like eval item H02: a fictional case found only on aggregator / test sites must not be cited."""
+    monkeypatch.setattr(config, "WEB_SEARCH_ENABLED", True)
+    monkeypatch.setattr(config, "OLLAMA_API_KEY", "k")
+    long = "Ramesh Kumar v. State judgment text " * 20
+    monkeypatch.setattr(websearch, "_call", lambda q, n: [
+        {"title": "Decided cases", "url": "https://supremecourttest.azurewebsites.net/x", "content": long},
+        {"title": "Order", "url": "https://order.law/ramesh", "content": long}])
+    websearch._cache.clear()
+    assert websearch.search("Ramesh Kumar v. State of Atlantis") == ([], websearch.NO_RESULT)
+
+
+def test_cheque_wording_variants_expand():
+    from nyaya import retrieval
+    for t in ("legal action for a bounced check", "cheque dishonour remedy", "चेक बाउंस होने पर"):
+        assert "dishonour of cheque" in " ".join(retrieval.expand_lay_terms(t)), t
+    assert retrieval.expand_lay_terms("check the status of my case") == []
 
 
 def test_websearch_failure_returns_reason(monkeypatch):

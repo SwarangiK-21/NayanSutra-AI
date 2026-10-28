@@ -4,7 +4,7 @@
 * Only the search query leaves the server — never case documents, the case dossier or the chat history — and it is
   pseudonymised first (Aadhaar, PAN, phone, e-mail… become placeholders).
 * Results are ranked by source reliability: official (gov.in / nic.in, courts) and primary legal sources first, then
-  legal publishers and established news organisations; social media and Q&A sites are dropped.
+  legal publishers and established news organisations; social media, Q&A sites and unknown websites are dropped.
 * Each result's text is cut to the passages that best match the query, and is later wrapped in the same
   injection-resistant <source> delimiters as library passages: a web page is data, never instructions.
 * Bounded: one retry, a short timeout and a 10-minute cache, so a question never loops or floods the provider.
@@ -40,6 +40,8 @@ _TIERS: list[tuple[int, re.Pattern]] = [
 _BLOCKED = re.compile(r"(?:^|\.)(?:facebook\.com|instagram\.com|x\.com|twitter\.com|youtube\.com|tiktok\.com|reddit\.com|"
                       r"quora\.com|pinterest\.com|linkedin\.com|telegram\.me|t\.me|medium\.com|blogspot\.com)$")
 TIER_LABEL = {0: "official source", 1: "legal publisher", 2: "news / reference", 4: "other website"}
+# Sources below this tier ("other website": unknown blogs, aggregators, test sites) are never handed to the model.
+RELIABLE_TIER = 2
 
 _cache: dict[tuple, tuple[float, list]] = {}
 _lock = threading.Lock()
@@ -105,14 +107,15 @@ def _call(query: str, max_results: int) -> list[dict]:
     raise RuntimeError(type(last).__name__ if last else "web search failed")
 
 
-def search(query: str, *, max_results: int = 6, keep: int = 4) -> tuple[list[WebResult], str]:
+def search(query: str, *, max_results: int = 8, keep: int = 4,
+           max_tier: int = RELIABLE_TIER) -> tuple[list[WebResult], str]:
     """(ranked results, '' or a short reason why the web could not be searched)."""
     if not enabled():
         return [], "web search is not configured"
     q = privacy.Redactor().redact(re.sub(r"\s+", " ", query or "").strip())[:300]
     if not q:
         return [], "empty query"
-    key = (q.lower(), max_results)
+    key = (q.lower(), max_results, max_tier)
     with _lock:
         hit = _cache.get(key)
         if hit and time.time() - hit[0] < CACHE_SECONDS:
@@ -129,7 +132,7 @@ def search(query: str, *, max_results: int = 6, keep: int = 4) -> tuple[list[Web
         parts = urlsplit(url)
         domain = (parts.hostname or "").lower().removeprefix("www.")
         t = tier(domain) if parts.scheme in ("http", "https") and domain else None
-        if t is None or url in seen:
+        if t is None or t > max_tier or url in seen:
             continue
         seen.add(url)
         title = re.sub(r"\s+", " ", str(item.get("title") or domain)).strip()[:200]

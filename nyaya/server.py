@@ -1796,6 +1796,23 @@ def indiacode_import(body: ImportActIn, p: Principal = Depends(need("library.imp
         raise HTTPException(502, str(exc)) from None
 
 
+class JudgmentFetchIn(BaseModel):
+    path: str = Field(min_length=3, max_length=80, pattern=r"^[\w.-]+$")
+
+
+@app.post("/api/judgments/fetch", dependencies=[Depends(rate(20, "judgment_fetch"))])
+def judgment_fetch(body: JudgmentFetchIn, p: Principal = Depends(need("research.use"))):
+    """Load the full text of one Supreme Court judgment from the open dataset (a background job; public data)."""
+    from . import judgments
+    if not judgments.entry(body.path):
+        raise HTTPException(404, "This judgment is not in the Supreme Court catalogue.")
+    doc = judgments.full_text_doc(body.path)
+    if doc and doc["status"] == "ready":
+        return {"status": "ready", "doc_id": doc["id"]}
+    queued = judgments.queue_fetch([body.path])
+    return {"status": "queued" if queued else (doc or {}).get("status", "queued")}
+
+
 @app.get("/api/library/provision")
 def library_provision(act: str, ref: str, p: Principal = Depends(need("library.read"))):
     from . import library

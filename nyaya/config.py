@@ -162,6 +162,11 @@ WEB_SEARCH_ENABLED = _bool("WEB_SEARCH_ENABLED", bool(OLLAMA_API_KEY))
 WEB_SEARCH_URL = _env("WEB_SEARCH_URL", default="https://ollama.com/api/web_search")
 WEB_SEARCH_TIMEOUT = float(_env("WEB_SEARCH_TIMEOUT", default="20"))
 
+# Supreme Court judgments (open dataset): every judgment is in the catalogue; full texts are fetched on demand and at
+# most this many are kept (least recently used removed first), which keeps the database inside the 500 MB free tier.
+SC_FULLTEXT_MAX = int(_env("SC_FULLTEXT_MAX", default="500"))
+SC_AUTO_FETCH = _bool("SC_AUTO_FETCH", True)   # fetch the full text of judgments that research answers rely on
+
 # ── Server / security ───────────────────────────────────────────────────────
 APP_HOST = _env("APP_HOST", default="127.0.0.1")
 APP_PORT = int(_env("APP_PORT", default="8000"))

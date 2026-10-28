@@ -46,6 +46,18 @@ def ingest_task(params: dict, ctx: jobs.Ctx) -> dict:
     return {"doc_id": doc_id, "status": res.get("status"), "passages": res.get("n_chunks"), "error": res.get("error")}
 
 
+@jobs.handler("judgment_fetch", lane="ingest", max_attempts=config.INGEST_MAX_ATTEMPTS,
+              timeout=config.INGEST_TIMEOUT_SECONDS)
+def judgment_fetch_task(params: dict, ctx: jobs.Ctx) -> dict:
+    """Full text of one Supreme Court judgment from the open dataset (public data; no case or user data involved)."""
+    from . import judgments
+    try:
+        doc = judgments.fetch_full_text(str(params.get("path") or ""))
+    except judgments.JudgmentError as exc:
+        raise jobs.Rejected(str(exc)) from exc
+    return {"doc_id": doc.get("id"), "status": doc.get("status"), "passages": doc.get("n_chunks")}
+
+
 # ── Document intelligence ────────────────────────────────────────────────────
 def authorize_doc_ai(p: authz.Principal, params: dict) -> None:
     collection, _ = authz.require_document(p, params["doc_id"], "documents.ai")

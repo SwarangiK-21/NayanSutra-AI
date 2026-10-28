@@ -659,7 +659,7 @@ function renderSourcesPanel(sources) {
   const L = COLL_LABEL();
   mount($("#sourcesPanel"), sources.length ? html`${sources.map((s) => html`<div class="src-card" role="button" tabindex="0" data-src="${JSON.stringify(s)}">
     <div><span class="src-n">${s.n}</span><span class="badge b-${s.collection}">${L[s.collection] || s.kind}</span>
-      ${s.jurisdiction ? html` <span class="chip ${s.jurisdiction === "Central" ? "" : "chip-wait"}" title="${t("research.jur_chip_hint")}">${s.jurisdiction === "Central" ? t("research.central_law") : s.jurisdiction}</span>` : ""} ${s.exact ? html`<span class="chip chip-ok" title="${t("research.exact_hint")}">${t("research.exact")}</span>` : ""}${s.injection_suspected ? html` <span class="chip chip-warn" title="${t("guard.injection_hint")}">${t("guard.injection")}</span>` : ""}</div>
+      ${s.jurisdiction ? html` <span class="chip ${s.jurisdiction === "Central" ? "" : "chip-wait"}" title="${t("research.jur_chip_hint")}">${s.jurisdiction === "Central" ? t("research.central_law") : s.jurisdiction}</span>` : ""} ${s.exact ? html`<span class="chip chip-ok" title="${t("research.exact_hint")}">${t("research.exact")}</span>` : ""}${s.injection_suspected ? html` <span class="chip chip-warn" title="${t("guard.injection_hint")}">${t("guard.injection")}</span>` : ""}${s.catalogue ? html` <span class="chip ${s.full_text === "ready" ? "chip-ok" : "chip-wait"}" title="${t("sc.hint")}">${t(s.full_text === "ready" ? "sc.full_text" : "sc.headnote_only")}</span>` : ""}</div>
     <div class="src-title" style="margin-top:4px">${s.title}</div>
     <div class="small muted">${LIVE.includes(s.collection)
       ? [s.domain, s.reliability, s.published ? t("research.published", { date: s.published }) : t("research.date_unknown")].filter(Boolean).join(" · ")
@@ -677,6 +677,29 @@ function onCiteClick(e) {
 export async function openSource(s) {
   const body = $("#drawerBody");
   const L = COLL_LABEL();
+  if (s.catalogue) {   // a Supreme Court catalogue entry: headnote here, full text on request
+    const safe = /^https:\/\//.test(s.url || "") ? s.url : "";
+    mount(body, html`<h3 style="margin-top:0;color:var(--navy)">${s.title}</h3>
+      <p class="small muted">${[s.label, t("sc.court")].filter(Boolean).join(" · ")}</p>
+      <div id="passage">${spinner(t("research.loading_passage"))}</div>
+      <p class="small muted">${t("sc.attribution")}</p>
+      <div class="row" style="margin-top:12px">
+        ${safe ? html`<a class="btn" href="${safe}" target="_blank" rel="noopener noreferrer">${t("sc.open_pdf")} ↗</a>` : ""}
+        ${s.full_text === "ready" ? html`<span class="chip chip-ok">${t("sc.full_text")}</span>` : html`<button type="button" class="btn btn-primary" id="scFetch">${t("sc.load_full")}</button>`}
+      </div>`);
+    showDrawer(`${t("research.source")} [${s.n ?? "•"}] — ${t("sc.summary")}`);
+    const btn = $("#scFetch");
+    if (btn) btn.onclick = async () => {
+      btn.disabled = true;
+      try { const r = await api("/api/judgments/fetch", { method: "POST", body: { path: s.dataset_path } });
+        toast(t(r.status === "ready" ? "sc.ready" : "sc.queued")); }
+      catch (e) { btn.disabled = false; toast(e.message, true); }
+    };
+    try { const c = await api(`/api/chunks/${encodeURIComponent(s.chunk_id)}`);
+      mount($("#passage"), html`<pre class="passage">${c.text}</pre>`); }
+    catch (e) { mount($("#passage"), html`<div class="notice notice-red">${e.message}</div>`); }
+    return;
+  }
   if (LIVE.includes(s.collection)) {   // a live web/news source: show the extract and link to the publisher
     const safe = /^https?:\/\//.test(s.url || "") ? s.url : "";
     mount(body, html`<h3 style="margin-top:0;color:var(--navy)">${s.title}</h3>
