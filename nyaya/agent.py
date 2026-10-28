@@ -522,7 +522,7 @@ def _audit(message: str, hits: list[retrieval.Hit], answer: list[str], meta: dic
     # Deterministic check, independent of the model: every section/article and case citation must be in a source.
     fabricated = guardrails.verify_citations(
         text, [f"{h.label or ''} {h.title}\n{h.header}\n{h.text}" for h in hits],
-        allowed_text=allowed_text)
+        allowed_text=allowed_text, case_lookup=judgments.describe_case)   # cases checked against the SC register
     unsupported += fabricated
     grounded = (v.get("grounded") is not False) and not invalid and not unsupported
     if not cited:

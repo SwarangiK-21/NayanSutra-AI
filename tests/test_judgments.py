@@ -55,7 +55,9 @@ def catalogue(fresh_db):
         items = [judgments.parse_record(REC, 2012)]
         other = dict(judgments.parse_record(REC, 2012), path="1985_3_985_990", title="GOVIND SARAN versus COMMISSIONER OF SALES TAX",
                      neutral="1985 INSC 107", headnote="Central Sales Tax Act – goods of special importance.")
-        assert judgments.add_to_catalogue(items + [other]) == 2
+        maneka = dict(judgments.parse_record(REC, 1978), path="1978_2_621_734", title="MANEKA GANDHI versus UNION OF INDIA AND ANR.",
+                      neutral="1978 INSC 16", decided="1978-01-25", headnote="Passports Act – personal liberty – Article 21.")
+        assert judgments.add_to_catalogue(items + [other, maneka]) == 3
         assert judgments.add_to_catalogue(items) == 0          # resumable: never added twice
     yield
     judgments._cat_id.clear()
@@ -74,7 +76,54 @@ def test_catalogue_is_searchable_as_a_judgment(catalogue):
 
 def test_catalogue_allows_several_judgments_per_answer(catalogue):
     hits, _ = retrieval.search("Supreme Court judgment", scope="library")
-    assert sum(h.doc_type == "catalogue" for h in hits) == 2   # both entries, not capped at one document's share
+    assert sum(h.doc_type == "catalogue" for h in hits) == 3   # all entries, not capped at one document's share
+
+
+def _cases_check(answer):
+    from nyaya import guardrails
+    return guardrails.verify_citations(answer, ["Section 103 of the Bharatiya Nyaya Sanhita"],
+                                       case_lookup=judgments.describe_case)
+
+
+def test_real_case_not_in_sources_is_identified(catalogue):
+    issues = _cases_check("See Kasab v. State of Maharashtra (2012) on the death sentence.")
+    assert any("real Supreme Court judgment (2012 INSC 341, decided 2012-08-29)" in i for i in issues)
+
+
+def test_wrong_year_is_flagged(catalogue):
+    issues = _cases_check("As held in Kasab v. State of Maharashtra (2015), the sentence stands.")
+    assert any("but not from 2015" in i for i in issues)
+
+
+def test_invented_case_is_flagged(catalogue):
+    issues = _cases_check("In Ramesh Kumarswamy v. Union of Atlantis (2012) the court held otherwise.")
+    assert any("not found among the Supreme Court judgments" in i for i in issues)
+
+
+def test_neutral_and_scr_citations_are_checked(catalogue):
+    issues = _cases_check("The rule was stated in 2012 INSC 341 and in [2012] 9 S.C.R. 1; contrast 2012 INSC 999.")
+    assert sum("real Supreme Court judgment (MOHD. AJMAL" in i for i in issues) == 2
+    assert any("2012 INSC 999" in i and "has this citation" in i for i in issues)
+
+
+def test_union_of_india_cases_are_looked_up(catalogue):
+    issues = _cases_check("Maneka Gandhi v. Union of India (1978) widened personal liberty.")
+    assert any("real Supreme Court judgment (1978 INSC 16, decided 1978-01-25)" in i for i in issues)
+    issues = _cases_check("Maneka Gandhi v. Union of India (1985) widened personal liberty.")
+    assert any("but not from 1985" in i for i in issues)
+
+
+def test_generic_names_and_other_reporters_are_not_guessed(catalogue):
+    issues = _cases_check("State v. Union of India and (2010) 5 SCC 1 are discussed.")
+    assert issues and not any("register" in i or "real Supreme Court" in i for i in issues)
+
+
+def test_case_in_sources_is_not_flagged(catalogue):
+    from nyaya import guardrails
+    issues = guardrails.verify_citations("Kasab v. State of Maharashtra (2012) [1]",
+                                         ["MOHD. AJMAL AMIR KASAB versus STATE OF MAHARASHTRA"],
+                                         case_lookup=judgments.describe_case)
+    assert issues == []
 
 
 def _fake_pdf_client(monkeypatch, body=b"%PDF-1.4 fake"):

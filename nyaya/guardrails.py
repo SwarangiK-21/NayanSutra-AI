@@ -286,7 +286,9 @@ def allowed_intent(principal, intent: str, case_id: str | None) -> str:
 _CASE_NAME = re.compile(r"\b([A-Z][A-Za-z.&']+(?:\s+[A-Z][A-Za-z.&']+){0,5})\s+(?:v\.?|vs\.?|versus)\s+"
                         r"((?:the\s+)?[A-Z][A-Za-z.&']+(?:\s+(?:of\s+)?[A-Z][A-Za-z.&']+){0,5})")
 _REPORTER = re.compile(r"\(\d{4}\)\s*\d{1,3}\s*SCC\s*\d{1,4}|\bAIR\s*\d{4}\s*(?:SC|[A-Z][a-z]{1,10})\s*\d{1,5}|"
-                       r"\b\d{4}\s*SCC\s*OnLine\s*\w{2,10}\s*\d{1,6}|\b\d{4}\s*INSC\s*\d{1,5}")
+                       r"\b\d{4}\s*SCC\s*OnLine\s*\w{2,10}\s*\d{1,6}|\b\d{4}\s*INSC\s*\d{1,5}|"
+                       r"\[\d{4}\]\s*\d{1,2}\s*S\.?\s?C\.?\s?R\.?\s*\d{1,4}")
+_YEAR_AFTER = re.compile(r"^[^.;\n]{0,40}?\b(19[5-9]\d|20[0-4]\d)\b")
 _STOP_PARTY = {"the", "state", "of", "union", "india", "and", "others", "ors", "anr", "another", "mr", "mrs", "ms", "m/s"}
 
 
@@ -298,9 +300,11 @@ def _key_words(party: str) -> list[str]:
     return [w for w in _norm(party).split() if w not in _STOP_PARTY and len(w) > 2]
 
 
-def verify_citations(answer: str, source_texts: list[str], allowed_text: str = "") -> list[str]:
+def verify_citations(answer: str, source_texts: list[str], allowed_text: str = "", case_lookup=None) -> list[str]:
     """Statutory references and case citations in the answer that no source supports.
-    `allowed_text` = the user's question and case dossier (things the user told us)."""
+    `allowed_text` = the user's question and case dossier (things the user told us).
+    `case_lookup(name=…, parties=(a_words, b_words), year=…)` / `case_lookup(citation=…)` may add what a register of
+    real judgments says about a case the sources do not contain (real, wrong year, or not found)."""
     corpus = "\n".join(source_texts)
     src_refs = {(r.key, r.act) for r in citations.parse_refs(corpus)}
     src_keys = {k for k, _ in src_refs}
@@ -315,16 +319,25 @@ def verify_citations(answer: str, source_texts: list[str], allowed_text: str = "
                     f"{r.key[1:]}" + (f" of the {r.act}" if r.act else "")
             issues.append(f"Mentions {label}, which is not in the retrieved sources.")
     norm_corpus = _norm(corpus + "\n" + allowed_text)
+    def note(**kw) -> str:
+        try:
+            extra = case_lookup(**kw) if case_lookup else ""
+        except Exception:   # the register is a bonus; the check above never depends on it
+            extra = ""
+        return f" {extra}" if extra else ""
+
     for m in _REPORTER.finditer(answer):
         if _norm(m.group(0)) not in norm_corpus:
-            issues.append(f"Cites “{m.group(0)}”, which does not appear in the sources.")
+            issues.append(f"Cites “{m.group(0)}”, which does not appear in the sources." + note(citation=m.group(0)))
     for m in _CASE_NAME.finditer(answer):
         a, b = _key_words(m.group(1)), _key_words(m.group(2))
         if not a and not b:
             continue
         words = (a[-1:] + b[:1])
         if not all(re.search(rf"\b{re.escape(w)}\b", norm_corpus) for w in words):
-            issues.append(f"Refers to the case “{m.group(0)[:80]}”, which does not appear in the sources.")
+            y = _YEAR_AFTER.match(answer[m.end():])
+            issues.append(f"Refers to the case “{m.group(0)[:80]}”, which does not appear in the sources."
+                          + note(name=m.group(0)[:80], parties=(a, b), year=int(y.group(1)) if y else None))
     return list(dict.fromkeys(issues))[:8]
 
 

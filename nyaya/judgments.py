@@ -226,6 +226,100 @@ def entry(section: str) -> dict | None:
     return dict(row) if row else None
 
 
+# ── Checking case names an answer mentions ───────────────────────────────────
+def _decided(header: str) -> str:
+    m = re.search(r"decided (\d{4}-\d{2}-\d{2})", header or "")
+    return m.group(1) if m else ""
+
+
+def _year_covered(year: int) -> bool:
+    cid = catalogue_id()
+    return bool(cid and db.conn().execute("SELECT 1 FROM chunks WHERE doc_id=? AND chapter=? LIMIT 1",
+                                          (cid, str(year))).fetchone())
+
+
+_LEAD_IN = {"see", "in", "also", "cf", "per", "case", "held", "following", "judgment", "decision", "as", "and", "but",
+            "the", "this", "that", "where", "under"}
+_GENERIC_PARTY = re.compile(r"^(?:the\s+)?(union\s+of\s+india|state\s+of\s+[a-z ]+?)\s*(?:&|and|ors\.?|anr\.?|$)", re.I)
+
+
+def _search_terms(name: str | None, parties) -> list[str]:
+    """Title fragments that must all appear: the first party's last two distinctive words, and the second party's
+    first two — or, when the second party is a generic one such as "Union of India", that whole phrase."""
+    a, b = parties
+    a_words = [w for w in a if w not in _LEAD_IN and len(w) >= 3][-2:]
+    b_words = [w for w in b if len(w) >= 3][:2]
+    terms = a_words + b_words
+    if not b_words and name:
+        raw_b = re.split(r"\s+(?:v\.?|vs\.?|versus)\s+", name, maxsplit=1, flags=re.I)[-1]
+        m = _GENERIC_PARTY.match(raw_b.strip())
+        if m:
+            terms.append(re.sub(r"\s+", " ", m.group(1).lower()))
+    return terms
+
+
+def find_case(terms: list[str], limit: int = 5) -> list[dict]:
+    """Catalogue entries whose title contains every term (at least two, so a lone surname never matches)."""
+    cid = catalogue_id()
+    if not cid or len(terms) < 2:   # e.g. "State v. Union of India": too generic to look up
+        return []
+    sql = "SELECT label, title, chapter, header FROM chunks WHERE doc_id=?" + " AND LOWER(title) LIKE ?" * len(terms)
+    rows = db.conn().execute(sql + " LIMIT ?", (cid, *[f"%{w}%" for w in terms], limit)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def find_citation(citation: str) -> tuple[dict | None, int | None]:
+    """(catalogue entry, year) for a neutral (YYYY INSC N) or SCR ([YYYY] V S.C.R. P) citation; (None, None) when
+    the citation is of a kind the register cannot check (SCC, AIR, …)."""
+    cid = catalogue_id()
+    if not cid:
+        return None, None
+    m = re.fullmatch(r"\s*(\d{4})\s*INSC\s*(\d{1,5})\s*", citation)
+    if m:
+        row = db.conn().execute("SELECT label, title, chapter, header FROM chunks WHERE doc_id=? AND label=?",
+                                (cid, f"{m.group(1)} INSC {int(m.group(2))}")).fetchone()
+        return (dict(row) if row else None), int(m.group(1))
+    m = re.fullmatch(r"\s*\[(\d{4})\]\s*(\d{1,2})\s*S\.?\s?C\.?\s?R\.?\s*(\d{1,4})\s*", citation)
+    if m:
+        row = db.conn().execute("SELECT label, title, chapter, header FROM chunks WHERE doc_id=? AND header LIKE ?",
+                                (cid, f"%[{m.group(1)}] {int(m.group(2))} S.C.R. {int(m.group(3))}%")).fetchone()
+        return (dict(row) if row else None), int(m.group(1))
+    return None, None
+
+
+def describe_case(*, name: str | None = None, parties=None, year: int | None = None,
+                  citation: str | None = None) -> str:
+    """What the Supreme Court register says about a case or citation an answer mentions but its sources do not
+    contain. Empty when the register cannot tell (other courts' reporters, generic party names, catalogue absent)."""
+    if citation:
+        row, y = find_citation(citation)
+        if row:
+            return (f"It is a real Supreme Court judgment ({row['title'][:90]}, decided {_decided(row['header'])}), "
+                    "but not one of this answer's sources — check how it is described.")
+        if y and _year_covered(y):
+            return "No Supreme Court judgment in the register (1950–2025) has this citation — it may be wrong."
+        return ""
+    if not parties:
+        return ""
+    terms = _search_terms(name, parties)
+    rows = find_case(terms)
+    if not rows:
+        if len(terms) >= 2 and catalogue_id() and (year is None or _year_covered(year)):
+            return ("It was not found among the Supreme Court judgments in the register (1950–2025) either — "
+                    "it may be wrong, or from another court; verify it before relying on it.")
+        return ""
+    if year:
+        same = [r for r in rows if str(year) in (r["chapter"], _decided(r["header"])[:4])]
+        if not same:
+            r = rows[0]
+            return (f"A Supreme Court judgment with these parties exists ({r['label']}, decided {_decided(r['header'])}), "
+                    f"but not from {year} — check the year and citation.")
+        rows = same
+    r = rows[0]
+    return (f"It is a real Supreme Court judgment ({r['label']}, decided {_decided(r['header'])}), but not one of "
+            "this answer's sources — check how it is described.")
+
+
 # ── Full text on demand ──────────────────────────────────────────────────────
 def full_text_doc(path: str) -> dict | None:
     row = db.conn().execute("SELECT id, status FROM documents WHERE collection='judgment' AND sha256 LIKE ? ",
