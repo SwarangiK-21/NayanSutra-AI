@@ -232,6 +232,20 @@ def _decided(header: str) -> str:
     return m.group(1) if m else ""
 
 
+def _complete() -> bool:
+    """Whether the register covers (nearly) every year, so "not found" means something. Cached once true."""
+    if _cat_id.get("complete"):
+        return True
+    cid = catalogue_id()
+    if not cid:
+        return False
+    years = db.conn().execute("SELECT COUNT(DISTINCT chapter) AS n FROM chunks WHERE doc_id=?", (cid,)).fetchone()["n"]
+    ok = years >= (LAST_YEAR - FIRST_YEAR + 1) - 2
+    if ok:
+        _cat_id["complete"] = True
+    return ok
+
+
 def _year_covered(year: int) -> bool:
     cid = catalogue_id()
     return bool(cid and db.conn().execute("SELECT 1 FROM chunks WHERE doc_id=? AND chapter=? LIMIT 1",
@@ -244,10 +258,10 @@ _GENERIC_PARTY = re.compile(r"^(?:the\s+)?(union\s+of\s+india|state\s+of\s+[a-z 
 
 
 def _search_terms(name: str | None, parties) -> list[str]:
-    """Title fragments that must all appear: the first party's last two distinctive words, and the second party's
+    """Title fragments that must all appear: the first party's last distinctive word, and the second party's
     first two — or, when the second party is a generic one such as "Union of India", that whole phrase."""
     a, b = parties
-    a_words = [w for w in a if w not in _LEAD_IN and len(w) >= 3][-2:]
+    a_words = [w for w in a if w not in _LEAD_IN and len(w) >= 3][-1:]   # surname-like word; titles vary in the rest
     b_words = [w for w in b if len(w) >= 3][:2]
     terms = a_words + b_words
     if not b_words and name:
@@ -258,13 +272,22 @@ def _search_terms(name: str | None, parties) -> list[str]:
     return terms
 
 
-def find_case(terms: list[str], limit: int = 5) -> list[dict]:
+# Party words are compared in their full form ("government"); register titles use either form.
+_ALT_FORMS = {"government": ["govt"], "limited": ["ltd"], "corporation": ["corpn", "corp."], "company": ["co."],
+              "university": ["univ"], "uttar": ["u.p", "u. p"], "madhya": ["m.p", "m. p"], "association": ["assn"]}
+
+
+def find_case(terms: list[str], limit: int = 8) -> list[dict]:
     """Catalogue entries whose title contains every term (at least two, so a lone surname never matches)."""
     cid = catalogue_id()
     if not cid or len(terms) < 2:   # e.g. "State v. Union of India": too generic to look up
         return []
-    sql = "SELECT label, title, chapter, header FROM chunks WHERE doc_id=?" + " AND LOWER(title) LIKE ?" * len(terms)
-    rows = db.conn().execute(sql + " LIMIT ?", (cid, *[f"%{w}%" for w in terms], limit)).fetchall()
+    sql, args = "SELECT label, title, chapter, header FROM chunks WHERE doc_id=?", [cid]
+    for w in terms:
+        forms = [w] + _ALT_FORMS.get(w, [])
+        sql += " AND (" + " OR ".join(["LOWER(title) LIKE ?"] * len(forms)) + ")"
+        args += [f"%{f}%" for f in forms]
+    rows = db.conn().execute(sql + " LIMIT ?", (*args, limit)).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -304,17 +327,24 @@ def describe_case(*, name: str | None = None, parties=None, year: int | None = N
     terms = _search_terms(name, parties)
     rows = find_case(terms)
     if not rows:
-        if len(terms) >= 2 and catalogue_id() and (year is None or _year_covered(year)):
+        if len(terms) >= 2 and catalogue_id() and (_year_covered(year) if year else _complete()):
             return ("It was not found among the Supreme Court judgments in the register (1950–2025) either — "
                     "it may be wrong, or from another court; verify it before relying on it.")
         return ""
-    if year:
-        same = [r for r in rows if str(year) in (r["chapter"], _decided(r["header"])[:4])]
+    if year:   # ±1: a judgment is often reported in the year after it was decided, e.g. (2014) 2 SCC 1 for Nov 2013
+        def years(r):
+            y = {r["chapter"], _decided(r["header"])[:4]}
+            return {int(x) for x in y if x.isdigit()}
+        same = [r for r in rows if any(abs(year - y) <= 1 for y in years(r))]
         if not same:
-            r = rows[0]
-            return (f"A Supreme Court judgment with these parties exists ({r['label']}, decided {_decided(r['header'])}), "
-                    f"but not from {year} — check the year and citation.")
+            listed = "; ".join(f"{r['label']}, decided {_decided(r['header'])}" for r in rows[:3])
+            return (f"Supreme Court judgments with these parties exist ({listed}), but none from {year} — check the year "
+                    "and citation.")
         rows = same
+    if len(rows) > 1:
+        listed = "; ".join(f"{r['label']}, decided {_decided(r['header'])}" for r in rows[:3])
+        return (f"The register has {len(rows)}{'+' if len(rows) >= 8 else ''} Supreme Court judgments with these parties "
+                f"(e.g. {listed}); none is among this answer's sources — check which one is meant.")
     r = rows[0]
     return (f"It is a real Supreme Court judgment ({r['label']}, decided {_decided(r['header'])}), but not one of "
             "this answer's sources — check how it is described.")

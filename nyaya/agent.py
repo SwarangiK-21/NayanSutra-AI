@@ -39,6 +39,11 @@ from . import (authz, cases, clock, config, db, guardrails, ingest, integrations
 
 log = logging.getLogger(__name__)
 
+# Standard abbreviations shown with each statute, so an answer never calls the BNSS "BNS".
+ABBREVIATIONS = (("Bharatiya Nagarik Suraksha Sanhita", "BNSS"), ("Bharatiya Nyaya Sanhita", "BNS"),
+                 ("Bharatiya Sakshya Adhiniyam", "BSA"), ("Indian Penal Code", "IPC"), ("Code of Civil Procedure", "CPC"),
+                 ("Negotiable Instruments Act", "NI Act"), ("Information Technology Act", "IT Act"),
+                 ("Hindu Marriage Act", "HMA"), ("Unlawful Activities (Prevention) Act", "UAPA"))
 KIND = {"case": "CASE FILE", "bare_act": "BARE ACT", "judgment": "JUDGMENT", "draft": "TEMPLATE", "web": "WEB",
         "news": "NEWS"}
 
@@ -87,7 +92,9 @@ def _case_docs(case_id: str | None) -> list[dict]:
 def _kind(h: retrieval.Hit) -> str:
     """Source type as the model sees it; statutes say whose law they are (central, or one state's)."""
     if h.collection == "bare_act" and h.jurisdiction:
-        return "BARE ACT — CENTRAL LAW" if h.jurisdiction == "Central" else f"BARE ACT — STATE LAW: {h.jurisdiction.upper()}"
+        abbr = next((a for name, a in ABBREVIATIONS if name in h.title), None)   # the model copies the right one
+        return ("BARE ACT — CENTRAL LAW" if h.jurisdiction == "Central" else f"BARE ACT — STATE LAW: {h.jurisdiction.upper()}") \
+            + (f" (abbreviation: {abbr})" if abbr else "")
     if h.collection in ("web", "news"):
         return f"{KIND[h.collection]} — {h.extra.get('domain', '')} ({h.extra.get('reliability', '')})"
     if h.collection == "judgment" and h.doc_type == judgments.CATALOGUE_TYPE:
@@ -472,6 +479,11 @@ def _research(message: str, p: dict, case: dict | None, docs: list[dict], scope:
         yield {"type": "token", "text": text}
         return
 
+    if not drafting:   # whole provisions, and the old/new criminal-code counterpart of a section, as sources
+        n = len(hits)
+        hits = retrieval.complete_sections(retrieval.add_counterparts(hits))
+        if len(hits) > n:
+            _step(meta, "counterparts", "ok", added=len(hits) - n)
     sources.extend(_source_items(hits))
     yield {"type": "sources", "items": sources}
     yield {"type": "status", "step": "generate", "text": "Drafting…" if drafting else "Writing a cited answer…"}
@@ -507,6 +519,25 @@ def _follow_up_judgments(hits: list[retrieval.Hit], answer: list[str], meta: dic
         log.exception("Judgment follow-up failed")
 
 
+_DISCLOSED = re.compile(r"(?im)^.*not in the provided sources.*$")
+_ABSTAINS = re.compile(r"(?:sources?|materials?|documents?|library)\s+(?:provided\s+)?(?:do(?:es)?\s+not|don't|did\s+not)\s+"
+                       r"(?:contain|cover|mention|include|address|discuss)|not\s+(?:found|covered)\s+in\s+the\s+"
+                       r"(?:provided\s+)?sources|won't guess", re.I)
+
+
+def _audit_items(items) -> tuple[list[str], list[str]]:
+    """(major, minor) claims from the auditor; a plain string (older reply format) counts as major."""
+    major, minor = [], []
+    for u in items or []:
+        if isinstance(u, dict):
+            claim = str(u.get("claim") or u.get("description") or "").strip()[:300]
+            if claim:
+                (minor if str(u.get("severity", "major")).lower() == "minor" else major).append(claim)
+        elif str(u).strip():
+            major.append(str(u).strip()[:300])
+    return major, minor
+
+
 def _audit(message: str, hits: list[retrieval.Hit], answer: list[str], meta: dict, allowed_text: str) -> Iterator[dict]:
     """Citation audit: deterministic check for out-of-range numbers + LLM check of support."""
     text = normalise_citations("".join(answer))
@@ -514,21 +545,30 @@ def _audit(message: str, hits: list[retrieval.Hit], answer: list[str], meta: dic
     invalid = sorted(n for n in cited if n < 1 or n > len(hits))
     yield {"type": "status", "step": "verify", "text": "Checking citations against sources…"}
     info = {}
-    v = llm.chat_json([{"role": "user", "content": prompts.VERIFY.format(sources=_context(hits)[:24000], answer=text)}],
+    v = llm.chat_json([{"role": "user", "content": prompts.VERIFY.format(sources=_context(hits)[:48000], answer=text)}],
                       model=config.FAST_LLM_MODEL, default={"grounded": None, "unsupported": []}, info=info)
-    unsupported = [str(u)[:300] for u in (v.get("unsupported") or [])][:6]
+    major, minor = _audit_items(v.get("unsupported"))
+    unsupported = major[:6]
     if invalid:
         unsupported.append(f"Cites source numbers that do not exist: {invalid}")
     # Deterministic check, independent of the model: every section/article and case citation must be in a source.
+    # Lines the answer itself labels "Not in the provided sources" are disclosed as unverified, so they are skipped.
     fabricated = guardrails.verify_citations(
-        text, [f"{h.label or ''} {h.title}\n{h.header}\n{h.text}" for h in hits],
+        _DISCLOSED.sub("", text), [f"{h.label or ''} {h.title}\n{h.header}\n{h.text}" for h in hits],
         allowed_text=allowed_text, case_lookup=judgments.describe_case)   # cases checked against the SC register
     unsupported += fabricated
-    grounded = (v.get("grounded") is not False) and not invalid and not unsupported
+    # The model's verdict counts only through major items; a "false" with nothing major listed is a wording quibble.
+    model_ok = v.get("grounded") is not False or (not major and bool(minor))
+    grounded = model_ok and not invalid and not unsupported
+    note = None
     if not cited:
-        grounded, unsupported = False, unsupported or ["The answer contains no citations."]
+        if not unsupported and _ABSTAINS.search(text):   # it says the sources do not cover it and asserts nothing
+            grounded, note = True, "No legal claims made: the answer says the sources do not cover the question."
+        else:
+            grounded, unsupported = False, unsupported or ["The answer contains no citations."]
     meta["verify"] = {"grounded": grounded, "unsupported": unsupported, "checked": v.get("grounded") is not None,
-                      "citation_check": "deterministic", "unverified_citations": len(fabricated)}
+                      "citation_check": "deterministic", "unverified_citations": len(fabricated),
+                      "minor": minor[:6], **({"note": note} if note else {})}
     # The model-based audit can fail (provider down); the deterministic check always runs. Never report "verified"
     # when the model audit did not happen.
     _step(meta, "verify_citations", "ok" if grounded else "issues" if meta["verify"]["checked"] else "partial",

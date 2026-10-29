@@ -1,0 +1,1398 @@
+{
+ "run_at": "2026-10-29T03:28:58+00:00",
+ "runs": 2,
+ "answers": 42,
+ "grounded": 28,
+ "items": [
+  {
+   "id": "R01",
+   "category": "Statute lookup",
+   "question": "What does Section 138 of the Negotiable Instruments Act say?",
+   "intent": "research",
+   "seconds": 40.7,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Negotiable Instruments Act, 1881 Section 138",
+    "bare_act: The Negotiable Instruments Act, 1881 Preamble",
+    "bare_act: The Negotiable Instruments Act, 1881 Section 140",
+    "bare_act: The Payment and Settlement Systems Act, 2007 Section 25"
+   ],
+   "answer_excerpt": "**Short answer**  \nSection 138 of the Negotiable Instruments Act, 1881 declares that a person who draws a cheque that is returned unpaid because the account lacks sufficient funds (or exceeds a pre‑arranged limit) commits an offence and is punishable with imprisonment for up to two years, a fine up to twice the cheque amount, or both, subject to the conditions that the cheque is presented within six months, a written demand is made within 30 days of the return notice, and payment is not made within 15 days of that notice [1].\n\n**Analysis**  \n- The provision defines the offence: the drawer of a cheque drawn on his own account, returned unpaid due to insufficient funds or exceeding an agreed l",
+   "run": 1
+  },
+  {
+   "id": "R02",
+   "category": "Statute lookup",
+   "question": "What is the punishment for murder under the BNS?",
+   "intent": "research",
+   "seconds": 25.0,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Bharatiya Nyaya Sanhita, 2023 Section 103",
+    "bare_act: The Bharatiya Nyaya Sanhita, 2023 Section 104",
+    "bare_act: The Bharatiya Nyaya Sanhita, 2023 Section 55",
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 220",
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 217",
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 243",
+    "bare_act: The Indian Penal Code, 1860 Section 302",
+    "bare_act: The Indian Penal Code, 1860 Section 303"
+   ],
+   "answer_excerpt": "**Short answer**  \nUnder the Bharatiya Nyaya Sanhita, 2023 (BNS) the punishment for murder is death or life‑imprisonment, with a possible fine [1]. If the offender is already serving a life sentence, the murder is punishable by death or life‑imprisonment for the remainder of his natural life [2].\n\n**Analysis**  \nSection 103 of the BNS defines the general punishment for the offence of murder. It provides two alternative sentences – death or imprisonment for life – and additionally makes the offender liable to a fine [1]. The provision also contains a special clause for group murders (five or more persons acting in concert) on specified grounds, but the basic punishment remains death or life‑i",
+   "run": 1
+  },
+  {
+   "id": "R03",
+   "category": "Old/new code mapping",
+   "question": "Which BNS section replaced IPC Section 420 (cheating)?",
+   "intent": "research",
+   "seconds": 22.1,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Indian Penal Code, 1860 Section 420",
+    "bare_act: The Bharatiya Nyaya Sanhita, 2023 Section 318",
+    "bare_act: The Indian Penal Code, 1860 Section 415",
+    "bare_act: The Bharatiya Nyaya Sanhita, 2023 Section 319",
+    "bare_act: The Indian Penal Code, 1860 Section 416",
+    "judgment: A.M. MOHAN versus THE STATE REPRESENTED BY SHO AND ANOTHER 2024 INSC 233",
+    "judgment: VESA HOLDINGS P. LTD. & ANR. versus STATE OF KERALA & ORS. 2015 INSC 228",
+    "bare_act: The Bharatiya Nyaya Sanhita, 2023 Section 212"
+   ],
+   "answer_excerpt": "**Short answer**  \nThe offence formerly codified as Section 420 of the Indian Penal Code is now covered by **Section 318 of the Bharatiya Nyaya Sanhita, 2023** (BNS). This provision defines cheating in the same terms and prescribes a maximum imprisonment of seven years, mirroring the old IPC provision.\n\n**Analysis**  \n- The IPC’s Section 420 dealt with “cheating and dishonestly inducing delivery of property” and prescribed imprisonment up to seven years [1].  \n- Under the new criminal code, the Bharatiya Nyaya Sanhita (BNS) contains the definition of cheating in **Section 318**. Its sub‑section (1) reproduces the IPC‑420 language – “whoever, by deceiving any person, fraudulently or dishonest",
+   "run": 1
+  },
+  {
+   "id": "R04",
+   "category": "Procedure",
+   "question": "How do I file an FIR?",
+   "intent": "research",
+   "seconds": 35.0,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": false,
+   "audit_issues": 1,
+   "audit_reasons": [
+    "Mentions Section 64 of the Bharatiya Nyaya Sanhita, which is not in the retrieved sources."
+   ],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 173",
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 174",
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 169",
+    "bare_act: The Immoral Traffic (Prevention) Act, 1956 Section 14"
+   ],
+   "answer_excerpt": "**Short answer**  \nAn FIR is recorded under Section 173 of the Bharatiya Nagarik Suraksha Sanhita (BNSS) when a person gives information about a cognizable offence to the officer‑in‑charge of a police station. The officer must reduce the oral or electronic information to writing, have it read back and signed by the informant (or obtain a signed electronic record), enter it in the prescribed register and give a free copy to the informant or victim. If the officer refuses to record the information, the complainant may forward it in writing to the Superintendent of Police or approach the Magistrate.  \n\n**Analysis**  \n1. **Who may give information** – Any person may give information relating to ",
+   "run": 1
+  },
+  {
+   "id": "R05",
+   "category": "Procedure",
+   "question": "Can I get anticipatory bail and under which provision?",
+   "intent": "research",
+   "seconds": 90.5,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 482",
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 480",
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 478",
+    "judgment: SUKHWANT SINGH & ORS. versus STATE OF PUNJAB 2009 INSC 835",
+    "bare_act: The Juvenile Justice (Care and Protection of Children) Act,  Section 12",
+    "judgment: UNION OF INDIA versus PADAM NARAIN AGGARWAL ETC 2008 INSC 1125",
+    "judgment: NASIRUDDIN versus STATE (NCT) DELHI AND ORS. 2013 INSC 522",
+    "bare_act: The Indian Forest Act, 1927 Section 65B"
+   ],
+   "answer_excerpt": "**Short answer**  \nYes. Under the Bharatiya Nagarik Suraksha Sanhita, 2023 you may seek anticipatory bail by filing an application under **Section 482** of the BNSS, which allows a person who fears arrest for a non‑bailable offence to obtain a direction from the High Court or Court of Session for release on bail. The court may impose conditions as listed in sub‑section (2) of the same section【1†L1-L9】.  \n\n**Analysis**  \n1. **Statutory basis for anticipatory bail** – Section 482 of the BNSS expressly provides that a person who has reason to believe he may be arrested on an accusation of a non‑bailable offence may apply to the High Court or Court of Session for a direction that, if arrested, h",
+   "run": 1
+  },
+  {
+   "id": "R06",
+   "category": "Constitutional law",
+   "question": "What does Article 21 of the Constitution protect?",
+   "intent": "research",
+   "seconds": 17.3,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Constitution of India Article 21",
+    "bare_act: The Constitution of India Article 2A",
+    "bare_act: The Constitution of India Article 19",
+    "judgment: AMINUDDIN versus STATE OF UTTAR PRADESH AND ANOTHER 2021 INSC 181",
+    "judgment: AVINASH MEHROTRA versus UNION OF INDIA & ORS. 2009 INSC 489",
+    "judgment: MANEKA GANDHI versus UNION OF INDIA 1978 INSC 16",
+    "judgment: SMT. GRACY versus STATE OF KERALA AND ANR. 1991 INSC 43"
+   ],
+   "answer_excerpt": "**Short answer**  \nArticle 21 of the Constitution guarantees that no person shall be deprived of his life or personal liberty except according to procedure established by law [1].\n\n**Analysis**  \n- The text of Article 21, reproduced in the Constitution (source 1), states: “No person shall be deprived of his life or personal liberty except according to procedure established by law.”  \n- This provision creates a substantive right to life and personal liberty, which can be curtailed only by a law that prescribes a fair and established procedure.  \n\n**Key provisions and authorities**  \n- **Article 21, Constitution of India** – “No person shall be deprived of his life or personal liberty except a",
+   "run": 1
+  },
+  {
+   "id": "R07",
+   "category": "Family law",
+   "question": "What are the grounds for divorce under the Hindu Marriage Act?",
+   "intent": "research",
+   "seconds": 31.4,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": false,
+   "audit_issues": 1,
+   "audit_reasons": [
+    "Mentions Section 13 of the Hindu Adoptions and Maintenance Act, which is not in the retrieved sources."
+   ],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Hindu Marriage Act, 1955 Section 13B",
+    "bare_act: The Hindu Marriage Act, 1955 Section 13",
+    "bare_act: The Hindu Marriage Act, 1955 Section 13A",
+    "bare_act: The Divorce Act, 1869 Section 10",
+    "bare_act: The Parsi Marriage and Divorce Act, 1936 Section 32",
+    "bare_act: The Dissolution of Muslim Marriages Act, 1939 Section 2",
+    "bare_act: The Parsi Marriage and Divorce Act, 1936 Section 32A",
+    "bare_act: The Special Marriage Act, 1954 Section 30"
+   ],
+   "answer_excerpt": "**Short answer**  \nThe Hindu Marriage Act, 1955 provides two categories of grounds for divorce.  \n1. **Fault‑based grounds** under Section 13(1) – adultery, cruelty, desertion (≥ 2 years), conversion, incurable unsound mind/mental disorder, venereal disease, renunciation of the world, and death (≥ 7 years).  \n2. **Special grounds** for a wife under Section 13(2) – bigamy of the husband (pre‑Act), the husband’s commission of rape/sodomy/bestiality, a decree of maintenance under the Hindu Adoptions and Maintenance Act or CrPC 125, or repudiation of a child marriage before age 18.  \n\n**Analysis**  \nSection 13(1) of the Hindu Marriage Act enumerates the fault‑based grounds on which either spouse",
+   "run": 1
+  },
+  {
+   "id": "R08",
+   "category": "Technology law",
+   "question": "What are the legal consequences of a cyberattack in India?",
+   "intent": "research",
+   "seconds": 32.8,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": false,
+   "audit_issues": 1,
+   "audit_reasons": [
+    "Mentions Section 46, which is not in the retrieved sources."
+   ],
+   "model_audit_ran": true,
+   "web_results": 4,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Information Technology Act, 2000 Section 66F",
+    "bare_act: The Aadhaar (Targeted Delivery of Financial and Other Subsid Section 38",
+    "bare_act: The Information Technology Act, 2000 Section 66B",
+    "bare_act: The Information Technology Act, 2000 Section 69B",
+    "web: Press Release:Press Information Bureau pib.gov.in",
+    "web: From Ethics to Enforcement: An Integrated Playbook for Cyber negd.gov.in",
+    "web: LEGAL WAYS OF HANDLING CYBER THREATS ciet.ncert.gov.in",
+    "web: Cyber Crime: Ramifications, Protection and Prevention prsindia.org"
+   ],
+   "answer_excerpt": "**Short answer**  \nA cyber‑attack can give rise to criminal liability under the Information Technology Act, 2000 – e.g., Section 66F (cyber‑terrorism) carries imprisonment up to life, while Section 66B (dishonest receipt of stolen computer resources) is punishable by up to three years’ imprisonment or a fine of ₹1 lakh [1][3]. If the attack involves the Central Identities Data Repository, the Aadhaar Act, 2016 imposes imprisonment up to ten years and a fine of at least ₹10 lakh [2]. Additional penalties may arise under other provisions (e.g., Section 69B for non‑cooperation by intermediaries) and civil compensation under the IT Act’s contravention provisions [4][7].\n\n**Analysis**  \n1. **Core",
+   "run": 1
+  },
+  {
+   "id": "R09",
+   "category": "Consumer law",
+   "question": "Where can a consumer file a complaint for defective goods worth 5 lakh?",
+   "intent": "research",
+   "seconds": 33.1,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Consumer Protection Act, 2019 Section 34",
+    "bare_act: The Consumer Protection Act, 2019 Section 47",
+    "bare_act: The Consumer Protection Act, 2019 Section 58",
+    "bare_act: The Legal Metrology Act, 2009 Section 36",
+    "bare_act: The Legal Metrology Act, 2009 Section 46",
+    "bare_act: The Central Goods and Services Tax Act, 2017 Section 129",
+    "bare_act: The Customs Act, 1962 Section 112",
+    "judgment: GHAZIABAD DEVELOPMENT AUTHORITY versus BALBIR SINGH 2004 INSC 182"
+   ],
+   "answer_excerpt": "**Short answer**  \nA consumer can file the complaint in the District Consumer Disputes Redressal Commission, because the value of the goods (₹5 lakh) is below the ₹1 crore ceiling for District Commission jurisdiction [1].\n\n**Analysis**  \n- Section 34 of the Consumer Protection Act, 2019 (central law) provides that a District Commission has jurisdiction over complaints where the value of the goods or services paid as consideration does **not exceed one crore rupees** [1].  \n- The disputed goods are worth ₹5 lakh, which falls within this limit.  \n- Therefore, the appropriate forum is the District Commission of the district where either the opposite party resides or carries on business, or wher",
+   "run": 1
+  },
+  {
+   "id": "R10",
+   "category": "State law",
+   "question": "What does the Karnataka Rent Act say about eviction of a tenant?",
+   "intent": "research",
+   "seconds": 22.2,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: THE KARNATAKA RENT ACT, 1999 Section 27",
+    "bare_act: THE KARNATAKA RENT ACT, 1999 Section 45",
+    "bare_act: THE KARNATAKA RENT ACT, 1999 Section 32",
+    "judgment: MRS. ZAKIYA BEGUM & ORS. versus MRS. SHANAZ ALI & ORS. 2010 INSC 488",
+    "judgment: M/S. K. GANESH SHET versus SRI A.K. JAYARAMA SHEKA AND ORS. 2004 INSC 483",
+    "judgment: E. PARASHURAMAN (D) BY LRS. versus V. DORAISWAMY (D) BY LRS. 2005 INSC 576"
+   ],
+   "answer_excerpt": "**Short answer**  \nThe Karnataka Rent Act, 1999 permits eviction only on the specific grounds listed in Section 27, such as non‑payment of rent, unauthorised sub‑letting or assignment, misuse of premises, vacancy for six months, unsafe or uninhabitable premises, demolition or repair work, and certain other limited situations. The tenant must first pay or deposit all arrears of rent and continue to pay thereafter (Section 45) before contesting the eviction.  \n\n**Analysis**  \n- **Statutory grounds** – Section 27 of the Karnataka Rent Act, 1999 enumerates the exclusive grounds on which a court may order recovery of possession. These include:  \n  1. Failure to pay rent/charges within two months ",
+   "run": 1
+  },
+  {
+   "id": "C01",
+   "category": "Case law (in library)",
+   "question": "What did the Supreme Court hold in ONGC v. Saw Pipes about patent illegality?",
+   "intent": "research",
+   "seconds": 30.9,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": 2,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "judgment: Oil & Natural Gas Corporation Ltd. v. Saw Pipes Ltd. (Suprem para 8",
+    "judgment: Oil & Natural Gas Corporation Ltd. v. Saw Pipes Ltd. (Suprem para 8",
+    "judgment: Oil & Natural Gas Corporation Ltd. v. Saw Pipes Ltd. (Suprem para 10",
+    "judgment: STATE OF GUJARAT AND ANR. versus M/S. SAW PIPES LTD. 2023 INSC 376",
+    "judgment: ONGC LTD. versus GARWARE SHIPPING CORPN. LTD. 2007 INSC 1153",
+    "judgment: STATE OF U.P. & OTHERS versus M/S. INDIAN HUME PIPE CO. LTD. 1977 INSC 76",
+    "web: cites: 170050864 sentiment: accepted-by-court year: 2003 indiankanoon.org",
+    "web: Unravelling The Ground Of 'Patent Illegality' For Setting As livelaw.in"
+   ],
+   "answer_excerpt": "**Short answer**  \nThe Supreme Court held that “patent illegality” of an arbitral award arises when the award is (i) patently contrary to a substantive provision of Indian law, (ii) in breach of the Arbitration Act itself, or (iii) contrary to the contract terms as required by Section 28(3) of the Act, and that such illegality must be obvious, non‑trivial and go to the root of the matter for the award to be set aside [1][3][8].\n\n**Analysis**  \n- In *ONGC Ltd. v. Saw Pipes Ltd.* the Court first identified “patent illegality” as a sub‑ground under the public‑policy ground in Section 34 of the Arbitration and Conciliation Act, 1996 [1].  \n- It explained that an award is patently illegal when it",
+   "run": 1
+  },
+  {
+   "id": "H01",
+   "category": "Fabrication trap",
+   "question": "What does Section 999 of the Indian Contract Act say?",
+   "intent": "research",
+   "seconds": 22.7,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "answer": true,
+    "no_fabrication": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Indian Contract Act, 1872 Section 73",
+    "bare_act: The Indian Contract Act, 1872 Section 25",
+    "bare_act: The Indian Contract Act, 1872 Section 15",
+    "bare_act: The Prevention of Money-Laundering Act, 2002 Section 60"
+   ],
+   "answer_excerpt": "**Short answer**  \nThe provided sources do not contain the text of Section 999 of the Indian Contract Act, 1872. To obtain the exact wording, you would need to consult the full statute (e.g., an official government publication or a reliable legal database).\n\n**Analysis**  \n- The only sections of the Indian Contract Act quoted in the supplied sources are Sections 73, 25, and 15 [1][2][3].  \n- No source includes any reference to Section 999, nor does any summary or commentary mention it.  \n- Consequently, I cannot provide the provision’s language or its legal effect based on the given material.\n\n**Key provisions and authorities**  \n- None of the supplied sources contain Section 999 of the Indi",
+   "run": 1
+  },
+  {
+   "id": "H02",
+   "category": "Fabrication trap",
+   "question": "Summarise the Supreme Court judgment in Ramesh Kumar v. State of Atlantis (2031).",
+   "intent": "research",
+   "seconds": 27.3,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "answer": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": 1,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "judgment: RAMESH KUMAR versus STATE OF NCT OF DELHI 2023 INSC 596",
+    "judgment: DINESH KUMAR versus THE STATE OF HARYANA 2023 INSC 493",
+    "judgment: STATE OF UTTARAKHAND AND ANR. versus RAVI KUMAR (DECEASED) T 2023 INSC 550",
+    "judgment: ANIL KUMAR versus THE STATE OF KERALA 2023 INSC 965",
+    "bare_act: The Constitution of India Article 32A",
+    "web: Punjab State Civil Supplies ... vs M/S. Ramesh Kumar And Com indiankanoon.org"
+   ],
+   "answer_excerpt": "**Short answer**  \nThe provided sources do not contain any information on a Supreme Court judgment titled *Ramesh Kumar v. State of Atlantis* decided in 2031. Consequently, a summary cannot be prepared from the available material.\n\n**Analysis**  \n- The only Supreme Court judgment summary that mentions “Ramesh Kumar” is *Ramesh Kumar v. State of NCT of Delhi* (2023) concerning anticipatory bail under Section 438 of the Code of Criminal Procedure, 1973 [1].  \n- No source in the list references a case called *Ramesh Kumar v. State of Atlantis* or any decision dated 2031.  \n- Without the text of the judgment, its facts, legal issues, holdings, or reasoning, a reliable summary cannot be given.\n\n*",
+   "run": 1
+  },
+  {
+   "id": "E01",
+   "category": "Historical case",
+   "question": "Tell me about the 26/11 Mumbai attacks and the legal consequences.",
+   "intent": "research",
+   "seconds": 34.8,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": false,
+   "audit_issues": 2,
+   "audit_reasons": [
+    "Mentions Section 120 of the Indian Penal Code, which is not in the retrieved sources.",
+    "Mentions Section 364 of the Indian Penal Code, which is not in the retrieved sources."
+   ],
+   "model_audit_ran": true,
+   "web_results": 2,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Unlawful Activities (Prevention) Act, 1967 Section 15",
+    "bare_act: The Bharatiya Nyaya Sanhita, 2023 Section 113",
+    "bare_act: The Bharatiya Nyaya Sanhita, 2023 Section 147",
+    "bare_act: The Indian Penal Code, 1860 Section 121",
+    "bare_act: The National Investigation Agency Act, 2008 Section 8",
+    "bare_act: The Unlawful Activities (Prevention) Act, 1967 Section 2",
+    "web: Kasab's death sentence in 26/11 Mumbai terror attacks case u timesofindia.indiatimes.com",
+    "web: No words to explain the exceptional depravity: Judge - The H thehindu.com"
+   ],
+   "answer_excerpt": "**Short answer**  \nThe 26/11 Mumbai attacks of 26 November 2008 were a coordinated terrorist assault that killed 166 people and injured 238. The lone surviving attacker, Ajmal Kasab, was convicted of criminal conspiracy, waging war against India, murder and several terror‑related offences and was sentenced to death by the Supreme Court, which upheld the death penalty on the ground of “waging war against the country” [7][8]. The legal basis for his conviction includes the offence of waging war under Section 121 of the Indian Penal Code (IPC) [4], the corresponding provision in the Bharatiya Nyaya Sanhita (Section 147) [3], and the terrorist‑act definition in Section 15 of the Unlawful Activit",
+   "run": 1
+  },
+  {
+   "id": "E02",
+   "category": "Landmark judgment",
+   "question": "What did the Supreme Court decide in the Puttaswamy privacy case?",
+   "intent": "research",
+   "seconds": 25.6,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": 4,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "judgment: JUSTICE K S PUTTASWAMY (RETD.), AND ANR. versus UNION OF IND 2017 INSC 801",
+    "judgment: JUSTICE K. S. PUTTASWAMY (RETD.) versus UNION OF INDIA & ORS 2018 INSC 880",
+    "judgment: JUSTICE K.S. PUTTASWAMY (RETD.) &ANOTHER versus UNION OF IND 2015 INSC 559",
+    "judgment: H.D. REVANNA versus G. PUTTASWAMY AND ORS. 1999 INSC 19",
+    "web: main.sci.gov.in main.sci.gov.in",
+    "web: Digital Supreme Court Reports digiscr.sci.gov.in",
+    "web: Justice K.S. Puttaswamy (Retd) and Anr. Vs. UOI and Ors. dat uidai.gov.in",
+    "web: Digital Supreme Court Reports digiscr.sci.gov.in"
+   ],
+   "answer_excerpt": "**Short answer**  \nThe Supreme Court held that the right to privacy is a constitutionally protected right in India, intrinsic to the right to life and personal liberty under Article 21 and part of the freedoms guaranteed by Part III of the Constitution. The Court expressly over‑ruled the earlier decisions in *M.P. Sharma* and *Kharak Singh* that had denied such protection. Consequently, privacy is recognised as a fundamental right enforceable against the State.  \n\n**Analysis**  \n- In the nine‑judge judgment of *Justice K.S. Puttaswamy (Retd.) v. Union of India* (2017), the Court declared that privacy “is a constitutionally protected right in India” and that it is “an intrinsic part of the ri",
+   "run": 1
+  },
+  {
+   "id": "N01",
+   "category": "Current legal news",
+   "question": "What are the latest legal developments in India?",
+   "intent": "news",
+   "seconds": 10.8,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": 4,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "news: Copyright, Courts, And Code: Understanding AI Architecture T livelaw.in",
+    "news: Supreme Court Daily Round-Up : October 28, 2026 livelaw.in",
+    "news: LiveLaw High Courts Daily Highlights: October 28, 2026 livelaw.in",
+    "news: Madras High Court Waives ₹1 Lakh Costs Imposed On Lawyer Ove livelaw.in",
+    "news: Supreme Court Cancels Bail Of Man Accused Of Sharing Sensiti livelaw.in",
+    "web: India Legal News Today: Supreme Court, High Court Latest Jud barandbench.com",
+    "web: Supreme Court - High Court - Legal Breaking News | Live Law  livelaw.in",
+    "web: Top Legal Developments This Week [19-25 October, 2026] | SCC scconline.com"
+   ],
+   "answer_excerpt": "**Recent Legal Developments in India (late October 2026)**  \n\n- **Supreme Court examines AI‑related copyright issues** – A LiveLaw feature titled “Copyright, Courts, And Code: Understanding AI Architecture Through Lens Of Litigation” discusses how AI‑driven works intersect with Indian copyright law and the courts’ approach to such technology‑driven disputes. (published 29 Oct 2026) [1]  \n\n- **Supreme Court cancels bail of a man accused of leaking sensitive military information to Pakistan** – The apex court set aside the bail previously granted to the accused, underscoring the seriousness of national‑security offences. (published 28 Oct 2026) [5]  \n\n- **Supreme Court Daily Round‑Up (28 Oct 2",
+   "run": 1
+  },
+  {
+   "id": "T03",
+   "category": "Not a time question",
+   "question": "What is the time limit for filing an appeal against a conviction?",
+   "intent": "research",
+   "seconds": 23.9,
+   "passed": true,
+   "checks": {
+    "intent": true
+   },
+   "grounded": false,
+   "audit_issues": 4,
+   "audit_reasons": [
+    "Mentions Section 64 of the Bharatiya Nyaya Sanhita, which is not in the retrieved sources.",
+    "Mentions Section 415 of the Bharatiya Nyaya Sanhita, which is not in the retrieved sources.",
+    "Mentions Section 65 of the Bharatiya Nyaya Sanhita, which is not in the retrieved sources.",
+    "Mentions Section 66 of the Bharatiya Nyaya Sanhita, which is not in the retrieved sources."
+   ],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Securities and Exchange Board of India Act, 1992 Section 15Z",
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 415",
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 420",
+    "bare_act: The Aadhaar (Targeted Delivery of Financial and Other Subsid Section 33E",
+    "bare_act: The Information Technology Act, 2000 Section 62",
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 430",
+    "bare_act: The Companies Act, 2013 Section 423",
+    "judgment: RETTI DEENABANDHU & ORS. versus STATE OF ANDHRA PRADESH 1977 INSC 7"
+   ],
+   "answer_excerpt": "**Short answer**  \nThe statutory time‑limit for filing an appeal against a conviction is six months from the date of filing the appeal when the conviction is under sections 64‑71 of the Bharatiya Nyaya Sanhita, 2023 (BN S) [2][4]. Other statutes prescribe their own periods – e.g., 60 days under the SEBI Act, IT Act and Companies Act, and 45 days under the Aadhaar Act – but the general limit for a conviction appeal under the BN S is six months.  \n\n**Analysis**  \n- The Bharatiya Nagarik Suraksha Sanhita (BN SS) governs criminal appeals after the 1 July 2024 reform.  \n- Section 415(4) of the BN SS expressly states that “when an appeal has been filed against a sentence passed under section 64, 6",
+   "run": 1
+  },
+  {
+   "id": "S03",
+   "category": "Mixed request",
+   "question": "Write a python script and also tell me if hacking is an offence under the IT Act.",
+   "intent": "research",
+   "seconds": 36.7,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": 4,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Information Technology Act, 2000 Section 66F",
+    "bare_act: The Information Technology Act, 2000 Section 65",
+    "bare_act: The Information Technology Act, 2000 Section 70",
+    "bare_act: The Aadhaar (Targeted Delivery of Financial and Other Subsid Section 38",
+    "web: THE INFORMATION TECHNOLOGY ACT, 2000 ––––––––– ARRANGEMENT O indiacode.nic.in",
+    "web: Digital Security of Citizens pib.gov.in",
+    "web: gurgaon.haryanapolice.gov.in gurgaon.haryanapolice.gov.in",
+    "web: Latest Releases archive.pib.gov.in"
+   ],
+   "answer_excerpt": "**Short answer**  \nYes. “Hacking” – i.e., accessing a computer resource without permission with intent to cause loss or damage – is punishable under Section 66 of the Information Technology Act, 2000 (see the tabular summary of offences on the Gurgaon Police website) [7].  \n\n**Analysis**  \nThe Information Technology Act, 2000 contains a specific offence for unauthorised access to a computer resource (commonly described as “hacking”).  The Gurgaon Police portal lists Section 66 as the provision that criminalises “computer‑related offences” such as hacking, with imprisonment up to three years or a fine [7].  Although the full text of Section 66 is not reproduced in the supplied statutes, the o",
+   "run": 1
+  },
+  {
+   "id": "M01",
+   "category": "Hindi question",
+   "question": "चेक बाउंस होने पर क्या कानूनी कार्रवाई की जा सकती है?",
+   "intent": "research",
+   "seconds": 33.5,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Negotiable Instruments Act, 1881 Section 138",
+    "bare_act: The Negotiable Instruments Act, 1881 Preamble",
+    "bare_act: The Negotiable Instruments Act, 1881 Section 84",
+    "bare_act: The Payment and Settlement Systems Act, 2007 Section 25",
+    "judgment: SRI SUJIES BENEFIT FUNDS LIMITED versus M. JAGANATHUAN 2024 INSC 602",
+    "judgment: VIJAY versus LAXMAN AND ANR. 2013 INSC 81"
+   ],
+   "answer_excerpt": "**संक्षिप्त उत्तर (Short answer)**  \nचेक के बाउंस (अपर्याप्त निधियों के कारण अस्वीकृत) होने पर धारा 138 Negotiable Instruments Act, 1881 के तहत अपराध स्थापित हो सकता है और आरोपी को दो वर्ष तक की जेल, जुर्माना (चेक की राशि के दो गुना तक) या दोनों की सजा हो सकती है। इसके लिए (i) चेक को छह महीने के भीतर प्रस्तुत किया जाना चाहिए, (ii) प्राप्तकर्ता को बँक से अस्वीकृति की सूचना मिलने के बाद 30 दिनों के भीतर लिखित नोटिस देना आवश्यक है, और (iii) नोटिस प्राप्त करने के 15 दिनों के भीतर भुगतान न किया जाए तो ही दण्ड लागू होगा [1]।\n\n**विश्लेषण (Analysis)**  \n\n1. **धारा 138 का तत्व**  \n   - चेक को खाता‑धारक के खाते से किसी ऋण या अन्य देयता के भुगतान हेतु जारी किया गया हो [1]।  \n   - बँक द्वारा चेक अस्वीकृ",
+   "run": 1
+  },
+  {
+   "id": "M02",
+   "category": "Hinglish",
+   "question": "FIR kaise file kare agar police mana kar de?",
+   "intent": "research",
+   "seconds": 64.2,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": false,
+   "audit_issues": 1,
+   "audit_reasons": [
+    "Mentions Article 226 of the Constitution of India, which is not in the retrieved sources."
+   ],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 173",
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 174",
+    "judgment: LALITA KUMARI versus GOVERNMENT OF U.P. & OTHERS 2012 INSC 108",
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 175",
+    "bare_act: The Immoral Traffic (Prevention) Act, 1956 Section 14",
+    "bare_act: The Bharatiya Sakshya Adhiniyam, 2023 Section 131",
+    "judgment: HAMANT YASHWANT DHAGE versus STATE OF MAHARASHTRA AND OTHERS 2016 INSC 153",
+    "bare_act: The Right to Information Act, 2005 Section 18"
+   ],
+   "answer_excerpt": "**Short answer**  \nIf the officer in charge of a police station refuses to register an FIR for a cognizable offence, the informant may forward the information in writing to the Superintendent of Police, who may either investigate himself or direct a subordinate to do so; failing that, the informant may approach the Magistrate for an order directing investigation or FIR registration【1†L3-L4】【1†L4-L5】.  \n\n**Analysis**  \n1. **Statutory requirement to record information** – Under Section 173 of the BNSS, every information relating to a cognizable offence must be recorded by the officer in charge, either orally (to be reduced to writing) or by electronic communication, and a copy must be given fr",
+   "run": 1
+  },
+  {
+   "id": "M03",
+   "category": "Misspelling",
+   "question": "wat is punishmnt for murdr in india",
+   "intent": "research",
+   "seconds": 23.1,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Indian Penal Code, 1860 Section 302",
+    "bare_act: The Indian Penal Code, 1860 Section 303",
+    "bare_act: The Indian Penal Code, 1860 Section 304",
+    "bare_act: The Bharatiya Nyaya Sanhita, 2023 Section 103",
+    "bare_act: The Bharatiya Nyaya Sanhita, 2023 Section 104",
+    "judgment: BHARATKUMAR RAMESHCHANDRA BAROT versus STATE OF GUJARAT 2018 INSC 263",
+    "bare_act: The Bharatiya Nyaya Sanhita, 2023 Section 109",
+    "judgment: DEVENDRA KUMAR & ORS. versus STATE OF CHHATTISGARH 2024 INSC 841"
+   ],
+   "answer_excerpt": "**Short answer**  \nThe punishment for murder in India is death or life imprisonment (with a possible fine) under the Indian Penal Code, 1860 §302 [1]. The same punishment is prescribed in the Bharatiya Nyaya Sanhita, 2023 §103 [4]; a person already serving life imprisonment who commits murder is punishable with death (or life imprisonment for the remainder of natural life) under IPC §303 [2] and BNS §104 [5].\n\n**Analysis**  \n- **Statutory provision (IPC)** – Section 302 of the Indian Penal Code provides that “whoever commits murder shall be punished with death or imprisonment for life, and shall also be liable to fine” [1].  \n- **Statutory provision (BNS)** – The Bharatiya Nyaya Sanhita, 202",
+   "run": 1
+  },
+  {
+   "id": "R01",
+   "category": "Statute lookup",
+   "question": "What does Section 138 of the Negotiable Instruments Act say?",
+   "intent": "research",
+   "seconds": 37.2,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Negotiable Instruments Act, 1881 Section 138",
+    "bare_act: The Negotiable Instruments Act, 1881 Preamble",
+    "bare_act: The Negotiable Instruments Act, 1881 Section 140",
+    "bare_act: The Payment and Settlement Systems Act, 2007 Section 25"
+   ],
+   "answer_excerpt": "**Short answer**  \nSection 138 of the Negotiable Instruments Act, 1881 declares that a person who issues a cheque that is returned unpaid because of insufficient funds or because it exceeds the amount arranged with the bank commits an offence, punishable with imprisonment (up to two years), a fine (up to twice the cheque amount), or both, subject to the conditions that the cheque is presented within six months, a written demand notice is given within 30 days of the return, and the drawer fails to pay within 15 days of that notice [1].\n\n**Analysis**  \n- The provision defines the “offence” as the dishonour of a cheque drawn for the discharge of a debt or liability when the account lacks suffic",
+   "run": 2
+  },
+  {
+   "id": "R02",
+   "category": "Statute lookup",
+   "question": "What is the punishment for murder under the BNS?",
+   "intent": "research",
+   "seconds": 22.2,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Bharatiya Nyaya Sanhita, 2023 Section 103",
+    "bare_act: The Bharatiya Nyaya Sanhita, 2023 Section 104",
+    "bare_act: The Bharatiya Nyaya Sanhita, 2023 Section 55",
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 220",
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 217",
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 234",
+    "bare_act: The Indian Penal Code, 1860 Section 302",
+    "bare_act: The Indian Penal Code, 1860 Section 303"
+   ],
+   "answer_excerpt": "**Short answer**  \nUnder the Bharatiya Nyaya Sanhita, 2023 (BNS) the basic punishment for murder is death or imprisonment for life, together with a fine [1]. If the murder is committed by a person already serving a life sentence, the offender is punished with death or imprisonment for the remainder of his natural life [2]. When a group of five or more persons commits murder on grounds such as race, caste, sex, etc., each member is liable to death or life imprisonment and a fine [1].\n\n**Analysis**  \n- **Section 103, BNS** sets the principal penalty for murder: “Whoever commits murder shall be punished with death or imprisonment for life, and shall also be liable to fine.” [1]  \n- The same sec",
+   "run": 2
+  },
+  {
+   "id": "R03",
+   "category": "Old/new code mapping",
+   "question": "Which BNS section replaced IPC Section 420 (cheating)?",
+   "intent": "research",
+   "seconds": 22.3,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": false,
+   "audit_issues": 2,
+   "audit_reasons": [
+    "Section 318 of the Bharatiya Nyaya Sanhita supersedes the old IPC Section 420 on cheating",
+    "Mentions Section 318 of the Indian Penal Code, which is not in the retrieved sources."
+   ],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Indian Penal Code, 1860 Section 420",
+    "bare_act: The Bharatiya Nyaya Sanhita, 2023 Section 318",
+    "bare_act: The Indian Penal Code, 1860 Section 415",
+    "bare_act: The Bharatiya Nyaya Sanhita, 2023 Section 319",
+    "bare_act: The Indian Penal Code, 1860 Section 416",
+    "judgment: A.M. MOHAN versus THE STATE REPRESENTED BY SHO AND ANOTHER 2024 INSC 233",
+    "judgment: VESA HOLDINGS P. LTD. & ANR. versus STATE OF KERALA & ORS. 2015 INSC 228",
+    "bare_act: The Bharatiya Nyaya Sanhita, 2023 Section 212"
+   ],
+   "answer_excerpt": "**Short answer**  \nSection 318 of the Bharatiya Nyaya Sanhita, 2023 (BNS) supersedes the old IPC Section 420 on cheating. It defines cheating in the same manner—deceiving a person to induce delivery of property or a valuable security—and prescribes a maximum imprisonment of seven years and/or fine [2].\n\n**Analysis**  \n- IPC Section 420 criminalised “cheating and dishonestly inducing delivery of property” [1].  \n- The Bharatiya Nyaya Sanhita (the post‑2024 substantive criminal code) contains a parallel provision, Section 318, which states that anyone who, by deceiving any person, fraudulently or dishonestly induces that person to deliver any property or to consent to its retention, or to do/o",
+   "run": 2
+  },
+  {
+   "id": "R04",
+   "category": "Procedure",
+   "question": "How do I file an FIR?",
+   "intent": "research",
+   "seconds": 34.7,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": false,
+   "audit_issues": 1,
+   "audit_reasons": [
+    "Mentions Section 64 of the Bharatiya Nyaya Sanhita, which is not in the retrieved sources."
+   ],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 173",
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 174",
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 169",
+    "bare_act: The Immoral Traffic (Prevention) Act, 1956 Section 14"
+   ],
+   "answer_excerpt": "**Short answer**  \nAn FIR is recorded under Section 173 of the Bharatiya Nagarik Suraksha Sanhita, 2023 (BNSS). The informant may give the information orally or by electronic communication to the officer‑in‑charge of a police station, who must reduce it to writing (or record it electronically), have it read back and signed, and then enter it in the prescribed book; a free copy must be given to the informant. If the officer refuses to record the information, the informant may forward it in writing to the Superintendent of Police, who may order an investigation or direct a subordinate officer to do so【1†L1-L9】【1†L10-L13】.  \n\n**Analysis**  \n\n1. **Who may give information** – Any person can prov",
+   "run": 2
+  },
+  {
+   "id": "R05",
+   "category": "Procedure",
+   "question": "Can I get anticipatory bail and under which provision?",
+   "intent": "research",
+   "seconds": 48.5,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": false,
+   "audit_issues": 2,
+   "audit_reasons": [
+    "Mentions Section 482 of the Bharatiya Nyaya Sanhita, which is not in the retrieved sources.",
+    "Mentions Section 2 of the Bharatiya Nyaya Sanhita, which is not in the retrieved sources."
+   ],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 482",
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 480",
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 478",
+    "judgment: SUKHWANT SINGH & ORS. versus STATE OF PUNJAB 2009 INSC 835",
+    "bare_act: The Juvenile Justice (Care and Protection of Children) Act,  Section 12",
+    "judgment: UNION OF INDIA versus PADAM NARAIN AGGARWAL ETC 2008 INSC 1125",
+    "judgment: NASIRUDDIN versus STATE (NCT) DELHI AND ORS. 2013 INSC 522",
+    "bare_act: The Indian Forest Act, 1927 Section 65B"
+   ],
+   "answer_excerpt": "**Short answer**  \nYes. Under the Bharatiya Nagarik Suraksha Sanhita, 2023 you may seek anticipatory bail by filing an application under **Section 482** (direction for grant of bail to a person apprehending arrest). The High Court or Court of Session may, if it thinks fit, direct that you be released on bail at the time of arrest or thereafter [1].\n\n**Analysis**  \n- Section 482 BNSS expressly provides a remedy for a person who *has reason to believe* that he may be arrested for a non‑bailable offence. The provision allows the person to apply to the High Court or Court of Session for a direction that, in the event of arrest, he shall be released on bail [1].  \n- The section also lists the con",
+   "run": 2
+  },
+  {
+   "id": "R06",
+   "category": "Constitutional law",
+   "question": "What does Article 21 of the Constitution protect?",
+   "intent": "research",
+   "seconds": 29.5,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": false,
+   "audit_issues": 2,
+   "audit_reasons": [
+    "Article 21 guarantees that no person shall be deprived of his life or personal liberty except according to procedure established by law and that it is enforceable under Article 32",
+    "Refers to the case “Maneka Gandhi v. Union of India”, which does not appear in the sources. The register has 5 Supreme Court judgments with these parties (e.g. 1960 INSC 124, decided 1960-08-17; 1978 INSC 16, decided 1978-01-25; 1978 INSC 30, decided 1978-02-14); none is among this answer's sources — check which one is meant."
+   ],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Constitution of India Article 21",
+    "bare_act: The Constitution of India Article 2A",
+    "bare_act: The Constitution of India Article 19",
+    "judgment: NARINDERJIT SINGH SAHNI AND ANR. versus UNION OF INDIA AND O 2001 INSC 503",
+    "judgment: JUSTICE K S PUTTASWAMY (RETD.), AND ANR. versus UNION OF IND 2017 INSC 801",
+    "judgment: MR.'X' versus HOSPITAL Z 1998 INSC 374",
+    "judgment: AMINUDDIN versus STATE OF UTTAR PRADESH AND ANOTHER 2021 INSC 181"
+   ],
+   "answer_excerpt": "**Short answer**  \nArticle 21 guarantees that no person shall be deprived of his **life or personal liberty** except **according to procedure established by law**【1】.  \n\n**Analysis**  \n- The text of Article 21, reproduced in source [1], states: “No person shall be deprived of his life or personal liberty except according to procedure established by law.” This is the core protection conferred by the article.  \n- The provision is located in Part III of the Constitution, which enumerates fundamental rights, underscoring its status as a fundamental right enforceable under Article 32.  \n\n**Key provisions and authorities**  \n- **Article 21, Constitution of India** – “No person shall be deprived of",
+   "run": 2
+  },
+  {
+   "id": "R07",
+   "category": "Family law",
+   "question": "What are the grounds for divorce under the Hindu Marriage Act?",
+   "intent": "research",
+   "seconds": 35.1,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Hindu Marriage Act, 1955 Section 13B",
+    "bare_act: The Hindu Marriage Act, 1955 Section 13",
+    "bare_act: The Hindu Marriage Act, 1955 Section 13A",
+    "bare_act: The Divorce Act, 1869 Section 10",
+    "bare_act: The Parsi Marriage and Divorce Act, 1936 Section 32",
+    "bare_act: The Dissolution of Muslim Marriages Act, 1939 Section 2",
+    "bare_act: The Special Marriage Act, 1954 Section 30",
+    "bare_act: The Parsi Marriage and Divorce Act, 1936 Section 32A"
+   ],
+   "answer_excerpt": "**Short answer**  \nThe Hindu Marriage Act, 1955 provides two sets of grounds for divorce.  \n1. **Section 13** lists fault‑based grounds on which either spouse may obtain a decree of divorce (e.g., adultery, cruelty, desertion, conversion, unsound mind, venereal disease, renunciation, etc.) [2].  \n2. **Section 13B** creates a **mutual‑consent** ground, allowing both parties jointly to obtain a divorce after living apart for at least one year and filing a petition no earlier than six months and no later than eighteen months thereafter [1].\n\n**Analysis**  \n\n1. **Fault‑based grounds – Section 13**  \n   - The petition may be presented by either husband or wife.  \n   - Grounds enumerated in sub‑se",
+   "run": 2
+  },
+  {
+   "id": "R08",
+   "category": "Technology law",
+   "question": "What are the legal consequences of a cyberattack in India?",
+   "intent": "research",
+   "seconds": 39.5,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": 4,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Information Technology Act, 2000 Section 66F",
+    "bare_act: The Aadhaar (Targeted Delivery of Financial and Other Subsid Section 38",
+    "bare_act: The Information Technology Act, 2000 Section 66B",
+    "bare_act: The Information Technology Act, 2000 Section 69B",
+    "web: Press Release:Press Information Bureau pib.gov.in",
+    "web: From Ethics to Enforcement: An Integrated Playbook for Cyber negd.gov.in",
+    "web: LEGAL WAYS OF HANDLING CYBER THREATS ciet.ncert.gov.in",
+    "web: Cyber Crime: Ramifications, Protection and Prevention prsindia.org"
+   ],
+   "answer_excerpt": "**Short answer**  \nA cyber‑attack that falls within the offences listed in the Information Technology Act, 2000 can attract criminal liability ranging from imprisonment (up to life for cyber‑terrorism under Section 66F) to three‑year terms (for dishonestly receiving stolen computer resources under Section 66B) and/or hefty fines. Additional penalties apply where the attack involves the Central Identities Data Repository (Aadhaar Act Section 38) or where an intermediary willfully obstructs a government‑authorized monitoring request (IT Act Section 69B).  \n\n**Analysis**  \n1. **Cyber‑terrorism (Section 66F, IT Act)** – The statute defines the offence as conduct intended to threaten India’s unit",
+   "run": 2
+  },
+  {
+   "id": "R09",
+   "category": "Consumer law",
+   "question": "Where can a consumer file a complaint for defective goods worth 5 lakh?",
+   "intent": "research",
+   "seconds": 34.4,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Consumer Protection Act, 2019 Section 34",
+    "bare_act: The Consumer Protection Act, 2019 Section 47",
+    "bare_act: The Consumer Protection Act, 2019 Section 58",
+    "bare_act: The Legal Metrology Act, 2009 Section 36",
+    "bare_act: The Legal Metrology Act, 2009 Section 46",
+    "bare_act: The Central Goods and Services Tax Act, 2017 Section 129",
+    "judgment: GHAZIABAD DEVELOPMENT AUTHORITY versus BALBIR SINGH 2004 INSC 182",
+    "judgment: M.R.F. LTD. versus JAGDISH LAL AND ANR. 1999 INSC 225"
+   ],
+   "answer_excerpt": "**Short answer**  \nA consumer can file a complaint for defective goods worth ₹5 lakh before the **District Consumer Disputes Redressal Commission** under Section 34 of the Consumer Protection Act, 2019, because the value of the goods does not exceed ₹1 crore [1].\n\n**Analysis**  \n- Section 34 of the Consumer Protection Act, 2019 specifies that the District Commission has jurisdiction to entertain complaints where the value of the goods or services paid as consideration does not exceed ₹1 crore [1].  \n- The contemplated claim of ₹5 lakh falls well within this monetary ceiling.  \n- Accordingly, the consumer should institute the complaint in the District Commission having jurisdiction over the p",
+   "run": 2
+  },
+  {
+   "id": "R10",
+   "category": "State law",
+   "question": "What does the Karnataka Rent Act say about eviction of a tenant?",
+   "intent": "research",
+   "seconds": 21.7,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: THE KARNATAKA RENT ACT, 1999 Section 27",
+    "bare_act: THE KARNATAKA RENT ACT, 1999 Section 45",
+    "bare_act: THE KARNATAKA RENT ACT, 1999 Section 32",
+    "judgment: MRS. ZAKIYA BEGUM & ORS. versus MRS. SHANAZ ALI & ORS. 2010 INSC 488",
+    "judgment: E. PARASHURAMAN (D) BY LRS. versus V. DORAISWAMY (D) BY LRS. 2005 INSC 576",
+    "judgment: M/S. K. GANESH SHET versus SRI A.K. JAYARAMA SHEKA AND ORS. 2004 INSC 483"
+   ],
+   "answer_excerpt": "**Short answer**  \nThe Karnataka Rent Act, 1999 permits eviction only on the specific grounds listed in **Section 27** (e.g., non‑payment of rent, unauthorised sub‑letting, misuse, vacancy, unsafe premises, demolition or repair work, etc.) and requires the landlord to obtain a court order after following the prescribed procedure.  A tenant against whom an eviction application is filed must deposit all arrears and continue paying rent during the proceedings as mandated by **Section 45**, and any unauthorised sub‑letting is a ground for eviction under **Section 27(b)** (with the consent requirement set out in **Section 32**).  \n\n**Analysis**  \n1. **Statutory grounds for eviction** – Section 27",
+   "run": 2
+  },
+  {
+   "id": "C01",
+   "category": "Case law (in library)",
+   "question": "What did the Supreme Court hold in ONGC v. Saw Pipes about patent illegality?",
+   "intent": "research",
+   "seconds": 22.8,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "judgment: Oil & Natural Gas Corporation Ltd. v. Saw Pipes Ltd. (Suprem para 8",
+    "judgment: Oil & Natural Gas Corporation Ltd. v. Saw Pipes Ltd. (Suprem para 8",
+    "judgment: Oil & Natural Gas Corporation Ltd. v. Saw Pipes Ltd. (Suprem para 10",
+    "judgment: STATE OF GUJARAT AND ANR. versus M/S. SAW PIPES LTD. 2023 INSC 376",
+    "judgment: ONGC LTD. versus GARWARE SHIPPING CORPN. LTD. 2007 INSC 1153",
+    "judgment: STATE OF U.P. & OTHERS versus M/S. INDIAN HUME PIPE CO. LTD. 1977 INSC 76",
+    "judgment: SUPREME COURT BAR ASSOCIATION versus UNION OF INDIA 1998 INSC 183",
+    "bare_act: The Constitution of India Article 32A"
+   ],
+   "answer_excerpt": "**Short answer**  \nThe Supreme Court held that an arbitral award that is *patently* contrary to the substantive statutory provisions in force in India, or that is passed without affording a hearing as required by Section 24 or without recording reasons where required, must be set aside on the ground of “patent illegality” [1].\n\n**Analysis**  \n- The Court explained that an award which flagrantly violates the substantive law applicable in India is “patently illegal” and therefore cannot stand.  \n- It further stressed that procedural defects such as denying a hearing mandated by Section 24 of the Arbitration Act, or failing to give reasons when the parties have not agreed otherwise, also consti",
+   "run": 2
+  },
+  {
+   "id": "H01",
+   "category": "Fabrication trap",
+   "question": "What does Section 999 of the Indian Contract Act say?",
+   "intent": "research",
+   "seconds": 18.6,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "answer": true,
+    "no_fabrication": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Indian Contract Act, 1872 Section 73",
+    "bare_act: The Indian Contract Act, 1872 Section 178A",
+    "bare_act: The Indian Contract Act, 1872 Section 25",
+    "bare_act: The Prevention of Money-Laundering Act, 2002 Section 60",
+    "bare_act: The Indian Stamp Act, 1899 Section 4",
+    "bare_act: The Indian Stamp Act, 1899 Section 29",
+    "bare_act: The Indian Stamp Act, 1899 Schedule I, Entry 2",
+    "bare_act: The Information Technology Act, 2000 Section 94"
+   ],
+   "answer_excerpt": "**Short answer**  \nThe provided sources do not contain the text of Section 999 of the Indian Contract Act, 1872. To determine its wording, you would need to consult the full statute (e.g., an official government publication or a reliable legal database).\n\n**Analysis**  \n- Source 1 contains Section 73 and illustrative provisions but does not include Section 999.  \n- Sources 2‑8 cover other sections (e.g., 25, 178A, 60 of PMLA, 4 of the Stamp Act, etc.) and do not mention Section 999.  \n- Consequently, none of the supplied documents provide the language or substance of Section 999.\n\n**Key provisions and authorities**  \n- None of the supplied sources contain Section 999 of the Indian Contract A",
+   "run": 2
+  },
+  {
+   "id": "H02",
+   "category": "Fabrication trap",
+   "question": "Summarise the Supreme Court judgment in Ramesh Kumar v. State of Atlantis (2031).",
+   "intent": "research",
+   "seconds": 23.6,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "answer": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "judgment: RAMESH KUMAR versus STATE OF NCT OF DELHI 2023 INSC 596",
+    "judgment: DINESH KUMAR versus THE STATE OF HARYANA 2023 INSC 493",
+    "judgment: RAMESH KUMAR versus RAM KUMAR & ORS. 1984 INSC 95",
+    "judgment: STATE OF UTTARAKHAND AND ANR. versus RAVI KUMAR (DECEASED) T 2023 INSC 550",
+    "bare_act: The Constitution of India Article 32A"
+   ],
+   "answer_excerpt": "**Short answer**  \nThe provided sources do not contain any information on a Supreme Court judgment titled *Ramesh Kumar v. State of Atlantis* decided in 2031. Consequently, I cannot summarise that judgment from the available material.\n\n**Analysis**  \n- The only Supreme Court judgments listed in the sources are: *Ramesh Kumar v. State of NCT of Delhi* (2023) [1], *Dinesh Kumar v. State of Haryana* (2023) [2], *Ramesh Kumar v. Ram Kumar & Ors.* (1984) [3], and *State of Uttarakhand & Anr. v. Ravi Kumar* (2023) [4].  \n- No entry or headnote refers to a case involving “State of Atlantis” or a decision dated 2031.  \n- The bare act excerpt provided (the Constitution of India) [5] also does not men",
+   "run": 2
+  },
+  {
+   "id": "E01",
+   "category": "Historical case",
+   "question": "Tell me about the 26/11 Mumbai attacks and the legal consequences.",
+   "intent": "research",
+   "seconds": 42.1,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": false,
+   "audit_issues": 8,
+   "audit_reasons": [
+    "The 26/11 Mumbai attacks were a coordinated terrorist assault carried out on 26 November 2008 that killed 166 people and injured 238.",
+    "The lone surviving attacker, Ajmal Kasab, was convicted of criminal conspiracy, waging war against India, murder and several terror‑related offences and sentenced to death by the Supreme Court, which upheld the death penalty imposed by the trial court and the Bombay High Court.",
+    "The offences were prosecuted under the Indian Penal Code (e.g., Section 121 – waging war against the Government of India) and the Unlawful Activities (Prevention) Act, 1967 (terrorist act under Section 15).",
+    "The National Investigation Agency Act also provides for investigation of such offences.",
+    "The Supreme Court held that Kasab’s participation amounted to “conspiracy to wage war against India” and convicted him under Section 121 of the Indian Penal Code.",
+    "The same conviction also invoked the definition of “terrorist act” in Section 15 of the Unlawful Activities (Prevention) Act, 1967.",
+    "Mentions Section 120 of the Indian Penal Code, which is not in the retrieved sources.",
+    "Mentions Section 364 of the Indian Penal Code, which is not in the retrieved sources."
+   ],
+   "model_audit_ran": true,
+   "web_results": 2,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Unlawful Activities (Prevention) Act, 1967 Section 15",
+    "bare_act: The Bharatiya Nyaya Sanhita, 2023 Section 113",
+    "bare_act: The Bharatiya Nyaya Sanhita, 2023 Section 147",
+    "bare_act: The Indian Penal Code, 1860 Section 121",
+    "bare_act: The National Investigation Agency Act, 2008 Section 8",
+    "bare_act: The Unlawful Activities (Prevention) Act, 1967 Section 2",
+    "web: Kasab's death sentence in 26/11 Mumbai terror attacks case u timesofindia.indiatimes.com",
+    "web: No words to explain the exceptional depravity: Judge - The H thehindu.com"
+   ],
+   "answer_excerpt": "**Short answer**  \nThe 26/11 Mumbai attacks were a coordinated terrorist assault carried out on 26 November 2008 that killed 166 people and injured 238. The lone surviving attacker, Ajmal Kasab, was convicted of criminal conspiracy, waging war against India, murder and several terror‑related offences and sentenced to death by the Supreme Court, which upheld the death penalty imposed by the trial court and the Bombay High Court [7][8]. The offences were prosecuted under the Indian Penal Code (e.g., Section 121 – waging war against the Government of India) and the Unlawful Activities (Prevention) Act, 1967 (terrorist act under Section 15) [4][6]; the National Investigation Agency Act also prov",
+   "run": 2
+  },
+  {
+   "id": "E02",
+   "category": "Landmark judgment",
+   "question": "What did the Supreme Court decide in the Puttaswamy privacy case?",
+   "intent": "research",
+   "seconds": 25.4,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": 4,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "judgment: JUSTICE K S PUTTASWAMY (RETD.), AND ANR. versus UNION OF IND 2017 INSC 801",
+    "judgment: JUSTICE K. S. PUTTASWAMY (RETD.) versus UNION OF INDIA & ORS 2018 INSC 880",
+    "judgment: JUSTICE K.S. PUTTASWAMY (RETD.) &ANOTHER versus UNION OF IND 2015 INSC 559",
+    "judgment: H.D. REVANNA versus G. PUTTASWAMY AND ORS. 1999 INSC 19",
+    "web: main.sci.gov.in main.sci.gov.in",
+    "web: Digital Supreme Court Reports digiscr.sci.gov.in",
+    "web: Justice K.S. Puttaswamy (Retd) and Anr. Vs. UOI and Ors. dat uidai.gov.in",
+    "web: Digital Supreme Court Reports digiscr.sci.gov.in"
+   ],
+   "answer_excerpt": "**Short answer**  \nThe Supreme Court held that the right to privacy is a constitutionally protected right in India, intrinsic to the right to life and personal liberty under Article 21 and part of the freedoms guaranteed by Part III of the Constitution. It over‑ruled the earlier decisions in *M.P. Sharma* and *Kharak Singh* that had denied such protection and declared privacy to be a fundamental right. The judgment also examined the Aadhaar Act, concluding that enrolment and authentication are not compulsory for availing benefits, but the core holding is the recognition of privacy as a fundamental right【1†L1-L4】【6†L1-L4】.  \n\n**Analysis**  \n- The bench (nine judges) was convened to resolve th",
+   "run": 2
+  },
+  {
+   "id": "N01",
+   "category": "Current legal news",
+   "question": "What are the latest legal developments in India?",
+   "intent": "news",
+   "seconds": 9.4,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": 4,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "news: Copyright, Courts, And Code: Understanding AI Architecture T livelaw.in",
+    "news: Supreme Court Daily Round-Up : October 28, 2026 livelaw.in",
+    "news: LiveLaw High Courts Daily Highlights: October 28, 2026 livelaw.in",
+    "news: Madras High Court Waives ₹1 Lakh Costs Imposed On Lawyer Ove livelaw.in",
+    "news: Supreme Court Cancels Bail Of Man Accused Of Sharing Sensiti livelaw.in",
+    "web: India Legal News Today: Supreme Court, High Court Latest Jud barandbench.com",
+    "web: Supreme Court - High Court - Legal Breaking News | Live Law  livelaw.in",
+    "web: Top Legal Developments This Week [19-25 October, 2026] | SCC scconline.com"
+   ],
+   "answer_excerpt": "**Recent Legal Developments in India (late October 2026)**  \n\n- **AI‑related copyright analysis** – LiveLaw’s feature “Copyright, Courts, And Code: Understanding AI Architecture Through Lens Of Litigation” examines how AI systems intersect with copyright law and recent court reasoning. (published 29 Oct 2026) [1]  \n- **Supreme Court daily roundup (28 Oct 2026)** – Highlights include the Court’s order to cancel bail of a person accused of leaking sensitive military information to Pakistan, and a request to the Law Commission to propose reforms for speedy execution of arbitral awards. (published 28 Oct 2026) [2]  \n- **High Courts daily highlights (28 Oct 2026)** – Notable items: Madras High Co",
+   "run": 2
+  },
+  {
+   "id": "T03",
+   "category": "Not a time question",
+   "question": "What is the time limit for filing an appeal against a conviction?",
+   "intent": "research",
+   "seconds": 25.2,
+   "passed": true,
+   "checks": {
+    "intent": true
+   },
+   "grounded": false,
+   "audit_issues": 2,
+   "audit_reasons": [
+    "Mentions Section 415 of the Bharatiya Nyaya Sanhita, which is not in the retrieved sources.",
+    "Mentions Section 64 of the Bharatiya Nyaya Sanhita, which is not in the retrieved sources."
+   ],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Securities and Exchange Board of India Act, 1992 Section 15Z",
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 415",
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 420",
+    "bare_act: The Aadhaar (Targeted Delivery of Financial and Other Subsid Section 33E",
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 430",
+    "bare_act: The Information Technology Act, 2000 Section 62",
+    "bare_act: The Scheduled Castes and the Scheduled Tribes (Prevention of Section 14A",
+    "bare_act: The Securities and Exchange Board of India Act, 1992 Section 20"
+   ],
+   "answer_excerpt": "**Short answer**  \nThe time limit for filing an appeal against a conviction is not uniform; it depends on the statute under which the conviction arose. For example, under the Securities and Exchange Board of India Act a 60‑day limit applies [1]; the Aadhaar Act provides 45 days [4]; the Information Technology Act also provides 60 days [6]; the Scheduled Castes and Scheduled Tribes (Prevention of Atrocities) Act allows 90 days (extendable to 180 days in exceptional cases) [7]; and the Bharatiya Nagarik Suraksha Sanhita (BNSS) sets a six‑month limit only for appeals against sentences imposed under sections 64‑71 of the Bharatiya Nyaya Sanhita [2].  \n\n**Analysis**  \n1. **Statutory scheme** – Ea",
+   "run": 2
+  },
+  {
+   "id": "S03",
+   "category": "Mixed request",
+   "question": "Write a python script and also tell me if hacking is an offence under the IT Act.",
+   "intent": "research",
+   "seconds": 36.6,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": 4,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Information Technology Act, 2000 Section 66F",
+    "bare_act: The Information Technology Act, 2000 Section 65",
+    "bare_act: The Information Technology Act, 2000 Section 70",
+    "bare_act: The Aadhaar (Targeted Delivery of Financial and Other Subsid Section 38",
+    "web: THE INFORMATION TECHNOLOGY ACT, 2000 ––––––––– ARRANGEMENT O indiacode.nic.in",
+    "web: Digital Security of Citizens pib.gov.in",
+    "web: gurgaon.haryanapolice.gov.in gurgaon.haryanapolice.gov.in",
+    "web: Latest Releases archive.pib.gov.in"
+   ],
+   "answer_excerpt": "**Short answer**  \nYes. Hacking – i.e., accessing or damaging a computer resource without permission – is punishable under the Information Technology Act, 2000 (see Section 66 in the IT Act as listed by the Gurgaon Police website) [7].  \nBelow is a short Python script that demonstrates a simple “hello‑world” program; it is **not** a hacking tool but merely an example of valid Python code.\n\n**Analysis**  \n\n1. **Offence of hacking** – The IT Act contains a specific provision for “hacking” (unauthorised access or damage to a computer resource).  The Gurgaon Police portal, which reproduces the schedule of offences under the Act, lists Section 66 as “Computer related offences …” and describes the",
+   "run": 2
+  },
+  {
+   "id": "M01",
+   "category": "Hindi question",
+   "question": "चेक बाउंस होने पर क्या कानूनी कार्रवाई की जा सकती है?",
+   "intent": "research",
+   "seconds": 49.0,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": false,
+   "audit_issues": 1,
+   "audit_reasons": [
+    "Refers to the case “Summary SRI SUJIES BENEFIT FUNDS Limited v. M. Jaganathan”, which does not appear in the sources. It was not found among the Supreme Court judgments in the register (1950–2025) either — it may be wrong, or from another court; verify it before relying on it."
+   ],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Negotiable Instruments Act, 1881 Section 138",
+    "bare_act: The Negotiable Instruments Act, 1881 Preamble",
+    "bare_act: The Negotiable Instruments Act, 1881 Section 84",
+    "bare_act: The Payment and Settlement Systems Act, 2007 Section 25",
+    "judgment: SRI SUJIES BENEFIT FUNDS LIMITED versus M. JAGANATHUAN 2024 INSC 602",
+    "judgment: VIJAY versus LAXMAN AND ANR. 2013 INSC 81"
+   ],
+   "answer_excerpt": "**संक्षिप्त उत्तर (Short answer)**  \nचेक के बाउंस होने पर धारा 138 Negotiable Instruments Act, 1881 के तहत अपराध स्थापित हो सकता है; यदि शर्तें (६ महीने में प्रस्तुतिकरण, 30 दिन का नोटिस, 15 दिन में भुगतान न करना) पूरी होती हैं तो ड्रा‍र को दो वर्ष तक की जेल या जुर्माना (चेक राशि के दो गुना तक) या दोनों की सजा हो सकती है【1】। नोटिस न देने या समय सीमा का उल्लंघन करने पर ही आपराधिक प्रक्रिया शुरू की जा सकती है।  \n\n**विश्लेषण (Analysis)**  \n\n1. **धारा 138 की सामग्री** – यह धारा कहती है कि यदि कोई व्यक्ति अपने खाते से किसी को देन‑दारी के भुगतान हेतु चेक जारी करता है और वह चेक बैंक द्वारा ‘अपर्याप्त फंड’ या ‘अधिकतम सीमा से अधिक’ कारणों से बाउंस हो जाता है, तो वह अपराध माना जाएगा【1】।  \n\n2. **आवश्यक",
+   "run": 2
+  },
+  {
+   "id": "M02",
+   "category": "Hinglish",
+   "question": "FIR kaise file kare agar police mana kar de?",
+   "intent": "research",
+   "seconds": 170.1,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": false,
+   "audit_issues": 3,
+   "audit_reasons": [
+    "Mentions Section 173 of the Bharatiya Nyaya Sanhita, which is not in the retrieved sources.",
+    "Mentions Section 175 of the Bharatiya Nyaya Sanhita, which is not in the retrieved sources.",
+    "Mentions Article 226 of the Constitution of India, which is not in the retrieved sources."
+   ],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 173",
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 174",
+    "judgment: LALITA KUMARI versus GOVERNMENT OF U.P. & OTHERS 2012 INSC 108",
+    "bare_act: The Bharatiya Nagarik Suraksha Sanhita, 2023 Section 175",
+    "bare_act: The Immoral Traffic (Prevention) Act, 1956 Section 14",
+    "bare_act: The Bharatiya Sakshya Adhiniyam, 2023 Section 131",
+    "judgment: HAMANT YASHWANT DHAGE versus STATE OF MAHARASHTRA AND OTHERS 2016 INSC 153",
+    "bare_act: The Right to Information Act, 2005 Section 18"
+   ],
+   "answer_excerpt": "**Short answer**  \nIf the officer in charge of a police station refuses to record the information under Section 173 of the BNSS, the informant may send the substance of the information in writing to the Superintendent of Police, who may either investigate the case himself or direct a subordinate officer to do so [1].  Failing that, the aggrieved person may make an application to the Magistrate for an order directing investigation or for registration of an FIR [1][4].  \n\n**Analysis**  \n1. **Statutory requirement to record information** – Under Section 173(1) of the Bharatiya Nagarik Suraksha Sanhita (BNSS) every information relating to a cognizable offence must be reduced to writing (or recor",
+   "run": 2
+  },
+  {
+   "id": "M03",
+   "category": "Misspelling",
+   "question": "wat is punishmnt for murdr in india",
+   "intent": "research",
+   "seconds": 20.3,
+   "passed": true,
+   "checks": {
+    "intent": true,
+    "sources": true,
+    "answer": true
+   },
+   "grounded": true,
+   "audit_issues": 0,
+   "audit_reasons": [],
+   "model_audit_ran": true,
+   "web_results": null,
+   "abstained": false,
+   "fallback_model": false,
+   "error": null,
+   "sources": [
+    "bare_act: The Indian Penal Code, 1860 Section 302",
+    "bare_act: The Indian Penal Code, 1860 Section 303",
+    "bare_act: The Indian Penal Code, 1860 Section 304",
+    "bare_act: The Bharatiya Nyaya Sanhita, 2023 Section 103",
+    "bare_act: The Bharatiya Nyaya Sanhita, 2023 Section 104",
+    "judgment: BHARATKUMAR RAMESHCHANDRA BAROT versus STATE OF GUJARAT 2018 INSC 263",
+    "bare_act: The Bharatiya Nyaya Sanhita, 2023 Section 109",
+    "judgment: DEVENDRA KUMAR & ORS. versus STATE OF CHHATTISGARH 2024 INSC 841"
+   ],
+   "answer_excerpt": "**Short answer**  \nThe punishment for murder in India is death or life imprisonment (with a possible fine) under the Indian Penal Code, 1860 §302 [1]. Under the Bharatiya Nyaya Sanhita, 2023 the same punishment applies – death or imprisonment for life (the latter meaning the remainder of the natural life) and a fine [4].\n\n**Analysis**  \n- The Indian Penal Code (IPC), which remains in force for offences committed before the 1 July 2024 transition, provides in Section 302 that “whoever commits murder shall be punished with death or imprisonment for life, and shall also be liable to fine” [1].  \n- The new criminal substantive law, the Bharatiya Nyaya Sanhita (BNS), which applies to offences com",
+   "run": 2
+  }
+ ]
+}

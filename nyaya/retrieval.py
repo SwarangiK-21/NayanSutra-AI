@@ -221,6 +221,59 @@ def _merge_parts(hits: list[Hit]) -> list[Hit]:
 
 
 CATALOGUE_PER_ANSWER = 4   # judgments from the Supreme Court catalogue (one entry each) per answer
+COMPLETE_TOP = 3           # statutory hits whose split provision is completed from its other parts
+COMPLETE_MAX_CHARS = 8000
+COUNTERPART_MIN_COS = 0.80   # an IPC section and its BNS replacement read almost alike; unrelated ones do not
+# Old and new criminal codes: a section of one is paired with the most similar section of the other.
+CODE_PAIRS = (("Bharatiya Nyaya Sanhita", "Indian Penal Code"),)
+
+
+def complete_sections(hits: list[Hit], top: int = COMPLETE_TOP, max_chars: int = COMPLETE_MAX_CHARS) -> list[Hit]:
+    """A long provision is split into several passages; give the top statutory hits their whole text (all parts of
+    the same section, in order), so a list such as the grounds of divorce is not cut off half-way."""
+    done = 0
+    for h in hits:
+        if done >= top:
+            break
+        if h.collection != "bare_act" or not h.section:
+            continue
+        done += 1
+        parts = db.conn().execute("SELECT text FROM chunks WHERE doc_id=? AND section=? ORDER BY ord",
+                                  (h.doc_id, h.section)).fetchall()
+        if len(parts) < 2:
+            continue
+        full = "\n".join(p["text"] for p in parts)
+        if len(full) > len(h.text):
+            h.text = full[:max_chars] + ("\n…" if len(full) > max_chars else "")
+    return hits
+
+
+def add_counterparts(hits: list[Hit], limit: int = 2) -> list[Hit]:
+    """For criminal-code sections among the hits, add the corresponding section of the other code (IPC <-> BNS),
+    found by text similarity, so an answer about the old and new law has both provisions in its sources."""
+    from .ingest import EMBED_CHARS
+    out, added = list(hits), 0
+    have = {(h.doc_id, h.section or h.chunk_id) for h in hits}   # a section already present (any of its parts)
+    for h in hits:
+        if added >= limit or h.collection != "bare_act":
+            continue
+        other = next((b if a in h.title else a for a, b in CODE_PAIRS if a in h.title or b in h.title), None)
+        if not other:
+            continue
+        target = act_doc_ids([other])
+        if not target:
+            continue
+        vec = embeddings.embed_passages([f"{h.header}\n{h.text}"[:EMBED_CHARS]])[0]
+        best = index.search(vec, 1, doc_ids=target, include_case_docs=False)
+        if best and best[0][1] >= COUNTERPART_MIN_COS:
+            for c in load_hits([best[0][0]]):
+                if (c.doc_id, c.section or c.chunk_id) in have:
+                    continue
+                c.score = h.score - 0.01
+                out.append(c)
+                have.add((c.doc_id, c.section or c.chunk_id))
+                added += 1
+    return out
 
 # Everyday words → the wording statutes actually use. Bare acts never say "FIR" or "cheque bounce", so without this a
 # plain question misses the provision that answers it. Used only to widen the search and the re-ranking query.
@@ -246,6 +299,9 @@ LAY_TERMS: list[tuple[re.Pattern, str]] = [(re.compile(p, re.I), t) for p, t in 
     (r"\bterror\w*|\b26/11\b", "terrorist act; waging war against the Government of India; unlawful activities"),
     (r"\bdowry\b", "dowry death; cruelty by husband or relatives of husband"),
     (r"\bdefam\w*", "defamation; imputation harming reputation"),
+    (r"consumer\s+(?:complaint|forum|court|commission|case)|defective\s+(?:goods|product)|deficiency\s+in\s+service",
+     "jurisdiction of the District Commission: value of goods or services paid as consideration; complaint "
+     "relating to defect in goods or deficiency in service"),
 ]]
 
 

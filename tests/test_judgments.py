@@ -92,7 +92,12 @@ def test_real_case_not_in_sources_is_identified(catalogue):
 
 def test_wrong_year_is_flagged(catalogue):
     issues = _cases_check("As held in Kasab v. State of Maharashtra (2015), the sentence stands.")
-    assert any("but not from 2015" in i for i in issues)
+    assert any("none from 2015" in i for i in issues)
+
+
+def test_reported_year_one_after_decision_is_accepted(catalogue):
+    issues = _cases_check("Kasab v. State of Maharashtra (2013) confirmed the sentence.")   # decided Aug 2012
+    assert any("real Supreme Court judgment (2012 INSC 341" in i for i in issues)
 
 
 def test_invented_case_is_flagged(catalogue):
@@ -110,7 +115,7 @@ def test_union_of_india_cases_are_looked_up(catalogue):
     issues = _cases_check("Maneka Gandhi v. Union of India (1978) widened personal liberty.")
     assert any("real Supreme Court judgment (1978 INSC 16, decided 1978-01-25)" in i for i in issues)
     issues = _cases_check("Maneka Gandhi v. Union of India (1985) widened personal liberty.")
-    assert any("but not from 1985" in i for i in issues)
+    assert any("none from 1985" in i for i in issues)
 
 
 def test_generic_names_and_other_reporters_are_not_guessed(catalogue):

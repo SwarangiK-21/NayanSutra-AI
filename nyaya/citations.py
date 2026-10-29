@@ -70,11 +70,11 @@ def mentioned_acts(text: str) -> list[str]:
     return seen
 
 
-def _nearest_act(text: str, start: int, end: int) -> str | None:
+def _nearest_act(text: str, start: int, end: int, after_window: int = 70) -> str | None:
     """Act named closest to a reference: "Section 73 of the Contract Act" (after) or
     "Contract Act ss. 73, 74" (before). Separators like ';' end the search window."""
     before = re.split(r"[;\n?!]", text[max(0, start - 60):start])[-1]
-    after = re.split(r"[;\n?!]", text[end:end + 70])[0]
+    after = re.split(r"[;\n?!]", text[end:end + after_window])[0]
     cand = []
     for m in _ALIAS_RE.finditer(before):
         cand.append((len(before) - m.end(), ACT_ALIASES[m.group(1).lower()]))
@@ -83,11 +83,12 @@ def _nearest_act(text: str, start: int, end: int) -> str | None:
     return min(cand)[1] if cand else None
 
 
-def parse_refs(text: str) -> list[Ref]:
-    """Provision references with the nearest act mentioned after them (or anywhere)."""
+def parse_refs(text: str, after_window: int = 70) -> list[Ref]:
+    """Provision references with the nearest act mentioned after them (or anywhere). A wider `after_window` reads
+    statutory lists ("section 64, section 65, … or section 71 of the Bharatiya Nyaya Sanhita")."""
     refs: list[Ref] = []
     for m in _REF.finditer(text):
-        near = _nearest_act(text, m.start(), m.end())
+        near = _nearest_act(text, m.start(), m.end(), after_window)
         is_article = bool(m.group("kind")) and m.group("kind").lower().startswith("art")
         if near:
             act = near

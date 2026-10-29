@@ -136,7 +136,7 @@ def search(query: str, *, max_results: int = 8, keep: int = 4,
             continue
         seen.add(url)
         title = re.sub(r"\s+", " ", str(item.get("title") or domain)).strip()[:200]
-        body = best_passages(str(item.get("content") or ""), q)
+        body = best_passages(str(item.get("content") or ""), q, keep=3)   # enough of the page to support what it says
         if len(body) < 80:
             continue
         out.append(WebResult(title=title, url=url, domain=domain, text=body, tier=t))

@@ -128,6 +128,8 @@ def run(selected: set[str]) -> list[dict]:
                "passed": all(checks.values()), "checks": checks,
                "grounded": (meta.get("verify") or {}).get("grounded"),
                "audit_issues": len((meta.get("verify") or {}).get("unsupported") or []),
+               "audit_reasons": (meta.get("verify") or {}).get("unsupported") or [],
+               "model_audit_ran": (meta.get("verify") or {}).get("checked"),
                "web_results": (meta.get("web") or {}).get("results"), "abstained": bool(meta.get("abstained")),
                "fallback_model": bool(meta.get("fallback_used")), "error": meta.get("error"),
                "sources": [f"{s['collection']}: {s['title'][:60]} {s.get('label') or ''}".strip() for s in srcs][:8],
@@ -138,7 +140,28 @@ def run(selected: set[str]) -> list[dict]:
     return out
 
 
+RESEARCH_IDS = {iid for iid, _, _, intents, *_ in ITEMS if intents & {"research", "news"} and iid not in ("S04", "G04")}
+
+
+def grounding(runs: int, out: Path) -> None:
+    """Grounding benchmark: every research/news item `runs` times; share of answers whose citation audit is clean."""
+    rows = []
+    for k in range(runs):
+        for r in run(RESEARCH_IDS):
+            r["run"] = k + 1
+            rows.append(r)
+    graded = [r for r in rows if r["grounded"] is not None]
+    clean = sum(r["grounded"] for r in graded)
+    out.write_text(json.dumps({"run_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "runs": runs,
+                               "answers": len(graded), "grounded": clean, "items": rows}, ensure_ascii=False, indent=1),
+                   encoding="utf-8")
+    print(f"grounded {clean}/{len(graded)} = {100 * clean / max(1, len(graded)):.0f}%  -> {out.name}")
+
+
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["--grounding"]:   # python run_eval.py --grounding 2 [name]
+        grounding(int(sys.argv[2]), Path(__file__).with_name(f"grounding_{sys.argv[3] if len(sys.argv) > 3 else 'latest'}.json"))
+        sys.exit(0)
     rows = run(set(sys.argv[1:]))
     res = {"run_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "items": rows,
            "passed": sum(r["passed"] for r in rows), "total": len(rows)}

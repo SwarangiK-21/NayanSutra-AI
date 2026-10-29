@@ -292,8 +292,15 @@ _YEAR_AFTER = re.compile(r"^[^.;\n]{0,40}?\b(19[5-9]\d|20[0-4]\d)\b")
 _STOP_PARTY = {"the", "state", "of", "union", "india", "and", "others", "ors", "anr", "another", "mr", "mrs", "ms", "m/s"}
 
 
+_PARTY_ABBR = {"govt": "government", "ltd": "limited", "corpn": "corporation", "corp": "corporation",
+               "co": "company", "assn": "association", "univ": "university", "dept": "department", "u p": "uttar pradesh",
+               "m p": "madhya pradesh", "nct": "nct"}
+_PARTY_ABBR_RE = re.compile(r"\b(" + "|".join(sorted((re.escape(k) for k in _PARTY_ABBR), key=len, reverse=True)) + r")\b")
+
+
 def _norm(s: str) -> str:
-    return re.sub(r"[^a-z0-9]+", " ", s.lower()).strip()
+    s = re.sub(r"[^a-z0-9]+", " ", s.lower()).strip()
+    return _PARTY_ABBR_RE.sub(lambda m: _PARTY_ABBR[m.group(1)], s)   # "Govt. of U.P." = "Government of Uttar Pradesh"
 
 
 def _key_words(party: str) -> list[str]:
@@ -306,15 +313,24 @@ def verify_citations(answer: str, source_texts: list[str], allowed_text: str = "
     `case_lookup(name=…, parties=(a_words, b_words), year=…)` / `case_lookup(citation=…)` may add what a register of
     real judgments says about a case the sources do not contain (real, wrong year, or not found)."""
     corpus = "\n".join(source_texts)
-    src_refs = {(r.key, r.act) for r in citations.parse_refs(corpus)}
+    # References inside each passage, read with its PDF line breaks joined, so "section 65 … ⏎ of the Bharatiya Nyaya
+    # Sanhita" inside the BNSS is credited to the BNS (a cross-reference), not to the act the passage belongs to.
+    src_refs = {(r.key, r.act) for t in source_texts for r in citations.parse_refs(t)} | \
+               {(r.key, r.act) for t in source_texts
+                for r in citations.parse_refs(re.sub(r"\s*\n\s*", " ", t), after_window=260)}
     src_keys = {k for k, _ in src_refs}
     user_keys = {r.key for r in citations.parse_refs(allowed_text)}
     issues = []
-    for r in citations.parse_refs(answer):
-        if r.key in user_keys:
-            continue
-        acts = {a for k, a in src_refs if k == r.key}
-        if r.key not in src_keys or (r.act and None not in acts and r.act not in acts):
+    for line in answer.splitlines():   # line by line: the act a reference belongs to is named near it
+        line_acts = set(citations.mentioned_acts(line))
+        for r in citations.parse_refs(line):
+            if r.key in user_keys:
+                continue
+            acts = {a for k, a in src_refs if k == r.key}
+            if r.key in src_keys and (not r.act or None in acts or r.act in acts):
+                continue
+            if r.key in src_keys and acts & line_acts:   # the line names the act whose section this is
+                continue
             label = f"{'Article' if r.key.startswith('A') else 'Order/Rule' if r.key.startswith('O') else 'Section'} " \
                     f"{r.key[1:]}" + (f" of the {r.act}" if r.act else "")
             issues.append(f"Mentions {label}, which is not in the retrieved sources.")
