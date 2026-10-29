@@ -83,8 +83,17 @@ def _collections(scope: str, exclude: frozenset[str] = frozenset()) -> set[str] 
     return base - exclude
 
 
+# Words in a large share of all passages (every Supreme Court catalogue entry says "Supreme Court of India", "case",
+# "bench", "citation"…). As keyword terms they match tens of thousands of rows and make ranking take seconds while
+# telling the search nothing; meaning search and the re-ranker still use them. From ts_stat on the library.
+_FTS_COMMON = set("""case cases court courts india indian author date dated official number decision decisions judge
+judges judgment judgments judgement decided supreme summary bench strength versus citation citations cnr abridged
+coram headnote headnotes insc scr outcome appeal appeals appellate appellant appellants civil state states allowed
+held part dismissed chapter code high person persons law laws legal""".split())
+
+
 def _fts_tokens(q: str) -> list[str]:
-    toks = [t for t in re.findall(r"[A-Za-z0-9]+", q.lower()) if t not in _STOP and len(t) > 1]
+    toks = [t for t in re.findall(r"[A-Za-z0-9]+", q.lower()) if t not in _STOP and t not in _FTS_COMMON and len(t) > 1]
     return list(dict.fromkeys(toks))[:14]
 
 
@@ -97,11 +106,41 @@ def fts_query(q: str) -> str:
     return " OR ".join(f'"{t}"' for t in toks)
 
 
+_NOT_NAMES = {"what", "which", "when", "where", "who", "whom", "how", "why", "can", "could", "should", "would", "does",
+              "did", "is", "are", "the", "tell", "explain", "give", "list", "please", "bharatiya", "nyaya", "nagarik",
+              "suraksha", "sanhita", "sakshya", "adhiniyam", "penal", "constitution", "article", "union", "government",
+              "high", "district", "sessions", "hindi", "english", "marathi", "under", "section"}
+
+
+def proper_names(text: str) -> list[str]:
+    """Capitalised words that look like party or place names (e.g. "Kasab", "Puttaswamy", "Maneka"), lower-cased;
+    question words, act names and near-universal words are left out."""
+    words = re.findall(r"\b[A-Z][a-z]{3,}\b", text or "")
+    out = [w.lower() for w in words]
+    return list(dict.fromkeys(w for w in out if w not in _NOT_NAMES and w not in _FTS_COMMON and w not in _STOP))[:4]
+
+
+PAIR_TERMS = 7   # Postgres: with 3+ keywords a passage must contain at least two of the first 7 (or a name)
+
+
+def pg_filter(q: str) -> str:
+    """Postgres match condition. "Any word" over ~60,000 passages matches most of them, and ranking that many takes
+    seconds on a small database; "at least two words" (or a capitalised name on its own) uses the index instead."""
+    toks = _fts_tokens(q)
+    if len(toks) < 3:
+        return " | ".join(toks)
+    names = [t for t in dict.fromkeys(w.lower() for w in re.findall(r"(?<!^)(?<![.?!]\s)\b[A-Z][a-z]{3,}", q))
+             if t in toks]   # proper nouns mid-sentence: party names, places
+    head = toks[:PAIR_TERMS]
+    pairs = [f"({a} & {b})" for i, a in enumerate(head) for b in head[i + 1:]]
+    return " | ".join(pairs + names)
+
+
 def _fts_sql(where: str) -> str:
     """Ranked keyword match; the header is weighted above the body (FTS5 bm25 3:1, Postgres weights A > B)."""
-    if db.backend() == "postgres":
-        return (f"SELECT c.id FROM chunks c JOIN documents d ON d.id=c.doc_id, to_tsquery('english', ?) q "
-                f"WHERE c.fts @@ q AND {where} ORDER BY ts_rank_cd(c.fts, q) DESC LIMIT ?")
+    if db.backend() == "postgres":   # filter with the index-friendly condition, rank with the plain one (ts_rank)
+        return (f"SELECT c.id FROM chunks c JOIN documents d ON d.id=c.doc_id, to_tsquery('english', ?) f, "
+                f"to_tsquery('english', ?) q WHERE c.fts @@ f AND {where} ORDER BY ts_rank(c.fts, q) DESC LIMIT ?")
     return (f"SELECT c.id FROM chunks_fts f JOIN chunks c ON c.id=f.rowid JOIN documents d ON d.id=c.doc_id "
             f"WHERE chunks_fts MATCH ? AND {where} ORDER BY bm25(chunks_fts, 3.0, 1.0) LIMIT ?")
 
@@ -110,8 +149,27 @@ def keyword_ids(q: str, where: str, args: list, k: int) -> list[int]:
     match = fts_query(q)
     if not match:
         return []
+    params = [pg_filter(q), match, *args, k] if db.backend() == "postgres" else [match, *args, k]
     try:
-        return [r[0] for r in db.conn().execute(_fts_sql(where), [match, *args, k])]
+        return [r[0] for r in db.conn().execute(_fts_sql(where), params)]
+    except Exception as exc:
+        log.warning("Keyword query failed (%s): %s", match, exc)
+        return []
+
+
+def pg_keyword_ids(q: str, k: int, collections: set[str], case_ids: list[str], doc_ids: set[str] | None = None,
+                   jurisdiction: str | None = None) -> list[int]:
+    """Postgres keyword search through private.fts_chunk_ids (migration 09): under row-level security Postgres cannot
+    use the full-text index directly, so the function runs the match with the index and applies the same access rule
+    itself (library for everyone; case documents only for cases the caller can access)."""
+    match = fts_query(q)
+    if not match or not collections:
+        return []
+    try:
+        rows = db.conn().execute("SELECT id FROM private.fts_chunk_ids(?, ?, ?, ?, ?, ?, ?)",
+                                 (pg_filter(q), match, sorted(collections), list(case_ids),
+                                  sorted(doc_ids) if doc_ids else None, jurisdiction or None, k)).fetchall()
+        return [r["id"] for r in rows]
     except Exception as exc:
         log.warning("Keyword query failed (%s): %s", match, exc)
         return []
@@ -119,6 +177,9 @@ def keyword_ids(q: str, where: str, args: list, k: int) -> list[int]:
 
 def lexical(q: str, k: int, scope: str, case_id: str | None, doc_ids: set[str] | None,
             exclude: frozenset[str] = frozenset(), jurisdiction: str | None = None) -> list[int]:
+    if db.backend() == "postgres":
+        cases = [case_id] if case_id and scope in ("all", "case") else []
+        return pg_keyword_ids(q, k, _collections(scope, exclude), cases, doc_ids, jurisdiction)
     where, args = _scope_sql(scope, case_id, doc_ids, exclude, jurisdiction)
     return keyword_ids(q, where, args, k)
 
@@ -349,6 +410,9 @@ def search(query: str, *, scope: str = "all", case_id: str | None = None, doc_id
                                                       collections=colls, doc_ids=doc_ids, include_case_docs=inc_case,
                                                       skip_doc_ids=skip)], 2.0))   # as strong as a named act
         lists.append((lexical(phrase, 20, scope, case_id, doc_ids, exclude, jur), 1.0))
+    names = proper_names(f"{query} {hint}")
+    if names:   # "Kasab", "Puttaswamy": rare, decisive words that common ones ("death", "sentence") would drown out
+        lists.append((lexical(" ".join(names), 20, scope, case_id, doc_ids, exclude, jur), 2.0))
     exact_ids = exact(refs, scope, case_id, doc_ids, jurisdiction=jur)
     if exact_ids:
         lists.append((exact_ids, 3.0))

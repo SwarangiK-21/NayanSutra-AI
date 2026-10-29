@@ -175,6 +175,9 @@ def create(user_id: str, *, org_id: str | None, state: str = "active", aal: str 
             cols = list(row)
             c.execute(f"INSERT INTO app_sessions({', '.join(cols)}) VALUES({', '.join('?' * len(cols))})",
                       [row[k] for k in cols])
+    if state == "active":   # signing in counts as using the account (data retention)
+        from . import retention
+        retention.mark_active(user_id, now)
     return token, row
 
 
@@ -210,6 +213,9 @@ def lookup(token: str | None) -> dict | None:
         with db.system():
             with db.tx() as c:
                 c.execute("UPDATE app_sessions SET last_seen_at=? WHERE id=?", (row["last_seen_at"], h))
+        if last.date() != dt_now.date() and row.get("user_id"):   # account activity for data retention, once a day
+            from . import retention
+            retention.mark_active(row["user_id"], dt_now)
     with _cache_lock:
         _cache[h] = (now, row)
     return row

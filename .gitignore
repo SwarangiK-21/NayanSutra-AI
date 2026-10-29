@@ -16,3 +16,5 @@ models/
 data/backups/
 # Acts imported from India Code at run time (kept with their own manifest; re-importable from the app)
 data/library/bare_acts/states/
+# Supreme Court judgments fetched on demand from the open dataset (re-fetchable; can be large)
+data/library/judgments/supreme_court/

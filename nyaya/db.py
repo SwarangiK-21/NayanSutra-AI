@@ -548,6 +548,15 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX IF NOT EXISTS ix_reminders_due ON event_reminders(status, remind_at_utc);
     """,
+    # 5 — data retention: last activity and inactivity warning on the profile (mirrors supabase/migrations/…10)
+    """
+    ALTER TABLE profiles ADD COLUMN last_active_at TEXT;
+    ALTER TABLE profiles ADD COLUMN retention_warned_at TEXT;
+    UPDATE profiles SET last_active_at = COALESCE((SELECT MAX(s.last_seen_at) FROM app_sessions s
+                                                   WHERE s.user_id = profiles.user_id), created_at);
+    CREATE INDEX IF NOT EXISTS ix_profiles_last_active ON profiles(last_active_at);
+    CREATE INDEX IF NOT EXISTS ix_chats_updated ON chats(updated_at);
+    """,
 ]
 
 _local = threading.local()
@@ -557,7 +566,7 @@ write_lock = threading.RLock()
 
 # Postgres schema version this code expects (supabase/migrations/*). The app never runs DDL against Postgres:
 # migrations are applied by the project owner (Supabase CLI / dashboard / MCP), and the app checks the version.
-PG_SCHEMA_VERSION = 5
+PG_SCHEMA_VERSION = 7
 DEFAULT_ORG = "org_default"
 
 

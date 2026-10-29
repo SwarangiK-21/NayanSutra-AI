@@ -39,13 +39,13 @@ async function refreshStatus() {
 
 // ── Router ──
 const routes = { dashboard: viewDashboard, cases: viewCases, research: viewResearch, acts: viewActs,
-  drafts: viewDrafts, limitation: viewLimitation, about: viewAbout, lookup: viewCaseSearch, doc: viewDocument,
+  drafts: viewDrafts, limitation: viewLimitation, about: viewAbout, privacy: viewPrivacy, lookup: viewCaseSearch, doc: viewDocument,
   upload: viewUpload, drafting: viewDrafting, notice: viewNotice, updates: viewUpdates, awareness: viewAwareness,
   search: viewSearch, tools: viewTools, account: viewAccount, admin: viewAdmin, jobs: viewJobs, calendar: viewCalendar,
   login: (m, r) => renderLogin(route, r.q), signup: (m, r) => renderSignup(route, r.q), forgot: () => renderForgot(),
   "reset-password": () => renderReset() };
 // Pages a signed-out visitor may open (public legal information); everything else asks them to sign in.
-const PUBLIC = new Set(["acts", "awareness", "limitation", "login", "signup", "forgot", "reset-password", "about"]);
+const PUBLIC = new Set(["acts", "awareness", "limitation", "login", "signup", "forgot", "reset-password", "about", "privacy"]);
 function parseHash() {
   const h = location.hash.replace(/^#\/?/, "") || "dashboard";
   const [path, qs] = h.split("?");
@@ -70,7 +70,7 @@ async function route() {
       <div class="card-b stack"><p>${t("auth.no_access_body", { email: s.user?.email || "" })}</p>
       <div class="small muted">${t("auth.public")} <a href="#/acts">${t("nav.acts")}</a> · <a href="#/awareness">${t("nav.awareness")}</a> · <a href="#/limitation">${t("nav.limitation")}</a></div></div></div>`);
   }
-  const navName = { doc: "cases", upload: "cases", notice: "drafting", drafts: "tools", limitation: "tools", about: "tools", jobs: "tools" }[r.name] || r.name;
+  const navName = { doc: "cases", upload: "cases", notice: "drafting", drafts: "tools", limitation: "tools", about: "tools", privacy: "tools", jobs: "tools" }[r.name] || r.name;
   $$("[data-nav]").forEach((a) => { const on = a.dataset.nav === navName; a.classList.toggle("active", on); if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   $("#navList").classList.remove("open");
   const main = $("#main");
@@ -975,6 +975,24 @@ async function viewAbout(main) {
         <tr><td>${t("about.storage")}</td><td>${s.database || "—"} · ${s.file_storage || "—"}</td></tr></tbody></table></div></details>
       <details class="panel"><summary>${t("about.chunking")}</summary><div class="panel-b md">${markdown(t("about.chunking_md"))}</div></details>
       <details class="panel"><summary>${t("about.security")}</summary><div class="panel-b md">${markdown(t("about.security_md"))}</div></details>
+    </div>`);
+}
+
+async function viewPrivacy(main) {
+  crumbs([[t("nav.privacy")]]);
+  mount(main, html`<h1 class="page-title">${t("privacy.title")}</h1><div style="max-width:960px">${spinner()}</div>`);
+  let p;
+  try { p = await api("/api/privacy"); } catch (e) { mount(main, html`<div class="notice notice-red">${e.message}</div>`); return; }
+  mount(main, html`
+    <h1 class="page-title">${t("privacy.title")}</h1>
+    <div style="max-width:960px">
+      <div class="md">${markdown(t("privacy.intro_md"))}</div>
+      <details class="panel" open><summary>${t("privacy.periods")}</summary><div class="panel-b"><table class="gov">
+        <thead><tr><th>${t("privacy.col_data")}</th><th>${t("privacy.col_kept")}</th><th>${t("privacy.col_from")}</th></tr></thead>
+        <tbody>${p.periods.map((r) => html`<tr><td>${r.data}</td><td>${r.kept}</td><td>${r.from}</td></tr>`)}</tbody></table>
+        <p class="small muted">${t(p.retention_job ? "privacy.job_on" : "privacy.job_off")}</p></div></details>
+      <details class="panel"><summary>${t("privacy.where")}</summary><div class="panel-b md">${markdown(t("privacy.where_md"))}</div></details>
+      <details class="panel"><summary>${t("privacy.rights")}</summary><div class="panel-b md">${markdown(t("privacy.rights_md"))}</div></details>
     </div>`);
 }
 

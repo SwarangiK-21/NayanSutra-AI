@@ -1,0 +1,38 @@
+# NyaySutra AI on one server (a VM such as Oracle Cloud Always Free, AWS Lightsail, DigitalOcean…):
+# the app + Caddy, which gets and renews the HTTPS certificate automatically. See docs/DEPLOYMENT.md.
+#     cd deploy && docker compose up -d --build
+services:
+  app:
+    build: ..
+    restart: unless-stopped
+    env_file: ../.env                  # your secrets stay on the server, never in the image
+    environment:
+      APP_HOST: 0.0.0.0
+      APP_PORT: "8000"
+      TRUSTED_PROXY_IPS: "*"          # only Caddy can reach the app: its port is not published below
+    volumes:
+      - nyaya-home:/var/lib/nyaysutra               # search-index cache, sessions' local state
+      - nyaya-judgments:/opt/nyaysutra/app/data/library/judgments/supreme_court   # full texts fetched on demand
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2.8
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS in deploy/.env, e.g. nyaysutra.example.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+
+volumes:
+  nyaya-home:
+  nyaya-judgments:
+  caddy-data:
+  caddy-config:

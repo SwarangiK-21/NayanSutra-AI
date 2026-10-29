@@ -38,8 +38,12 @@ def main() -> int:
           f"  Press Ctrl+C to stop.\n")
     if "--no-browser" not in sys.argv:
         Timer(2.0, lambda: webbrowser.open(url)).start()
+    # Client IP / https from X-Forwarded-* only when a reverse proxy we control sits in front (TRUSTED_PROXY_IPS);
+    # otherwise a visitor could forge them.
+    proxy = {"proxy_headers": True, "forwarded_allow_ips": config.TRUSTED_PROXY_IPS} if config.TRUSTED_PROXY_IPS \
+        else {"proxy_headers": False}
     uvicorn.run("nyaya.server:app", host=config.APP_HOST, port=config.APP_PORT, log_level="warning",
-                proxy_headers=False, server_header=False, date_header=False)
+                server_header=False, date_header=False, **proxy)
     return 0
 
 

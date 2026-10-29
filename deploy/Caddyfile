@@ -1,0 +1,9 @@
+# HTTPS in front of NyaySutra. Caddy obtains and renews the certificate for SITE_ADDRESS by itself
+# (the domain's DNS must point at this server, and ports 80/443 must be open).
+{$SITE_ADDRESS} {
+	encode gzip
+	reverse_proxy app:8000 {
+		# answers stream (Server-Sent Events): pass them through without buffering
+		flush_interval -1
+	}
+}

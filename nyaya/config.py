@@ -162,6 +162,15 @@ WEB_SEARCH_ENABLED = _bool("WEB_SEARCH_ENABLED", bool(OLLAMA_API_KEY))
 WEB_SEARCH_URL = _env("WEB_SEARCH_URL", default="https://ollama.com/api/web_search")
 WEB_SEARCH_TIMEOUT = float(_env("WEB_SEARCH_TIMEOUT", default="20"))
 
+# Data retention (docs/DATA_RETENTION.md). Defaults: the project owner's "keep data longer" choice. 0 = keep forever.
+RETENTION_ENABLED = _bool("RETENTION_ENABLED", True)              # the daily clean-up job
+RETENTION_CHAT_MONTHS = int(_env("RETENTION_CHAT_MONTHS", default="24"))        # after the chat was last used
+RETENTION_SEARCH_MONTHS = int(_env("RETENTION_SEARCH_MONTHS", default="24"))
+RETENTION_INACTIVE_MONTHS = int(_env("RETENTION_INACTIVE_MONTHS", default="36"))   # account deleted after
+RETENTION_WARN_MONTHS = int(_env("RETENTION_WARN_MONTHS", default="33"))           # warning sent after
+RETENTION_AUDIT_YEARS = int(_env("RETENTION_AUDIT_YEARS", default="5"))
+RETENTION_TICK_HOURS = float(_env("RETENTION_TICK_HOURS", default="24"))
+
 # Supreme Court judgments (open dataset): every judgment is in the catalogue; full texts are fetched on demand and at
 # most this many are kept (least recently used removed first), which keeps the database inside the 500 MB free tier.
 SC_FULLTEXT_MAX = int(_env("SC_FULLTEXT_MAX", default="500"))
@@ -172,6 +181,9 @@ APP_HOST = _env("APP_HOST", default="127.0.0.1")
 APP_PORT = int(_env("APP_PORT", default="8000"))
 APP_PASSWORD = _env("APP_PASSWORD")
 ALLOWED_HOSTS = [h.strip() for h in _env("ALLOWED_HOSTS", default="127.0.0.1,localhost").split(",") if h.strip()]
+# Set only when the app is reachable solely through your own reverse proxy (e.g. "*" inside docker compose, where the
+# app port is not published): then the client IP and https are read from the proxy's X-Forwarded-* headers.
+TRUSTED_PROXY_IPS = _env("TRUSTED_PROXY_IPS")
 MAX_UPLOAD_MB = int(_env("MAX_UPLOAD_MB", default="40"))
 MAX_PDF_PAGES = int(_env("MAX_PDF_PAGES", default="2000"))
 CHAT_RATE_PER_MIN = int(_env("CHAT_RATE_PER_MIN", default="20"))

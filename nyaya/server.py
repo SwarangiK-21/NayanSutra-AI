@@ -115,6 +115,9 @@ async def lifespan(app: FastAPI):
     jobs.start_workers()
     if config.REMINDERS_ENABLED:
         events.start_dispatcher()   # calendar reminders are delivered whether or not anyone has the app open
+    if config.RETENTION_ENABLED:
+        from . import retention
+        retention.start()           # daily: delete personal data older than the retention periods
     threading.Thread(target=_warm, daemon=True).start()
     if config.SYNC_ENABLED:
         _scheduler = integrations.Scheduler()
@@ -123,6 +126,8 @@ async def lifespan(app: FastAPI):
     if _scheduler:
         _scheduler.stop.set()
     events.stop_dispatcher()
+    from . import retention
+    retention.stop()
     jobs.stop_workers()
     db.close_pool()
 
@@ -639,6 +644,20 @@ def directory(q: str = "", p: Principal = Depends(need("directory.read"))):
 
 
 # ── Status / dashboard ───────────────────────────────────────────────────────
+@app.get("/api/health")
+def health():
+    """For uptime monitors and container health checks: no sign-in, no AI call, no data returned — only whether the
+    app is up, the database answers and the search index is loaded."""
+    try:
+        db.conn().execute("SELECT 1").fetchone()
+        database = True
+    except Exception:
+        database = False
+    from .vectorindex import index
+    body = {"ok": database, "database": database, "index_loaded": len(index) > 0}
+    return JSONResponse(body, status_code=200 if database else 503)
+
+
 @app.get("/api/status")
 def status(p: Principal = P):
     if time.time() - _state["llm_checked"] > 120:
@@ -1924,6 +1943,13 @@ def integrations_enable(iid: str, body: EnabledIn, p: Principal = Depends(need("
 @app.get("/api/news")
 def news(q: str = "", limit: int = 50, p: Principal = Depends(need("library.read"))):
     return {"items": integrations.news(max(1, min(limit, 200)), q[:100])}
+
+
+@app.get("/api/privacy")
+def privacy_policy(p: Principal = Depends(need("library.read"))):
+    """How long each kind of data is kept (public: shown on the Privacy page, also before sign-in)."""
+    from . import retention
+    return {"periods": retention.policy(), "retention_job": config.RETENTION_ENABLED}
 
 
 # ── Legal awareness, unified search ─────────────────────────────────────────

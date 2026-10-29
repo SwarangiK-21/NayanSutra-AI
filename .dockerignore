@@ -1,0 +1,19 @@
+# Never in the image: secrets, local databases, uploads, caches, tooling
+.env
+.env.*
+.git
+.github
+.claude
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.venv
+data/nyaysutra.db*
+data/uploads
+data/backups
+data/migration_report.json
+data/samples
+data/cases.json
+docs
+tests
+deploy/*.env

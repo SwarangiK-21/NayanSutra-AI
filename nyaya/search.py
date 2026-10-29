@@ -65,8 +65,11 @@ def search(q: str, *, types: set[str] | None = None, court: str = "", state: str
         ids = retrieval.lexical(q, 60, "library", None, only, exclude=frozenset({"draft"})) if lib_types else []
         # documents of every case the caller can access — lexical() limits case docs to one case
         if "document" in types and mine:
-            ids += retrieval.keyword_ids(q, f"d.collection='case' AND d.status='ready' AND d.case_id IN "
-                                            f"({','.join('?' * len(mine))})", list(mine), 30)
+            if db.backend() == "postgres":   # indexed search; the function re-checks case access
+                ids += retrieval.pg_keyword_ids(q, 30, {"case"}, list(mine))
+            else:
+                ids += retrieval.keyword_ids(q, f"d.collection='case' AND d.status='ready' AND d.case_id IN "
+                                                f"({','.join('?' * len(mine))})", list(mine), 30)
         seen_docs: dict[str, int] = {}
         hits = retrieval.load_hits(list(dict.fromkeys(ids)))
         doc_ids = sorted({h.doc_id for h in hits})

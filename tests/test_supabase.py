@@ -49,7 +49,15 @@ def test_keyword_query_syntax_per_engine(monkeypatch):
     assert retrieval.fts_query("Is the deposit refundable?") == '"deposit" OR "refundable"'
     monkeypatch.setattr(config, "SUPABASE_DB_URL", "postgresql://u@h/db")
     assert retrieval.fts_query("Is the deposit refundable?") == "deposit | refundable"
-    assert retrieval.fts_query("x'); DROP TABLE cases;--") == "drop | table | cases"   # no syntax can be injected
+    assert retrieval.fts_query("x'); DROP TABLE users;--") == "drop | table | users"   # no syntax can be injected
+    # Postgres filter: with 3+ keywords at least two must co-occur (index-friendly); names may match alone
+    assert retrieval.pg_filter("deposit refundable") == "deposit | refundable"
+    assert retrieval.pg_filter("Is the security deposit refundable") == \
+        "(security & deposit) | (security & refundable) | (deposit & refundable)"
+    assert retrieval.pg_filter("death sentence of Kasab confirmed") .endswith("| kasab")
+    assert retrieval.pg_filter("x'); DROP TABLE users; -- & | !") == "(drop & table) | (drop & users) | (table & users)"
+    # common words (every catalogue entry says "Supreme Court of India") are not keyword terms
+    assert retrieval.fts_query("Supreme Court of India judgment on bail") == "bail"
 
 
 def test_migrations_cover_every_table():
