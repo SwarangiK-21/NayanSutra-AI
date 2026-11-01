@@ -18,3 +18,4 @@ data/backups/
 data/library/bare_acts/states/
 # Supreme Court judgments fetched on demand from the open dataset (re-fetchable; can be large)
 data/library/judgments/supreme_court/
+docs/competitive_analysis/eval/web_recording.json

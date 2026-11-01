@@ -111,4 +111,7 @@ them; the app refuses to start against an older schema.
 | `APP_HOST` | `0.0.0.0` (set by compose) | listen inside the container |
 | `TRUSTED_PROXY_IPS` | `*` (set by compose) | real client IPs for rate limits and the audit log |
 | `RETENTION_ENABLED` | `true` (default) | daily data-retention clean-up (docs/DATA_RETENTION.md) |
-| `WEB_SEARCH_ENABLED` | `true` (default) | note: the Ollama web-search allowance is limited; heavy use returns HTTP 429 until it resets or the plan is upgraded |
+| `WEB_SEARCH_ENABLED` | `true` (default) | `false` for local work that needs no web answers. The Ollama web-search allowance is limited; heavy use returns HTTP 429 until it resets or the plan is upgraded |
+| `WEB_SEARCH_DAILY_LIMIT` | `300` (default) | live web searches a day: a warning is logged at 80%, and they stop at 100% (cached results still work). 0 = no budget |
+| `WEB_SEARCH_PAUSE_MINUTES` | `30` (default) | live searches stop this long after a "limit reached" reply, unless the provider states a time |
+| `WEB_CACHE_HOURS` / `WEB_CACHE_FRESH_HOURS` | `24` / `1` (defaults) | how long a web result is reused; the second applies to news and other recent questions |

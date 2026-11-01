@@ -59,6 +59,7 @@ def _web(monkeypatch, results=None, reason=""):
     return seen
 
 
+_REAL_CALL = websearch._call
 KASAB = websearch.WebResult(
     title="Mohd. Ajmal Mohd. Amir Kasab v. State of Maharashtra", url="https://main.sci.gov.in/judgment/kasab.pdf",
     domain="main.sci.gov.in", tier=0,
@@ -283,7 +284,7 @@ def test_websearch_ranks_and_filters(monkeypatch):
         {"title": "SC judgment", "url": "https://main.sci.gov.in/j.pdf", "content": long},
         {"title": "bad scheme", "url": "javascript:alert(1)", "content": long},
     ])
-    websearch._cache.clear()
+    websearch.reset()
     res, why = websearch.search("Kasab judgment, call me on 9876543210 or a@b.com")
     assert why == "" and [r.domain for r in res] == ["main.sci.gov.in", "thehindu.com"]   # unknown blog dropped
     assert "9876543210" not in sent[0] and "a@b.com" not in sent[0]
@@ -299,7 +300,7 @@ def test_only_unknown_websites_means_no_web_sources(monkeypatch):
     monkeypatch.setattr(websearch, "_call", lambda q, n: [
         {"title": "Decided cases", "url": "https://supremecourttest.azurewebsites.net/x", "content": long},
         {"title": "Order", "url": "https://order.law/ramesh", "content": long}])
-    websearch._cache.clear()
+    websearch.reset()
     assert websearch.search("Ramesh Kumar v. State of Atlantis") == ([], websearch.NO_RESULT)
 
 
@@ -313,7 +314,7 @@ def test_cheque_wording_variants_expand():
 def test_websearch_failure_returns_reason(monkeypatch):
     monkeypatch.setattr(config, "WEB_SEARCH_ENABLED", True)
     monkeypatch.setattr(config, "OLLAMA_API_KEY", "k")
-    websearch._cache.clear()
+    websearch.reset()
 
     def boom(q, n):
         raise RuntimeError("ConnectError")
@@ -362,3 +363,63 @@ def test_lay_terms_map_to_statutory_wording(text, expect):
     from nyaya import retrieval
     found = " ".join(retrieval.expand_lay_terms(text))
     assert (expect in found) if expect else found == ""
+
+
+class _LimitReply:
+    status_code = 429
+    headers = {"Retry-After": "120"}
+
+
+def _live_web(monkeypatch, **settings):
+    monkeypatch.setattr(config, "WEB_SEARCH_ENABLED", True)
+    monkeypatch.setattr(config, "OLLAMA_API_KEY", "k")
+    for name, value in settings.items():
+        monkeypatch.setattr(config, name, value)
+    websearch.reset()
+    calls = []
+    page = {"title": "t", "url": "https://x.gov.in/a", "content": "text " * 40}
+    monkeypatch.setattr(websearch, "_call", lambda q, n: calls.append(q) or [page])
+    return calls
+
+
+def test_websearch_results_are_reused(monkeypatch):
+    calls = _live_web(monkeypatch)
+    first, _ = websearch.search("Kasab judgment")
+    again, why = websearch.search("Kasab judgment")
+    assert len(calls) == 1 and why == "" and [r.url for r in again] == [r.url for r in first]
+
+
+def test_websearch_recent_questions_need_a_recent_result(monkeypatch):
+    calls = _live_web(monkeypatch, WEB_CACHE_FRESH_HOURS=0)
+    websearch.search("latest news", fresh=True)
+    websearch.search("latest news", fresh=True)
+    assert len(calls) == 2
+    websearch.search("latest news")          # an ordinary question may still use it
+    assert len(calls) == 2
+
+
+def test_websearch_limit_is_not_retried_and_pauses_searches(monkeypatch):
+    _live_web(monkeypatch)
+    posts = []
+    monkeypatch.setattr(websearch, "_call", _REAL_CALL)
+    monkeypatch.setattr(websearch.httpx, "post", lambda *a, **k: posts.append(1) or _LimitReply())
+    assert websearch.search("first") == ([], websearch.LIMIT_REACHED)
+    assert websearch.search("second") == ([], websearch.LIMIT_REACHED)
+    assert len(posts) == 1                   # no retry, and the second question never reached the provider
+
+
+def test_websearch_serves_cached_results_while_paused(monkeypatch):
+    calls = _live_web(monkeypatch)
+    websearch.search("Kasab judgment")
+    websearch._pause(600)
+    res, why = websearch.search("Kasab judgment")
+    assert res and why == "" and len(calls) == 1
+
+
+def test_websearch_daily_budget_stops_live_searches(monkeypatch):
+    calls = _live_web(monkeypatch, WEB_SEARCH_DAILY_LIMIT=2)
+    websearch.search("one")
+    websearch.search("two")
+    assert websearch.search("three") == ([], websearch.BUDGET_USED)
+    assert len(calls) == 2
+    assert websearch.search("one")[0]        # what is already cached still works

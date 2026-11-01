@@ -438,7 +438,7 @@ def _research(message: str, p: dict, case: dict | None, docs: list[dict], scope:
     # case or person that a statute library cannot contain. Never for drafting or a "case documents only" search.
     if not drafting and scope != "case" and (not hits or weak or p.get("external")):
         yield {"type": "status", "step": "web", "text": "Searching reliable web sources…"}
-        web, why = websearch.search(intents.strip_parties(p["query"], case))
+        web, why = websearch.search(intents.strip_parties(p["query"], case), fresh=intents.asks_for_recent(message))
         _step(meta, "web_search", "ok" if web else "empty" if why == websearch.NO_RESULT else "unavailable",
               results=len(web))
         meta["web"] = {"results": len(web), "domains": [r.domain for r in web], "reason": why or None}
@@ -632,7 +632,8 @@ def _news(message: str, p: dict, answer: list[str], sources: list[dict], meta: d
         query = "latest legal news India Supreme Court High Court"
     yield {"type": "status", "step": "news", "text": "Checking current legal news…"}
     feed = _feed_hits("" if general else query)
-    web, why = websearch.search(query if re.search(r"\bnews\b", query, re.I) else f"{query} India legal news")
+    web, why = websearch.search(query if re.search(r"\bnews\b", query, re.I) else f"{query} India legal news",
+                                fresh=True)
     hits = (feed[:5] + _web_hits(web))[: config.CONTEXT_PASSAGES]
     _step(meta, "news_search", "ok" if hits else "empty", feed=len(feed), web=len(web))
     meta["web"] = {"results": len(web), "domains": [r.domain for r in web], "reason": why or None}

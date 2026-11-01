@@ -7,21 +7,30 @@
   legal publishers and established news organisations; social media, Q&A sites and unknown websites are dropped.
 * Each result's text is cut to the passages that best match the query, and is later wrapped in the same
   injection-resistant <source> delimiters as library passages: a web page is data, never instructions.
-* Bounded: one retry, a short timeout and a 10-minute cache, so a question never loops or floods the provider.
+* Bounded: a short timeout, one retry for a server error, and a cache that survives restarts (a day; an hour for news
+  and other recent questions), so a question never loops or floods the provider.
+* The allowance is protected: "limit reached" (HTTP 429) is never retried and pauses live searches for a while, and a
+  daily budget stops them before the allowance runs out. Cached results are still served during both.
   Failure returns ([], reason) — callers must say that the web was not searched, never pretend it was.
+* The cache and counters live in a small local file (HOME_DIR/web_search.db), not in Supabase. Queries are stored only
+  as a hash; the results are public web pages.
 """
 from __future__ import annotations
 
+import contextlib
+import hashlib
+import json
 import logging
 import re
+import sqlite3
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from urllib.parse import urlsplit
 
 import httpx
 
-from . import config, privacy
+from . import clock, config, privacy
 
 log = logging.getLogger(__name__)
 
@@ -43,10 +52,10 @@ TIER_LABEL = {0: "official source", 1: "legal publisher", 2: "news / reference",
 # Sources below this tier ("other website": unknown blogs, aggregators, test sites) are never handed to the model.
 RELIABLE_TIER = 2
 
-_cache: dict[tuple, tuple[float, list]] = {}
 _lock = threading.Lock()
-CACHE_SECONDS = 600
 NO_RESULT = "no reliable web result was found"
+LIMIT_REACHED = "the web search limit has been reached for now"
+BUDGET_USED = "today's web search budget has been used"
 
 
 @dataclass
@@ -58,6 +67,16 @@ class WebResult:
     tier: int
     published: str | None = None
     extra: dict = field(default_factory=dict)
+
+
+class RateLimited(RuntimeError):
+    def __init__(self, retry_after: int):
+        super().__init__("HTTP 429")
+        self.retry_after = retry_after
+
+
+class Blocked(RuntimeError):
+    """A live search was not attempted (paused or over budget); the message is the reason shown to the user."""
 
 
 def enabled() -> bool:
@@ -90,11 +109,13 @@ def best_passages(text: str, query: str, size: int = 1400, keep: int = 2) -> str
 def _call(query: str, max_results: int) -> list[dict]:
     headers = {"Authorization": f"Bearer {config.OLLAMA_API_KEY}", "User-Agent": config.HTTP_USER_AGENT}
     last: Exception | None = None
-    for attempt in range(2):   # one retry, never more
+    for attempt in range(2):   # one retry, never more, and none for "limit reached": it would only waste the allowance
         try:
             r = httpx.post(config.WEB_SEARCH_URL, headers=headers, json={"query": query, "max_results": max_results},
                            timeout=config.WEB_SEARCH_TIMEOUT)
-            if r.status_code in (429, 500, 502, 503, 504) and attempt == 0:
+            if r.status_code == 429:
+                raise RateLimited(_retry_after(r.headers.get("Retry-After")))
+            if r.status_code in (500, 502, 503, 504) and attempt == 0:
                 time.sleep(1.0)
                 continue
             r.raise_for_status()
@@ -107,21 +128,122 @@ def _call(query: str, max_results: int) -> list[dict]:
     raise RuntimeError(type(last).__name__ if last else "web search failed")
 
 
-def search(query: str, *, max_results: int = 8, keep: int = 4,
-           max_tier: int = RELIABLE_TIER) -> tuple[list[WebResult], str]:
-    """(ranked results, '' or a short reason why the web could not be searched)."""
+def _retry_after(value: str | None) -> int:
+    default = config.WEB_SEARCH_PAUSE_MINUTES * 60
+    return min(int(value), 86400) if value and value.isdigit() else default
+
+
+@contextlib.contextmanager
+def _store():
+    config.HOME_DIR.mkdir(parents=True, exist_ok=True)
+    with _lock, contextlib.closing(sqlite3.connect(config.HOME_DIR / "web_search.db", timeout=5)) as c, c:
+        c.execute("CREATE TABLE IF NOT EXISTS results(key TEXT PRIMARY KEY, saved_at REAL, items TEXT)")
+        c.execute("CREATE TABLE IF NOT EXISTS state(name TEXT PRIMARY KEY, value REAL)")
+        yield c
+
+
+def reset() -> None:
+    """Forget cached results, the pause and today's count."""
+    with _store() as c:
+        c.execute("DELETE FROM results")
+        c.execute("DELETE FROM state")
+
+
+def _cached(key: str, fresh: bool) -> list[WebResult] | None:
+    long, short = config.WEB_CACHE_HOURS * 3600, config.WEB_CACHE_FRESH_HOURS * 3600
+    try:
+        with _store() as c:
+            row = c.execute("SELECT saved_at, items FROM results WHERE key=?", (key,)).fetchone()
+    except sqlite3.Error as exc:
+        log.warning("Web search cache unavailable: %s", exc)
+        return None
+    if not row:
+        return None
+    items = [WebResult(**i) for i in json.loads(row[1])]
+    # "nothing found" is rechecked as soon as recent news is: the web may have caught up
+    return items if time.time() - row[0] < (short if fresh or not items else long) else None
+
+
+def _remember(key: str, items: list[WebResult]) -> None:
+    now = time.time()
+    try:
+        with _store() as c:
+            c.execute("INSERT OR REPLACE INTO results(key, saved_at, items) VALUES(?,?,?)",
+                      (key, now, json.dumps([asdict(i) for i in items], ensure_ascii=False)))
+            c.execute("DELETE FROM results WHERE saved_at < ?", (now - config.WEB_CACHE_HOURS * 3600,))
+    except sqlite3.Error as exc:
+        log.warning("Web search cache unavailable: %s", exc)
+
+
+def _paused() -> bool:
+    try:
+        with _store() as c:
+            row = c.execute("SELECT value FROM state WHERE name='paused_until'").fetchone()
+    except sqlite3.Error:
+        return False
+    return bool(row and row[0] > time.time())
+
+
+def _pause(seconds: int) -> None:
+    log.warning("Web search limit reached: pausing live searches for %d minutes", seconds // 60)
+    with contextlib.suppress(sqlite3.Error), _store() as c:
+        c.execute("INSERT OR REPLACE INTO state(name, value) VALUES('paused_until', ?)", (time.time() + seconds,))
+
+
+def _spend() -> bool:
+    """Count one live search against today's budget; False when it is used up. 0 = no budget."""
+    limit = config.WEB_SEARCH_DAILY_LIMIT
+    if limit <= 0:
+        return True
+    day = f"spent:{clock.today()}"
+    try:
+        with _store() as c:
+            row = c.execute("SELECT value FROM state WHERE name=?", (day,)).fetchone()
+            spent = int(row[0]) if row else 0
+            if spent >= limit:
+                return False
+            c.execute("DELETE FROM state WHERE name LIKE 'spent:%' AND name<>?", (day,))
+            c.execute("INSERT OR REPLACE INTO state(name, value) VALUES(?,?)", (day, spent + 1))
+    except sqlite3.Error as exc:
+        log.warning("Web search budget unavailable: %s", exc)
+        return True
+    if spent + 1 == int(limit * 0.8):
+        log.warning("Web search budget: %d of %d used today", spent + 1, limit)
+    elif spent + 1 == limit:
+        log.warning("Web search budget used up (%d today): live searches stop until tomorrow", limit)
+    return True
+
+
+def _live(query: str, max_results: int) -> list[dict]:
+    """One provider call, unless paused or over budget. This is the only way a search reaches the provider."""
+    if _paused():
+        raise Blocked(LIMIT_REACHED)
+    if not _spend():
+        raise Blocked(BUDGET_USED)
+    try:
+        return _call(query, max_results)
+    except RateLimited as exc:
+        _pause(exc.retry_after)
+        raise Blocked(LIMIT_REACHED) from exc
+
+
+def search(query: str, *, max_results: int = 8, keep: int = 4, max_tier: int = RELIABLE_TIER,
+           fresh: bool = False) -> tuple[list[WebResult], str]:
+    """(ranked results, '' or a short reason why the web could not be searched). `fresh`: the answer depends on recent
+    events, so only a recent cached result will do."""
     if not enabled():
         return [], "web search is not configured"
     q = privacy.Redactor().redact(re.sub(r"\s+", " ", query or "").strip())[:300]
     if not q:
         return [], "empty query"
-    key = (q.lower(), max_results, max_tier)
-    with _lock:
-        hit = _cache.get(key)
-        if hit and time.time() - hit[0] < CACHE_SECONDS:
-            return list(hit[1]), ""
+    key = hashlib.sha256(f"{q.lower()}|{max_results}|{max_tier}|{keep}".encode()).hexdigest()
+    hit = _cached(key, fresh)
+    if hit is not None:
+        return hit, "" if hit else NO_RESULT
     try:
-        raw = _call(q, max_results)
+        raw = _live(q, max_results)
+    except Blocked as exc:
+        return [], str(exc)
     except Exception as exc:
         log.warning("Web search failed: %s", exc)
         return [], "the web search service could not be reached"
@@ -142,8 +264,5 @@ def search(query: str, *, max_results: int = 8, keep: int = 4,
         out.append(WebResult(title=title, url=url, domain=domain, text=body, tier=t))
     out.sort(key=lambda r: r.tier)   # stable: provider order within a tier
     out = out[:keep]
-    with _lock:
-        _cache[key] = (time.time(), out)
-        if len(_cache) > 200:
-            _cache.pop(next(iter(_cache)))
+    _remember(key, out)
     return out, "" if out else NO_RESULT

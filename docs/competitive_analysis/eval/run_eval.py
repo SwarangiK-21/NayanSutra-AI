@@ -6,6 +6,9 @@ so nothing is written to the database.
 
     python docs/competitive_analysis/eval/run_eval.py            # all items
     python docs/competitive_analysis/eval/run_eval.py R01 S02    # selected items
+    python docs/competitive_analysis/eval/run_eval.py --live-web # ask the web afresh and update the recording
+Web results are recorded in web_recording.json (not in Git) and replayed on later runs, so repeat runs use almost none
+of the web-search allowance and their scores are comparable. A query not yet recorded is searched live.
 Results: docs/competitive_analysis/eval/results.json
 """
 from __future__ import annotations
@@ -19,7 +22,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
-from nyaya import agent, db, embeddings  # noqa: E402
+from nyaya import agent, db, embeddings, websearch  # noqa: E402
 from nyaya.vectorindex import index  # noqa: E402
 
 # id, category, question, expected intents, source must include (regex on "kind title label"), answer must match,
@@ -94,6 +97,26 @@ ITEMS = [
 ]
 
 
+def replay_web(live: bool) -> dict:
+    """Answer web searches from the recording; counts how many came from it and how many went live."""
+    path = Path(__file__).with_name("web_recording.json")
+    saved = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    stats = {"replayed": 0, "live": 0}
+    search_live = websearch._live
+
+    def call(query: str, max_results: int) -> list[dict]:
+        key = f"{max_results}|{query.lower()}"
+        if key in saved and not live:
+            stats["replayed"] += 1
+            return saved[key]
+        stats["live"] += 1
+        saved[key] = search_live(query, max_results)
+        path.write_text(json.dumps(saved, ensure_ascii=False, indent=1), encoding="utf-8")
+        return saved[key]
+    websearch._live = call
+    return stats
+
+
 def run(selected: set[str]) -> list[dict]:
     agent.ensure_chat = lambda chat_id, case_id, first: "chat_eval"
     agent.save_message = lambda *a, **k: 0
@@ -159,6 +182,9 @@ def grounding(runs: int, out: Path) -> None:
 
 
 if __name__ == "__main__":
+    live_web = "--live-web" in sys.argv
+    sys.argv = [a for a in sys.argv if a != "--live-web"]
+    web_use = replay_web(live_web)
     if sys.argv[1:2] == ["--grounding"]:   # python run_eval.py --grounding 2 [name]
         grounding(int(sys.argv[2]), Path(__file__).with_name(f"grounding_{sys.argv[3] if len(sys.argv) > 3 else 'latest'}.json"))
         sys.exit(0)
@@ -166,4 +192,4 @@ if __name__ == "__main__":
     res = {"run_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "items": rows,
            "passed": sum(r["passed"] for r in rows), "total": len(rows)}
     Path(__file__).with_name("results.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
-    print(f"{res['passed']}/{res['total']} passed")
+    print(f"{res['passed']}/{res['total']} passed; web searches: {web_use['replayed']} replayed, {web_use['live']} live")
