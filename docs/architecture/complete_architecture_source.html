@@ -1,0 +1,255 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>NyayaSutra AI complete architecture</title>
+<style>
+:root{--ink:#14202e;--muted:#526173;--line:#c9d3de;--navy:#0f3a5c;--built:#d9f1e6;--builtL:#176b49;--part:#fcefcc;--partL:#8a5f00;--plan:#dfe9fb;--planL:#2553a3;--fut:#ece4f8;--futL:#60399c}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{width:3000px;height:2300px;position:relative;background:#f3f6f9;color:var(--ink);font:19px/1.25 "Segoe UI",Arial,sans-serif;overflow:hidden}
+.abs{position:absolute}
+.panel{position:absolute;background:#fff;border:2px solid var(--line);border-radius:8px;padding:48px 14px 12px}
+.panel>h2{position:absolute;left:0;right:0;top:0;margin:0;height:38px;line-height:38px;padding:0 14px;background:var(--navy);color:#fff;font-size:20px;font-weight:600;border-radius:6px 6px 0 0}
+.panel>h2 small{font-weight:400;opacity:.85;font-size:17px;margin-left:10px}
+.rows{display:flex;flex-direction:column;gap:7px;height:100%}
+.row{display:flex;gap:7px;flex-wrap:wrap;align-items:stretch;flex:1}
+.panel>.row{height:100%}
+.c{border:2px solid;border-radius:5px;padding:5px 9px;min-width:0;flex:1 1 auto}
+.c b{display:block;font-size:18px;font-weight:600}
+.c i{display:block;font-style:normal;font-size:16px;color:#334155}
+.b{background:var(--built);border-color:var(--builtL)}
+.p{background:var(--part);border-color:var(--partL)}
+.n{background:var(--plan);border-color:var(--planL)}
+.f{background:var(--fut);border-color:var(--futL)}
+.life{position:absolute;left:40px;top:172px;width:2920px;height:112px;display:flex;gap:8px}
+.life .c{flex:1 1 0;padding:7px 8px;position:relative}
+.life .c b{font-size:18px}
+.life .num{font-weight:700;color:var(--navy)}
+svg{position:absolute;left:0;top:0;pointer-events:none}
+.lab{font:600 16px "Segoe UI",Arial,sans-serif;fill:#0f3a5c;paint-order:stroke;stroke:#f3f6f9;stroke-width:7px}
+.card-h{font-weight:600;font-size:18px;margin:0}
+</style></head><body>
+
+<div class="abs" style="left:40px;top:28px"><div style="font-size:50px;font-weight:700;color:var(--navy);line-height:1.1">NyayaSutra AI: Complete End-to-End Technical Architecture</div>
+<div style="font-size:23px;color:var(--muted);margin-top:8px">Context-aware, traceable, evidence-grounded legal assistance for Indian lawyers. Status taken from the code on 1 November 2026.</div></div>
+<div class="abs" style="right:40px;top:30px;width:640px;display:grid;grid-template-columns:1fr 1fr;gap:7px">
+<div class="c b"><b>Current prototype: implemented</b></div><div class="c p"><b>Implemented in part</b></div>
+<div class="c n"><b>Planned enhancement</b></div><div class="c f"><b>Future scope</b></div></div>
+
+<div class="abs" style="left:40px;top:142px;font-size:20px;font-weight:600;color:var(--navy)">USER LIFECYCLE</div>
+<div class="life">
+<div class="c b"><b><span class="num">1</span> Register</b><i>E-mail verification, profile</i></div>
+<div class="c b"><b><span class="num">2</span> Authenticate</b><i>Password, TOTP MFA, session</i></div>
+<div class="c b"><b><span class="num">3</span> Create case</b><i>Private workspace, members</i></div>
+<div class="c b"><b><span class="num">4</span> Upload documents</b><i>FIR, statements, reports</i></div>
+<div class="c p"><b><span class="num">5</span> AI analysis</b><i>Summaries now, case-wide next</i></div>
+<div class="c n"><b><span class="num">6</span> Case graph</b><i>People, events, evidence</i></div>
+<div class="c b"><b><span class="num">7</span> Legal research</b><i>Ask in English or Hindi</i></div>
+<div class="c b"><b><span class="num">8</span> Evidence-backed answer</b><i>Page citations, audit</i></div>
+<div class="c n"><b><span class="num">9</span> Visual intelligence</b><i>Timeline, contradictions</i></div>
+<div class="c p"><b><span class="num">10</span> Report and export</b><i>Drafts now, case reports next</i></div>
+<div class="c p"><b><span class="num">11</span> Closure</b><i>Retention, archive, audit</i></div>
+</div>
+
+<div class="panel" style="left:40px;top:350px;width:2320px;height:178px"><h2>FRONTEND LAYER<small>JavaScript, HTML, CSS</small></h2><div class="row">
+<div class="c b"><b>Web single-page app</b><i>Vanilla JS, hash routes, strict CSP</i></div>
+<div class="c b"><b>Research chat</b><i>Streaming, source cards, passage drawer</i></div>
+<div class="c b"><b>Case workspace</b><i>Upload, drafting, calendar, limitation</i></div>
+<div class="c b"><b>Languages</b><i>English, Hindi, Marathi interface</i></div>
+<div class="c n"><b>React + TypeScript</b><i>For graph-heavy screens</i></div>
+<div class="c n"><b>Cytoscape.js, vis-timeline</b><i>Graph, timeline, contradiction matrix</i></div>
+<div class="c f"><b>Mobile app</b><i>Court-side access</i></div>
+</div></div>
+
+<div class="panel" style="left:40px;top:600px;width:2320px;height:204px"><h2>BACKEND AND ACCESS LAYER<small>Python 3.14, FastAPI, Uvicorn, Pydantic, REST with 117 endpoints</small></h2>
+<div class="rows"><div class="row">
+<div class="c p"><b>Caddy edge</b><i>HTTPS; config written, not deployed</i></div>
+<div class="c b"><b>FastAPI application</b><i>Validation, CSRF, Host and Origin checks</i></div>
+<div class="c b"><b>Accounts and sessions</b><i>Server-side sessions, MFA, lockout</i></div>
+<div class="c b"><b>RBAC and case access</b><i>Lawyer, Admin, case owner and member</i></div>
+<div class="c b"><b>Durable job queue</b><i>Postgres FOR UPDATE SKIP LOCKED</i></div>
+<div class="c b"><b>Audit, retention</b><i>Audit 5 years, chats 24 months</i></div>
+</div><div class="row">
+<div class="c n"><b>Lawyer verification</b><i>Enrolment number review</i></div>
+<div class="c n"><b>More roles</b><i>Platform Admin, Org Admin, Researcher</i></div>
+<div class="c n"><b>Report builder</b><i>Pinned verified findings</i></div>
+<div class="c n"><b>Redis rate limits</b><i>From the second app instance</i></div>
+<div class="c f"><b>SSO and ABAC</b><i>Ethical walls for large firms</i></div>
+</div></div></div>
+
+<div class="panel" style="left:115px;top:890px;width:745px;height:340px"><h2>DOCUMENT PROCESSING<small>Runs as background jobs</small></h2>
+<div class="rows"><div class="row">
+<div class="c b"><b>1 Validate</b><i>Type, magic bytes, active content</i></div>
+<div class="c p"><b>2 Malware scan</b><i>ClamAV supported, not installed</i></div>
+</div><div class="row">
+<div class="c b"><b>3 Extract text</b><i>PDFium, python-docx, openpyxl, python-pptx</i></div>
+<div class="c b"><b>4 OCR</b><i>RapidOCR, Tesseract</i></div>
+</div><div class="row">
+<div class="c b"><b>5 Language</b><i>en, hi, mr</i></div>
+<div class="c p"><b>6 Classify</b><i>Rule based</i></div>
+<div class="c b"><b>7 Chunk</b><i>Section, para, clause</i></div>
+<div class="c b"><b>8 Embed</b><i>Local fastembed</i></div>
+</div><div class="row">
+<div class="c n"><b>9 Extract entities, events, claims</b><i>JSON schema, page evidence</i></div>
+<div class="c n"><b>10 Resolve, build graph</b><i>Lawyer confirms merges</i></div>
+</div></div></div>
+
+<div class="panel" style="left:935px;top:890px;width:745px;height:340px"><h2>AGENTIC AI LAYER<small>Python orchestrator, tool allow-list</small></h2>
+<div class="rows"><div class="row">
+<div class="c b"><b>Query Understanding</b><i>Planner: intent, query, filters</i></div>
+<div class="c b"><b>Deterministic tools</b><i>Limitation, dates, IST clock</i></div>
+</div><div class="row">
+<div class="c b"><b>Legal Research</b><i>Library, then web</i></div>
+<div class="c b"><b>Document Analysis</b><i>One document</i></div>
+<div class="c p"><b>Provision Mapping</b><i>IPC to BNS date flags</i></div>
+</div><div class="row">
+<div class="c b"><b>Response Generation</b><i>Sources only, streamed</i></div>
+<div class="c b"><b>Verification</b><i>Citation check, claim audit, case register</i></div>
+</div><div class="row">
+<div class="c n"><b>Evidence Analysis agent</b><i>Contradictions, gaps</i></div>
+<div class="c n"><b>LangGraph</b><i>Checkpoints, human pause</i></div>
+<div class="c f"><b>Reviewed workflows</b><i>Legal reviewers</i></div>
+</div></div></div>
+
+<div class="panel" style="left:115px;top:1300px;width:745px;height:292px"><h2>LEGAL KNOWLEDGE BASE</h2>
+<div class="rows"><div class="row">
+<div class="c b"><b>Central acts and Constitution</b><i>101 imported from India Code</i></div>
+<div class="c b"><b>Supreme Court catalogue</b><i>38,152 judgments, CC-BY-4.0</i></div>
+</div><div class="row">
+<div class="c b"><b>Judgment full text</b><i>On demand, up to 500 kept</i></div>
+<div class="c b"><b>Legal news</b><i>LiveLaw RSS</i></div>
+<div class="c p"><b>Amendment updates</b><i>Change polling</i></div>
+</div><div class="row">
+<div class="c n"><b>High Courts, state law</b><i>Lawful sources</i></div>
+<div class="c n"><b>Section versions</b><i>Valid from and to</i></div>
+<div class="c n"><b>Curator workflow</b><i>Review, publish</i></div>
+</div></div></div>
+
+<div class="panel" style="left:935px;top:1300px;width:745px;height:292px"><h2>RETRIEVAL AND GRAPHRAG LAYER<small>Hybrid RAG today</small></h2>
+<div class="rows"><div class="row">
+<div class="c b"><b>Dense</b><i>Vector search</i></div>
+<div class="c b"><b>Keyword</b><i>Postgres FTS</i></div>
+<div class="c b"><b>Exact refs</b><i>Section lookup</i></div>
+<div class="c b"><b>Lay terms, names</b><i>Query expansion</i></div>
+</div><div class="row">
+<div class="c b"><b>RRF fusion</b><i>Combine ranked lists</i></div>
+<div class="c b"><b>Cross-encoder rerank</b><i>24 candidates, 8 used</i></div>
+<div class="c n"><b>Authority, date weighting</b><i>Court hierarchy</i></div>
+</div><div class="row">
+<div class="c n"><b>Entity linking</b><i>Question to nodes</i></div>
+<div class="c n"><b>Graph traversal</b><i>Up to 3 hops</i></div>
+<div class="c n"><b>Cluster summaries</b><i>Broad questions</i></div>
+</div></div></div>
+
+<div class="panel" style="left:1755px;top:848px;width:605px;height:744px"><h2>AI/ML MODELS AND LLMs</h2>
+<div class="rows">
+<p class="card-h">Language models (Ollama Cloud)</p>
+<div class="c b"><b>gpt-oss:120b</b><i>Answers, drafting, summaries</i></div>
+<div class="c b"><b>gpt-oss:20b</b><i>Planning, audit, labelled fallback</i></div>
+<div class="c b"><b>Resilient LLM client</b><i>Retries, circuit breaker, identifier masking</i></div>
+<p class="card-h" style="margin-top:6px">Local models (ONNX, no text leaves server)</p>
+<div class="c b"><b>BAAI/bge-small-en-v1.5</b><i>Embeddings, English-only</i></div>
+<div class="c b"><b>ms-marco-MiniLM-L-6-v2</b><i>Cross-encoder reranker</i></div>
+<div class="c b"><b>RapidOCR models</b><i>English and Devanagari</i></div>
+<p class="card-h" style="margin-top:6px">Next</p>
+<div class="c n"><b>BGE-M3 evaluation</b><i>Hindi and Marathi search</i></div>
+<div class="c n"><b>Gemini, GPT, Claude comparison</b><i>On our legal benchmark</i></div>
+<div class="c f"><b>Private GPU serving, fine-tuned models</b><i>Enterprise confidentiality</i></div>
+</div></div>
+
+<div class="panel" style="left:40px;top:1672px;width:2320px;height:204px"><h2>DATABASE AND STORAGE LAYER<small>SQL, Supabase in Mumbai, row-level security on every table</small></h2>
+<div class="rows"><div class="row">
+<div class="c b"><b>PostgreSQL</b><i>Accounts, cases, documents, chats, jobs, audit</i></div>
+<div class="c b"><b>chunks table</b><i>Text, tsvector + GIN, embeddings</i></div>
+<div class="c b"><b>Private object storage</b><i>Original files, server key only</i></div>
+<div class="c b"><b>Supabase Vault</b><i>Encrypted session tokens</i></div>
+<div class="c b"><b>In-memory NumPy index</b><i>Exact cosine search</i></div>
+<div class="c b"><b>Local SQLite</b><i>Web cache, daily budget</i></div>
+</div><div class="row">
+<div class="c n"><b>Graph tables in Postgres</b><i>kg_nodes, kg_edges, kg_evidence</i></div>
+<div class="c n"><b>pgvector HNSW</b><i>Vectors under RLS</i></div>
+<div class="c n"><b>Transactional outbox</b><i>Keeps stores in step</i></div>
+<div class="c n"><b>Redis</b><i>Short cache</i></div>
+<div class="c f"><b>Neo4j, OpenSearch, Qdrant</b><i>Only if scale proves the need</i></div>
+</div></div></div>
+
+<div class="panel" style="left:40px;top:1948px;width:2320px;height:204px"><h2>DEPLOYMENT, TESTING AND OPERATIONS</h2>
+<div class="rows"><div class="row">
+<div class="c b"><b>GitHub</b><i>Source control</i></div>
+<div class="c b"><b>pytest</b><i>242 passing tests</i></div>
+<div class="c b"><b>Evaluation suite</b><i>31 questions, grounding benchmark</i></div>
+<div class="c b"><b>Health endpoint</b><i>/api/health</i></div>
+<div class="c p"><b>Docker, Docker Compose, Caddy</b><i>Files written, not yet built</i></div>
+</div><div class="row">
+<div class="c n"><b>Single VM in India</b><i>Pilot hosting</i></div>
+<div class="c n"><b>GitHub Actions CI</b><i>Tests, scan, build</i></div>
+<div class="c n"><b>Automated backups</b><i>Restore drills</i></div>
+<div class="c n"><b>Sentry, Prometheus, Grafana</b><i>Errors, metrics</i></div>
+<div class="c f"><b>Kubernetes, private cloud</b><i>Scale, enterprise</i></div>
+</div></div></div>
+
+<div class="panel" style="left:2440px;top:600px;width:520px;height:992px"><h2>EXTERNAL SERVICES AND SOURCES</h2></div>
+<div class="c b abs" style="left:2460px;top:730px;width:480px"><b>SMTP e-mail</b><i>Reminders and notifications</i></div>
+<div class="c b abs" style="left:2460px;top:650px;width:480px"><b>Supabase Auth</b><i>Identity, e-mail links, TOTP factors</i></div>
+<div class="c f abs" style="left:2460px;top:900px;width:480px"><b>Licensed legal databases</b><i>Commercial licence required</i></div>
+<div class="c f abs" style="left:2460px;top:985px;width:480px"><b>Court and case-status systems</b><i>Only with official permission; no open API assumed</i></div>
+<div class="c b abs" style="left:2460px;top:1160px;width:480px"><b>Ollama Cloud API</b><i>Hosted LLM inference</i></div>
+<div class="c b abs" style="left:2460px;top:1290px;width:480px"><b>Web search API</b><i>Tiered sources, cache, daily budget</i></div>
+<div class="c b abs" style="left:2460px;top:1385px;width:480px"><b>India Code DSpace API</b><i>Acts and updates</i></div>
+<div class="c b abs" style="left:2460px;top:1457px;width:480px"><b>LiveLaw RSS</b><i>Legal news</i></div>
+<div class="c b abs" style="left:2460px;top:1525px;width:480px;padding-block:3px"><b>Open SC judgments dataset, AWS</b></div>
+
+<div class="panel" style="left:2440px;top:1672px;width:520px;height:480px"><h2>SECURITY AND GOVERNANCE</h2>
+<div class="rows">
+<div class="c b"><b>Row-level security, case isolation</b><i>Enforced in API and database</i></div>
+<div class="c b"><b>Prompt injection defence</b><i>Sources as data, tool allow-list</i></div>
+<div class="c b"><b>Identifier masking</b><i>Aadhaar, PAN, phone, e-mail, bank</i></div>
+<div class="c b"><b>Audit, retention, Privacy page</b><i>Encryption at rest by provider</i></div>
+<div class="c p"><b>Human review</b><i>Provisions and drafts today</i></div>
+<div class="c n"><b>DPDP readiness</b><i>Export, deletion, breach runbook</i></div>
+<div class="c n"><b>Penetration test before real client data</b></div>
+</div></div>
+
+<div class="abs" style="left:40px;top:2176px;width:2920px;background:#fff;border:2px solid var(--line);border-radius:8px;padding:12px 18px;font-size:20px;line-height:1.4">
+<b>Golden rule:</b> the model proposes, deterministic code verifies, and the lawyer decides. Every statement traces to a source passage and page. &nbsp; <b>Current results:</b> 74% grounding on our own 42-question benchmark, 101 acts, 38,152 Supreme Court judgments, answers in about 11 to 13 seconds on the development machine.<br>
+<b>Important:</b> GraphRAG, the knowledge graph and multi-agent analysis are planned, not implemented. NyayaSutra AI assists qualified legal professionals and does not give legal advice.
+</div>
+
+<svg width="3000" height="2300" viewBox="0 0 3000 2300" id="s"><defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#0f3a5c"/></marker>
+<marker id="p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#2553a3"/></marker>
+</defs></svg>
+<script>
+const s=document.getElementById('s'),NS='http://www.w3.org/2000/svg';
+function ln(pts,o={}){const e=document.createElementNS(NS,'polyline');e.setAttribute('points',pts.map(p=>p.join(',')).join(' '));
+ const pl=o.planned;e.setAttribute('fill','none');e.setAttribute('stroke',pl?'#2553a3':'#0f3a5c');e.setAttribute('stroke-width',4);
+ if(pl)e.setAttribute('stroke-dasharray','12 8');e.setAttribute('marker-end',`url(#${pl?'p':'a'})`);if(o.both)e.setAttribute('marker-start',`url(#${pl?'p':'a'})`);s.appendChild(e)}
+function t(x,y,txt,o={}){const e=document.createElementNS(NS,'text');e.setAttribute('x',x);e.setAttribute('y',y);e.setAttribute('class','lab');
+ if(o.rot)e.setAttribute('transform',`rotate(${o.rot} ${x} ${y})`);if(o.anchor)e.setAttribute('text-anchor',o.anchor);e.textContent=txt;s.appendChild(e)}
+// lifecycle and front door
+ln([[1200,286],[1200,348]]);t(1216,324,'User actions over HTTPS');
+ln([[1200,528],[1200,598]]);t(1216,570,'REST JSON and streaming, session cookie + CSRF header');
+ln([[1090,598],[1090,528]]);t(1074,570,'Answers, sources, job status',{anchor:'end'});
+// backend to engines
+ln([[490,804],[490,888]]);t(506,852,'Upload, then durable job');
+ln([[1300,804],[1300,888]]);t(1316,852,'Question + permitted case IDs');
+ln([[1200,888],[1200,804]]);t(1184,852,'Verified answer',{anchor:'end'});
+// data lanes on the left
+ln([[60,804],[60,1670]]);t(53,1400,'Accounts, cases, chats, jobs, audit',{rot:-90});
+ln([[115,1100],[86,1100],[86,1670]]);t(108,1655,'Files, chunks, vectors',{rot:-90});
+// document processing and knowledge
+ln([[490,1298],[490,1232]]);t(506,1272,'Acts and judgments are ingested');
+ln([[860,1060],[897,1060],[897,1262],[1717,1262],[1717,1420],[1753,1420]]);t(1420,1254,'Passages to embed, OCR, rerank');
+ln([[1300,1230],[1300,1298]],{both:true});t(1120,1254,'Plan, ranked evidence',{anchor:'middle'});
+ln([[1680,1040],[1753,1040]],{both:true});t(1717,1030,'Masked',{anchor:'middle'});t(1717,1064,'prompts',{anchor:'middle'});
+// to data
+ln([[490,1592],[490,1670]]);t(506,1660,'Library passages, catalogue');
+ln([[1300,1592],[1300,1670]],{both:true});t(1316,1664,'Permission-filtered search');
+ln([[1520,1592],[1520,1670]],{planned:true,both:true});t(1536,1664,'Graph evidence',{});
+// external
+ln([[2360,682],[2458,682]],{both:true});t(2400,668,'Auth',{anchor:'middle'});
+ln([[2360,762],[2458,762]]);t(2400,750,'E-mail',{anchor:'middle'});
+ln([[2360,1210],[2458,1210]]);t(2400,1198,'LLM',{anchor:'middle'});
+ln([[1600,1592],[1600,1610],[2400,1610],[2400,1320],[2458,1320]]);t(2000,1616,'Masked query for web sources',{anchor:'middle'});
+ln([[2458,1420],[2420,1420],[2420,1634],[800,1634],[800,1594]]);t(1980,1640,'India Code, LiveLaw and Supreme Court data sync into the library',{anchor:'middle'});
+ln([[2458,1035],[2420,1035],[2420,1418]],{planned:true});
+</script>
+</body></html>

@@ -1,0 +1,969 @@
+<title>NyayaSutra AI Architecture Blueprint</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,500;7..72,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a single long engineering dossier, a contents panel up front, every section numbered to the requested order. */
+:root{
+  --bg:#f6f8fa;--panel:#ffffff;--fg:#17212e;--muted:#566476;--line:#d7dee6;--accent:#0b5c6b;--soft:#e7f1f3;
+  --built:#176b49;--built-bg:#d9f1e6;--part:#8a5f00;--part-bg:#fcefcc;--plan:#2553a3;--plan-bg:#dfe9fb;--fut:#60399c;--fut-bg:#ece4f8;
+  --warn:#9a3412;--warn-bg:#fdeadd;
+  --display:"Literata",Georgia,serif;--body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;--mono:"IBM Plex Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#10161d;--panel:#18212b;--fg:#e6ecf2;--muted:#9fb0c2;--line:#2d3a48;--accent:#6cc5d6;--soft:#1b3138;
+  --built:#7fe0b4;--built-bg:#163a2c;--part:#f0c864;--part-bg:#3c2f0e;--plan:#a4c4fb;--plan-bg:#1e2f4e;--fut:#cdb4f4;--fut-bg:#2f2347;
+  --warn:#fdba8c;--warn-bg:#43230f;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#10161d;--panel:#18212b;--fg:#e6ecf2;--muted:#9fb0c2;--line:#2d3a48;--accent:#6cc5d6;--soft:#1b3138;
+  --built:#7fe0b4;--built-bg:#163a2c;--part:#f0c864;--part-bg:#3c2f0e;--plan:#a4c4fb;--plan-bg:#1e2f4e;--fut:#cdb4f4;--fut-bg:#2f2347;
+  --warn:#fdba8c;--warn-bg:#43230f;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:16px/1.62 var(--body)}
+.wrap{max-width:1040px;margin:0 auto;padding-block:40px 80px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--display);line-height:1.22;text-wrap:balance;margin:0}
+h1{font-size:clamp(2rem,5vw,3rem)}
+h2{font-size:1.75rem;margin-top:56px;padding-top:18px;border-top:2px solid var(--accent)}
+h3{font-size:1.2rem;margin-top:30px}
+h4{font:600 1rem var(--body);margin:20px 0 4px}
+p{margin:10px 0;max-width:76ch}
+ul,ol{max-width:76ch;padding-left:22px}
+li{margin:4px 0}
+a{color:var(--accent)}
+a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+code{font:.88em var(--mono);background:var(--soft);padding:1px 4px;border-radius:3px;overflow-wrap:anywhere}
+.eyebrow{font:500 .78rem var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.lead{font-size:1.14rem;color:var(--muted);max-width:68ch}
+.tag{display:inline-block;font:500 .7rem var(--mono);padding:1px 7px;border-radius:3px;white-space:nowrap;vertical-align:1px}
+.b{color:var(--built);background:var(--built-bg)}.p{color:var(--part);background:var(--part-bg)}
+.n{color:var(--plan);background:var(--plan-bg)}.f{color:var(--fut);background:var(--fut-bg)}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;margin:16px 0;font-size:.9rem}
+.legend div{min-width:0}
+.call{background:var(--warn-bg);color:var(--fg);padding:14px 18px;margin:18px 0;border-left:4px solid var(--warn)}
+.call strong{color:var(--warn)}
+.note{background:var(--soft);padding:12px 16px;margin:16px 0;font-size:.95rem}
+.toc{columns:2;column-gap:32px;margin:0;padding-left:26px;font-size:.95rem}
+.tocbox{background:var(--panel);border:1px solid var(--line);padding:18px 20px;margin-top:28px}
+.scroll{overflow-x:auto;margin:14px 0;background:var(--panel);border:1px solid var(--line)}
+table{border-collapse:collapse;width:100%;font-size:.88rem;line-height:1.45}
+th{font-weight:600;text-align:left;background:var(--soft);white-space:nowrap}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+td:first-child{font-weight:500}
+figure{margin:18px 0}
+figcaption{font:500 .84rem var(--mono);color:var(--muted);margin-bottom:6px}
+pre.mermaid{background:#ffffff;border:1px solid var(--line);padding:14px;margin:0;overflow-x:auto;text-align:center;color:#17212e}
+.step{background:var(--panel);border:1px solid var(--line);padding:4px 16px 12px;margin:16px 0}
+.step h3{margin-top:12px}
+.step dl{display:grid;grid-template-columns:150px minmax(0,1fr);gap:3px 14px;margin:8px 0 0;font-size:.9rem}
+.step dt{color:var(--muted);font-weight:500}.step dd{margin:0;min-width:0}
+.conn{counter-reset:c;list-style:none;padding:0;font-size:.92rem;max-width:none}
+.conn li{counter-increment:c;padding-left:30px;position:relative}
+.conn li::before{content:counter(c);position:absolute;left:0;font:500 .78rem var(--mono);color:var(--accent)}
+@media (max-width:640px){.toc{columns:1}.step dl{grid-template-columns:1fr}.step dt{margin-top:6px}}
+</style>
+
+<div class="wrap">
+<header>
+<div class="eyebrow">Technical architecture blueprint · 1 November 2026</div>
+<h1>NyayaSutra AI</h1>
+<p class="lead">How a lawyer's question becomes a traceable, evidence-backed answer: what exists in the code today, what we will build next, and why each part is designed the way it is.</p>
+<div class="legend">
+<div><span class="tag b">BUILT</span> in the code and tested</div>
+<div><span class="tag p">PARTIAL</span> a working part exists; the rest does not</div>
+<div><span class="tag n">PLANNED</span> designed, next phases, no code yet</div>
+<div><span class="tag f">FUTURE</span> proposal, depends on access, money or partners</div>
+</div>
+<p class="note">Status labels come from reading the repository on 1 November 2026 (about 17,500 lines of Python and JavaScript, 10 database migrations, 242 passing automated tests). The product is named NyaySutra in the code and interface. Diagram colours match the labels: green built, amber partial, blue planned, purple future.</p>
+<div class="call"><strong>Read this first.</strong> The prototype is hybrid RAG with agent-style planning. <strong>GraphRAG, a knowledge graph, Neo4j, LangGraph, Redis, OpenSearch, lawyer professional verification, the cross-document contradiction matrix and the visual timeline and graphs do not exist yet.</strong> They are specified here as planned work. If a reviewer asks whether GraphRAG runs today, the correct answer is no.</div>
+<nav class="tocbox" aria-label="Contents"><ol class="toc">
+<li><a href="#s1">Executive overview</a></li><li><a href="#s2">Product vision and system boundaries</a></li><li><a href="#s3">Level-wise architecture</a></li><li><a href="#s4">High-level architecture diagram</a></li><li><a href="#s5">Detailed component architecture</a></li><li><a href="#s6">Onboarding-to-closure journey</a></li><li><a href="#s7">Document ingestion pipeline</a></li><li><a href="#s8">Legal knowledge base and graph</a></li><li><a href="#s9">GraphRAG internal working</a></li><li><a href="#s10">Agentic AI workflow</a></li><li><a href="#s11">Database and storage</a></li><li><a href="#s12">Security and governance</a></li><li><a href="#s13">Technology stack</a></li><li><a href="#s14">Production deployment</a></li><li><a href="#s15">Current vs planned vs future</a></li><li><a href="#s16">Decisions and trade-offs</a></li><li><a href="#s17">Phased roadmap</a></li><li><a href="#s18">End-to-end summary</a></li>
+</ol></nav>
+</header>
+
+<section id="s1"><h2>1. Executive overview</h2>
+<p>NyayaSutra AI is a legal research and case-analysis workspace for Indian lawyers. A lawyer searches the law, opens a private case workspace, uploads case papers and asks questions. Every answer must point to a passage the lawyer can open and check.</p>
+<p>The central engineering rule is that <strong>the model proposes and deterministic code verifies</strong>. Models plan, read and write. Ordinary code decides who may see what, calculates dates, checks that every cited section exists in the sources, and blocks unsupported output. The system assists a lawyer and never gives legal advice or makes a legal decision.</p>
+<div class="scroll"><table>
+<tr><th>Where we stand</th><th>Measured value</th><th>Note</th></tr>
+<tr><td>Library</td><td>101 central acts imported, 38,152 Supreme Court judgments catalogued</td><td>Full judgment text fetched on demand, at most 500 kept</td></tr>
+<tr><td>Answer grounding</td><td>74% (31 of 42 benchmark answers pass the citation audit)</td><td>Up from 40%; a benchmark result, not a production measure</td></tr>
+<tr><td>Evaluation suite</td><td>31 of 31 at the last committed run</td><td>Our own questions, not an independent test</td></tr>
+<tr><td>Answer time</td><td>About 11 to 13 seconds</td><td>Measured on the development machine</td></tr>
+<tr><td>Database</td><td>About 304 MB of the 500 MB free plan</td><td>Supabase, Mumbai</td></tr>
+<tr><td>Deployment</td><td>Runs locally only</td><td>Docker files written, never built</td></tr>
+</table></div>
+</section>
+
+<section id="s2"><h2>2. Product vision and system boundaries</h2>
+<p><strong>Vision:</strong> a secure legal intelligence platform for lawyers, firms and legal departments, in which every statement traces to a source and a person stays responsible for the result.</p>
+<div class="scroll"><table>
+<tr><th>Inside the system</th><th>Outside the system</th><th>Never done</th></tr>
+<tr><td>Legal search, case workspaces, document intelligence, grounded chat, drafting aids, limitation and calendar tools, audit and retention</td><td>Court portals, eCourts, police portals, payment, e-filing, the LLM provider, the identity provider, email delivery</td><td>Predicting guilt, deciding a case, giving legal advice to the public, bypassing a CAPTCHA or login, presenting a guess as a finding</td></tr>
+</table></div>
+<p><strong>Users:</strong> lawyers and juniors first; firm administrators next; legal departments and institutions later. Members of the public can read the bare acts, awareness pages and limitation tool without signing in.</p>
+</section>
+
+<section id="s3"><h2>3. Complete level-wise architecture</h2>
+<p>Each level depends only on the levels below it. The table gives the level's job and status; later sections open each one up.</p>
+
+<h3>Level 1: User experience and presentation</h3>
+<div class="scroll"><table>
+<tr><th>Capability</th><th>Status</th><th>How it works</th></tr>
+<tr><td>Registration, sign-in, MFA</td><td><span class="tag b">BUILT</span></td><td><code>web/js/auth.js</code> talks to our own API, never directly to Supabase</td></tr>
+<tr><td>Lawyer profile</td><td><span class="tag p">PARTIAL</span></td><td>Account and preferences exist</td></tr>
+<tr><td>Professional verification</td><td><span class="tag n">PLANNED</span></td><td>Enrolment number and certificate upload, reviewed by an administrator. Any lawyer who verifies an e-mail can sign up today</td></tr>
+<tr><td>Dashboards by role</td><td><span class="tag p">PARTIAL</span></td><td>Lawyer dashboard and admin page exist; firm analytics do not</td></tr>
+<tr><td>Case workspace, upload, research chat</td><td><span class="tag b">BUILT</span></td><td>Hash-routed single-page app; chat streams tokens; source cards open a drawer on the cited passage</td></tr>
+<tr><td>Timeline and evidence graph visuals</td><td><span class="tag n">PLANNED</span></td><td>Timeline exists only as a table in a single-document chat answer</td></tr>
+<tr><td>Reports and export</td><td><span class="tag p">PARTIAL</span></td><td>Drafts export to Word and PDF. Case analysis reports do not exist</td></tr>
+<tr><td>Notifications, activity history</td><td><span class="tag b">BUILT</span></td><td>In-app bell, optional e-mail, search history, job status</td></tr>
+<tr><td>Languages</td><td><span class="tag b">BUILT</span></td><td>Interface in English, Hindi and Marathi</td></tr>
+</table></div>
+<p><strong>Frontend to backend:</strong> the browser calls same-origin JSON REST endpoints with an HttpOnly session cookie and a CSRF header. Chat answers arrive as a stream. The Content Security Policy allows no inline script and no third-party origin. The browser never receives a Supabase key.</p>
+
+<h3>Level 2: Identity, access and application</h3>
+<div class="scroll"><table>
+<tr><th>Capability</th><th>Status</th><th>How it works</th></tr>
+<tr><td>Authentication</td><td><span class="tag b">BUILT</span></td><td>Supabase Auth with TOTP MFA, required for lawyers and administrators; recovery codes; account lockout</td></tr>
+<tr><td>Sessions</td><td><span class="tag b">BUILT</span></td><td>Server-side sessions; provider tokens encrypted in Supabase Vault; per-device revoke</td></tr>
+<tr><td>RBAC</td><td><span class="tag b">BUILT</span></td><td>Deny-by-default permission matrix in <code>authz.py</code> with guest, advocate and admin</td></tr>
+<tr><td>Extra roles</td><td><span class="tag n">PLANNED</span></td><td>Platform Admin, Organisation Admin, Researcher, Reviewer, Knowledge Curator. Client and auditor roles were retired in migration 07</td></tr>
+<tr><td>Case-level permission</td><td><span class="tag b">BUILT</span></td><td><code>case_members</code>, owner or member; admins see metadata only unless they add themselves, which is audited</td></tr>
+<tr><td>ABAC</td><td><span class="tag f">FUTURE</span></td><td>Rules such as ethical walls between conflicting clients, for large firms</td></tr>
+<tr><td>Tenant model</td><td><span class="tag p">PARTIAL</span></td><td><code>org_id</code> and row-level security exist; self-service firm onboarding does not</td></tr>
+<tr><td>API layer</td><td><span class="tag b">BUILT</span></td><td>One FastAPI application with 117 endpoints, Pydantic validation, Host and Origin checks, rate limits</td></tr>
+<tr><td>Separate API gateway</td><td><span class="tag n">PLANNED</span></td><td>Caddy as the first edge (files written); a real gateway only when several services exist</td></tr>
+<tr><td>Audit logging</td><td><span class="tag b">BUILT</span></td><td>Actions, never document contents; kept 5 years</td></tr>
+</table></div>
+
+<h3>Level 3: Case and document ingestion</h3>
+<p>Mostly <span class="tag b">BUILT</span>, detailed in <a href="#s7">section 7</a>. The durable job queue, format checks, OCR, classification, chunking and embedding all run today. ClamAV support exists but is not installed.</p>
+
+<h3>Level 4: Data management and storage</h3>
+<p>One system does most of the work today: Supabase Postgres plus private object storage. Detailed in <a href="#s11">section 11</a>.</p>
+
+<h3>Level 5: Legal knowledge base and knowledge graph</h3>
+<p>The curated library is <span class="tag b">BUILT</span>. The graph over it is <span class="tag n">PLANNED</span>. Detailed in <a href="#s8">section 8</a>.</p>
+
+<h3>Level 6: AI/ML and intelligence</h3>
+<div class="scroll"><table>
+<tr><th>Group</th><th>Component</th><th>Status</th><th>Implementation or plan</th></tr>
+<tr><td>A. Document intelligence</td><td>OCR</td><td><span class="tag b">BUILT</span></td><td>RapidOCR or Tesseract; English, Hindi, Marathi; unsure words marked <code>[?word]</code></td></tr>
+<tr><td></td><td>Classification</td><td><span class="tag p">PARTIAL</span></td><td>Rules on file name and first page; no trained classifier</td></tr>
+<tr><td></td><td>Structured summary</td><td><span class="tag b">BUILT</span></td><td>Parties, dates, facts, relief, deadlines, each checked against the cited page</td></tr>
+<tr><td></td><td>Language detection</td><td><span class="tag b">BUILT</span></td><td><code>langdetect.py</code></td></tr>
+<tr><td></td><td>NER, event and relation extraction</td><td><span class="tag n">PLANNED</span></td><td>Stored per document as typed records with page spans</td></tr>
+<tr><td></td><td>Contradiction detection</td><td><span class="tag p">PARTIAL</span></td><td>Only a list inside drafting intake; no case-wide analysis</td></tr>
+<tr><td>B. Embeddings</td><td>Chunk and embed</td><td><span class="tag b">BUILT</span></td><td>Structure-aware chunks; local <code>bge-small-en-v1.5</code>; the model is English-only, a real gap for Hindi and Marathi</td></tr>
+<tr><td></td><td>Multilingual embedding</td><td><span class="tag n">PLANNED</span></td><td>Evaluate BGE-M3 or similar on Indian legal text before switching</td></tr>
+<tr><td>C. Knowledge graph</td><td>Entity resolution, graph build, traversal</td><td><span class="tag n">PLANNED</span></td><td><a href="#s8">Section 8</a></td></tr>
+<tr><td>D. GraphRAG</td><td>Hybrid retrieval</td><td><span class="tag b">BUILT</span></td><td>The non-graph half: dense, lexical, exact reference, lay terms, names, fusion, rerank</td></tr>
+<tr><td></td><td>Graph retrieval</td><td><span class="tag n">PLANNED</span></td><td><a href="#s9">Section 9</a></td></tr>
+<tr><td>E. LLM</td><td>Answering and audit</td><td><span class="tag b">BUILT</span></td><td><code>gpt-oss:120b</code> and <code>20b</code> on Ollama Cloud; retries, circuit breaker, labelled fallback</td></tr>
+<tr><td>F. Agents</td><td>Planner with tool allow-list</td><td><span class="tag b">BUILT</span></td><td>One orchestrator in <code>agent.py</code>, not a multi-agent system</td></tr>
+<tr><td></td><td>Specialist agents</td><td><span class="tag n">PLANNED</span></td><td><a href="#s10">Section 10</a></td></tr>
+</table></div>
+</section>
+
+<section id="s4"><h2>4. High-level architecture diagram</h2>
+<figure><figcaption>Diagram 1: High-level enterprise architecture</figcaption>
+<pre class="mermaid">
+flowchart TB
+  classDef built fill:#d9f1e6,stroke:#176b49,color:#0c3324
+  classDef partial fill:#fcefcc,stroke:#8a5f00,color:#3f2c00
+  classDef planned fill:#dfe9fb,stroke:#2553a3,color:#0f2748
+  classDef future fill:#ece4f8,stroke:#60399c,color:#2a1747
+  U["Lawyer / Firm admin / Public reader"]:::built
+  subgraph L1["Level 1: Presentation"]
+    W["Web app: research, cases, drafting"]:::built
+    V["Timeline and graph views"]:::planned
+    M["Mobile app"]:::future
+  end
+  subgraph L2["Level 2: Identity and application"]
+    E["Caddy edge, HTTPS"]:::partial
+    API["FastAPI application"]:::built
+    AZ["Authorization and audit"]:::built
+    J["Durable job queue"]:::built
+  end
+  subgraph L6["Level 6: Intelligence"]
+    AG["Planner and orchestrator"]:::built
+    RET["Hybrid retrieval"]:::built
+    GR["Graph retrieval"]:::planned
+    VER["Citation verification"]:::built
+    DI["Document intelligence"]:::partial
+  end
+  subgraph L3["Levels 3 and 5: Ingestion and knowledge"]
+    ING["Ingestion pipeline"]:::built
+    KB["Curated legal library"]:::built
+    KG["Knowledge graph builder"]:::planned
+  end
+  subgraph L4["Level 4: Data"]
+    PG["Postgres with RLS"]:::built
+    OBJ["Private object storage"]:::built
+    VEC["In-memory vector index"]:::built
+    GDB["Graph tables"]:::planned
+  end
+  subgraph EXT["External services"]
+    LLM["Ollama Cloud models"]:::built
+    SA["Supabase Auth"]:::built
+    WEB["Web search provider"]:::built
+    SRC["India Code, LiveLaw, SC dataset"]:::built
+    CRT["Court systems with authorised access"]:::future
+  end
+  U --> W
+  U --> M
+  W --> E --> API
+  V --> E
+  API --> AZ
+  API --> AG
+  API --> J
+  AZ --> SA
+  AZ --> PG
+  AG --> RET
+  AG --> GR
+  AG --> LLM
+  AG --> VER
+  RET --> VEC
+  RET --> PG
+  RET --> WEB
+  GR --> GDB
+  J --> ING
+  J --> DI
+  ING --> OBJ
+  ING --> PG
+  ING --> VEC
+  DI --> LLM
+  DI --> KG
+  KG --> GDB
+  SRC --> KB
+  KB --> ING
+  CRT --> KB
+</pre></figure>
+<ol class="conn">
+<li>All traffic reaches one application. The browser has no route to the database, storage or model.</li>
+<li>Authorization runs before any data access, and row-level security repeats the check inside the database.</li>
+<li>Fast work runs in the request; slow work (OCR, embedding, translation, drafting) becomes a job row.</li>
+<li>The orchestrator picks a tool, retrieval gathers evidence, the model writes, and verification checks the result before it is shown as final.</li>
+<li>Every text sent to the model passes one masking point in <code>llm.py</code>.</li>
+</ol>
+</section>
+
+<section id="s5"><h2>5. Detailed component architecture</h2>
+<p>Each row gives the module's purpose, internal working, technology, inputs and outputs, dependencies and interactions.</p>
+<div class="scroll"><table>
+<tr><th>Module</th><th>Purpose</th><th>Internal working</th><th>Technology</th><th>Input → output</th><th>Depends on</th><th>Talks to</th></tr>
+<tr><td>Web client <span class="tag b">BUILT</span></td><td>All screens</td><td>Hash routes, escaped rendering, streaming chat, source drawer</td><td>Vanilla JS, CSS, i18n JSON</td><td>User actions → API calls</td><td>REST API</td><td>API layer</td></tr>
+<tr><td>API layer <span class="tag b">BUILT</span></td><td>Single entry point</td><td>Validate, resolve session to principal, authorize, call module, audit</td><td>FastAPI, Pydantic, Uvicorn</td><td>HTTP → JSON or stream</td><td>Accounts, authz</td><td>Every module</td></tr>
+<tr><td>Accounts <span class="tag b">BUILT</span></td><td>Sign-in, MFA, sessions, invitations</td><td>Backend wraps the provider; tokens stay on the server</td><td><code>accounts.py</code>, Supabase Auth, Vault</td><td>Credentials → session cookie</td><td>Supabase</td><td>API, authz</td></tr>
+<tr><td>Authorization <span class="tag b">BUILT</span></td><td>Who may do what</td><td>Permission matrix, case access; workers recheck before running</td><td><code>authz.py</code>, RLS</td><td>Principal + action → allow or deny</td><td>Case membership</td><td>All data access</td></tr>
+<tr><td>Job queue <span class="tag b">BUILT</span></td><td>Durable slow work</td><td>Rows claimed with <code>FOR UPDATE SKIP LOCKED</code>; back-off, cancel, dead-letter, recovery</td><td><code>jobs.py</code>, Postgres</td><td>Task + params → state, result</td><td>Postgres</td><td>Ingest, docintel, drafting</td></tr>
+<tr><td>Ingestion <span class="tag b">BUILT</span></td><td>File to searchable passages</td><td>Scan, parse, OCR, classify, chunk, embed, index</td><td><code>filescan</code>, <code>parsing</code>, <code>ocr</code>, <code>chunking</code>, <code>ingest</code></td><td>File → document, chunks, vectors</td><td>Storage, embeddings</td><td>Jobs, retrieval</td></tr>
+<tr><td>Retrieval <span class="tag b">BUILT</span></td><td>Find the best evidence</td><td>Five rankers, RRF fusion, cross-encoder rerank, section completion, IPC-BNS counterparts</td><td><code>retrieval.py</code>, NumPy, Postgres FTS, ONNX</td><td>Query + scope → ranked passages</td><td>Index, Postgres</td><td>Agent</td></tr>
+<tr><td>Orchestrator <span class="tag b">BUILT</span></td><td>Run one request</td><td>Screen, plan, route, retrieve, stream, audit, save</td><td><code>agent.py</code>, <code>prompts.py</code></td><td>Question + case → answer, sources, trace</td><td>Retrieval, LLM, guardrails</td><td>API</td></tr>
+<tr><td>Guardrails <span class="tag b">BUILT</span></td><td>Keep output safe and true</td><td>Input screening, source delimiting, tool allow-list, citation check, output filter</td><td><code>guardrails.py</code>, <code>citations.py</code></td><td>Answer + sources → unsupported list</td><td>Case register</td><td>Agent</td></tr>
+<tr><td>Case register <span class="tag b">BUILT</span></td><td>Check Supreme Court cases named in answers</td><td>Looks up names and citations in the catalogue; never claims absence outside coverage</td><td><code>judgments.py</code></td><td>Case name → match or unknown</td><td>Catalogue</td><td>Guardrails</td></tr>
+<tr><td>Document intelligence <span class="tag p">PARTIAL</span></td><td>Understand one document</td><td>Translate and summarise with consent, verify quoted values on the page</td><td><code>docintel.py</code></td><td>Document → summary with page links</td><td>LLM</td><td>Jobs, UI</td></tr>
+<tr><td>Provision mapping <span class="tag b">BUILT</span></td><td>Suggest relevant law</td><td>Model chooses only among retrieved provisions; temporal flags for BNS vs IPC; lawyer accepts or rejects</td><td><code>provisions.py</code></td><td>Case → suggestions</td><td>Library, retrieval</td><td>Case UI</td></tr>
+<tr><td>Drafting <span class="tag b">BUILT</span></td><td>Prepare documents</td><td>Fact intake, gaps, inconsistencies, draft, review, versions, export</td><td><code>drafting.py</code>, <code>export.py</code></td><td>Request + files → draft</td><td>LLM, templates</td><td>Jobs, UI</td></tr>
+<tr><td>Web search <span class="tag b">BUILT</span></td><td>Fill library gaps, current news</td><td>Masked query, source tiers, cache, pause, daily budget</td><td><code>websearch.py</code></td><td>Query → ranked pages</td><td>Provider</td><td>Agent</td></tr>
+<tr><td>Integrations <span class="tag b">BUILT</span></td><td>Keep sources current</td><td>LiveLaw RSS and India Code polling; other portals are manual import</td><td><code>integrations.py</code>, <code>casesearch.py</code></td><td>Source → records, notifications</td><td>Source access</td><td>Library</td></tr>
+<tr><td>Retention <span class="tag b">BUILT</span></td><td>Delete on schedule</td><td>Daily job, warnings for idle accounts</td><td><code>retention.py</code></td><td>Policy → deletions</td><td>Postgres</td><td>Audit</td></tr>
+<tr><td>Knowledge graph <span class="tag n">PLANNED</span></td><td>Represent connections</td><td><a href="#s8">Section 8</a></td><td>Postgres graph tables first</td><td>Extractions → nodes, edges</td><td>Extraction</td><td>GraphRAG, visuals</td></tr>
+</table></div>
+</section>
+
+<section id="s6"><h2>6. Complete user onboarding-to-case-closure journey</h2>
+<p>Scenario: a lawyer registers and analyses a criminal case. The steps mark what happens today and what the same step becomes once the planned work is done.</p>
+<figure><figcaption>Diagram 2: User onboarding and authentication flow</figcaption>
+<pre class="mermaid">
+sequenceDiagram
+  actor L as Lawyer
+  participant W as Web app
+  participant A as FastAPI
+  participant S as Supabase Auth
+  participant D as Postgres
+  L->>W: Enter e-mail and password
+  W->>A: POST /api/auth/signup with CSRF header
+  A->>S: Create user
+  S-->>L: Verification e-mail
+  L->>S: Open verification link
+  S-->>A: Verified user at /auth/callback
+  A->>D: Create profile, role advocate
+  L->>W: Sign in
+  W->>A: POST /api/auth/login, rate limited
+  A->>S: Check password
+  S-->>A: Tokens
+  A->>D: Store session, tokens encrypted in Vault
+  A-->>W: Session state needs MFA enrolment
+  L->>W: Scan TOTP code
+  W->>A: POST /api/auth/mfa/enroll/verify
+  A->>D: Session becomes active, audit entry
+  A-->>W: HttpOnly cookie and dashboard
+  Note over L,D: Planned: enrolment number review before full access
+</pre></figure>
+
+<div class="step"><h3>Step 1: Discover and register <span class="tag p">PARTIAL</span></h3><dl>
+<dt>User action</dt><dd>Visits the site, signs up, verifies e-mail, sets up MFA</dd>
+<dt>Frontend</dt><dd>Sign-in and account views, <code>auth.js</code></dd>
+<dt>Backend</dt><dd><code>accounts.py</code>, <code>supabase_auth.py</code>, <code>sessions.py</code></dd>
+<dt>AI/ML</dt><dd>None</dd>
+<dt>Storage</dt><dd>Supabase Auth, <code>profiles</code>, <code>memberships</code>, Vault</dd>
+<dt>Input → output</dt><dd>E-mail, password, TOTP → active session with role</dd>
+<dt>Security</dt><dd>Rate limits, lockout, MFA, CSRF, a user cannot pick a role. Planned: enrolment verification</dd></dl></div>
+
+<div class="step"><h3>Step 2: Create the case workspace <span class="tag b">BUILT</span></h3><dl>
+<dt>User action</dt><dd>Enters title, type, court, state, FIR and CNR numbers, parties</dd>
+<dt>Frontend</dt><dd>Cases view with validated forms from <code>/api/reference</code></dd>
+<dt>Backend</dt><dd><code>cases.py</code>, <code>reference.py</code></dd>
+<dt>AI/ML</dt><dd>None; deliberately deterministic</dd>
+<dt>Storage</dt><dd><code>cases</code>, <code>case_members</code>, audit log</dd>
+<dt>Input → output</dt><dd>Form → unique case ID, creator as owner</dd>
+<dt>Security</dt><dd>Field validation, organisation check, RLS on every related table</dd></dl></div>
+
+<div class="step"><h3>Step 3: Upload documents <span class="tag b">BUILT</span></h3><dl>
+<dt>User action</dt><dd>Uploads FIR, charge sheet, witness statements, medical report as a batch</dd>
+<dt>Frontend</dt><dd>Upload view with per-file progress, cancel, retry, CSV report</dd>
+<dt>Backend</dt><dd>Batches API, <code>filescan.py</code>, <code>storage.py</code>, <code>jobs.py</code></dd>
+<dt>AI/ML</dt><dd>OCR when a page has no text layer</dd>
+<dt>Storage</dt><dd>Private bucket, <code>documents</code>, <code>jobs</code>, <code>batches</code></dd>
+<dt>Input → output</dt><dd>Up to 50 files, 40 MB each → job per file, one state per file</dd>
+<dt>Security</dt><dd>Extension and magic-byte checks, active-content refusal, server-made file names. ClamAV must be installed before launch</dd></dl></div>
+
+<div class="step"><h3>Step 4: Document intelligence <span class="tag p">PARTIAL</span></h3><dl>
+<dt>User action</dt><dd>Opens a document; requests translation or a summary</dd>
+<dt>Frontend</dt><dd>Document view with original and extracted text, consent prompt</dd>
+<dt>Backend</dt><dd><code>docintel.py</code> today; an extraction pipeline when planned work lands</dd>
+<dt>AI/ML</dt><dd>Today: LLM summary per document. Planned: entities, events, claims across all documents, inconsistency candidates</dd>
+<dt>Storage</dt><dd><code>doc_derivatives</code> today; planned typed extraction tables</dd>
+<dt>Input → output</dt><dd>Page text → structured summary with page references</dd>
+<dt>Security</dt><dd>Explicit consent before whole-document LLM use; values not found on the cited page are marked unverified</dd></dl></div>
+
+<div class="step"><h3>Step 5: Knowledge graph creation <span class="tag n">PLANNED</span></h3><dl>
+<dt>User action</dt><dd>None; progress shown, then the lawyer reviews merged entities</dd>
+<dt>Frontend</dt><dd>Entity review screen: confirm "S. Patil" and "Suresh Patil" are one person</dd>
+<dt>Backend</dt><dd>New graph-build job</dd>
+<dt>AI/ML</dt><dd>Entity resolution, relation typing, provision linking</dd>
+<dt>Storage</dt><dd><code>kg_nodes</code>, <code>kg_edges</code>, <code>kg_evidence</code>, scoped by <code>case_id</code></dd>
+<dt>Input → output</dt><dd>Extractions → case graph with each edge tied to page spans</dd>
+<dt>Security</dt><dd>Same RLS as the case; no graph data crosses cases; merges are reversible and audited</dd></dl></div>
+
+<div class="step"><h3>Step 6: Vector and graph indexing <span class="tag p">PARTIAL</span></h3><dl>
+<dt>User action</dt><dd>None</dd>
+<dt>Frontend</dt><dd>Document status changes to ready</dd>
+<dt>Backend</dt><dd><code>ingest.py</code>, <code>vectorindex.py</code>; planned graph indexer</dd>
+<dt>AI/ML</dt><dd>Local embedding model</dd>
+<dt>Storage</dt><dd><code>chunks</code> (text, tsvector, embedding bytes), in-memory index; planned graph tables</dd>
+<dt>Input → output</dt><dd>Chunks → searchable passages keeping page and label</dd>
+<dt>Security</dt><dd>Embedding runs on our server, so case text does not leave for that step; search filters by permitted case IDs</dd></dl></div>
+
+<div class="step"><h3>Step 7: The lawyer asks a question <span class="tag p">PARTIAL</span></h3>
+<p>Question: "Identify contradictions between the witness statements and the FIR. Also identify potentially relevant legal provisions."</p><dl>
+<dt>User action</dt><dd>Types in the case chat</dd>
+<dt>Frontend</dt><dd>Research view streams status, tokens, source cards</dd>
+<dt>Backend</dt><dd><code>/api/chat</code>, <code>agent.py</code>, <code>retrieval.py</code>, <code>guardrails.py</code></dd>
+<dt>AI/ML</dt><dd>Fast model plans; main model answers; audit model checks. Planned: graph traversal and a contradiction specialist</dd>
+<dt>Storage</dt><dd>Index, Postgres, later graph tables; <code>messages</code> records the answer and trace</dd>
+<dt>Input → output</dt><dd>Question + case → verified answer with sources</dd>
+<dt>Security</dt><dd>Prompt-injection screen, sources wrapped as data, tool allow-list, masking of identifiers</dd></dl>
+<p>Query lifecycle: Query understanding → intent classification → entity recognition → retrieval planning → hybrid search → graph traversal <span class="tag n">PLANNED</span> → context assembly → LLM reasoning → verification → citation mapping → final answer. Today this question works as a best-effort reading of the top 8 passages, so it can miss contradictions outside them. That limit is the main reason for GraphRAG.</p></div>
+
+<div class="step"><h3>Step 8: Evidence-grounded response <span class="tag p">PARTIAL</span></h3><dl>
+<dt>User action</dt><dd>Reads the answer, opens citations</dd>
+<dt>Frontend</dt><dd>Numbered citations, source cards, drawer on the passage, PDF link</dd>
+<dt>Backend</dt><dd><code>_audit</code>, <code>verify_citations</code>, case register</dd>
+<dt>AI/ML</dt><dd>Audit model separates major from minor unsupported claims</dd>
+<dt>Storage</dt><dd>Sources and audit stored with the message</dd>
+<dt>Input → output</dt><dd>Draft answer → findings, page citations, provisions, judgments, stated limits. Planned: supporting and conflicting evidence side by side</dd>
+<dt>Security</dt><dd>If nothing supports an answer, the system says what it searched instead of guessing</dd></dl></div>
+
+<div class="step"><h3>Step 9: Visual intelligence <span class="tag n">PLANNED</span></h3><dl>
+<dt>User action</dt><dd>Opens Timeline, Graph or Contradictions tab</dd>
+<dt>Frontend</dt><dd>Interactive timeline, entity graph, contradiction matrix, provision map; click any item to open the source page</dd>
+<dt>Backend</dt><dd>Read-only graph APIs</dd>
+<dt>AI/ML</dt><dd>None at view time; visuals render stored, verified records</dd>
+<dt>Storage</dt><dd>Graph and extraction tables</dd>
+<dt>Input → output</dt><dd>Case ID → nodes, edges, dated events</dd>
+<dt>Security</dt><dd>Case permission on each call; unverified items shown as unverified</dd></dl></div>
+
+<div class="step"><h3>Step 10: Conversational follow-up <span class="tag b">BUILT</span></h3><dl>
+<dt>User action</dt><dd>Asks "What about the second witness?"</dd>
+<dt>Frontend</dt><dd>Same chat thread</dd>
+<dt>Backend</dt><dd><code>history()</code> gives the last turns to the planner, which rewrites the query</dd>
+<dt>AI/ML</dt><dd>Planner resolves the reference</dd>
+<dt>Storage</dt><dd><code>chats</code>, <code>messages</code></dd>
+<dt>Input → output</dt><dd>Follow-up + recent turns → a fresh search</dd>
+<dt>Security</dt><dd>History helps understand the question only. Evidence is retrieved again each time, so newly uploaded documents count and permissions are rechecked</dd></dl></div>
+
+<div class="step"><h3>Step 11: Report generation <span class="tag p">PARTIAL</span></h3><dl>
+<dt>User action</dt><dd>Chooses findings and exports</dd>
+<dt>Frontend</dt><dd>Drafts export today; planned report builder pins verified findings</dd>
+<dt>Backend</dt><dd><code>export.py</code> (Word and PDF with Hindi shaping)</dd>
+<dt>AI/ML</dt><dd>Planned: section summaries from pinned findings only</dd>
+<dt>Storage</dt><dd><code>drafts</code>, versions; planned <code>reports</code></dd>
+<dt>Input → output</dt><dd>Selected items → report with source appendix</dd>
+<dt>Security</dt><dd>Marked as AI-assisted and requiring advocate review; export audited</dd></dl></div>
+
+<div class="step"><h3>Step 12: Case closure and retention <span class="tag p">PARTIAL</span></h3><dl>
+<dt>User action</dt><dd>Sets status to Disposed / Closed, or deletes the case</dd>
+<dt>Frontend</dt><dd>Case view, Privacy page with retention periods</dd>
+<dt>Backend</dt><dd><code>retention.py</code>, case delete</dd>
+<dt>AI/ML</dt><dd>None</dd>
+<dt>Storage</dt><dd>Chats and history 24 months, idle accounts 36 months with notice, audit log 5 years</dd>
+<dt>Input → output</dt><dd>Policy + dates → deletions and audit entries</dd>
+<dt>Security</dt><dd>Sole-member cases go with the account; shared cases stay. Planned: archive state, access freeze, 90-day recovery bin, reopen flow, deletion certificate</dd></dl></div>
+</section>
+
+<section id="s7"><h2>7. Document ingestion and processing pipeline</h2>
+<figure><figcaption>Diagram 3: Case creation and document ingestion pipeline</figcaption>
+<pre class="mermaid">
+flowchart TD
+  classDef built fill:#d9f1e6,stroke:#176b49,color:#0c3324
+  classDef partial fill:#fcefcc,stroke:#8a5f00,color:#3f2c00
+  classDef planned fill:#dfe9fb,stroke:#2553a3,color:#0f2748
+  A["1. Create case, case_members row"]:::built --> B["2. Upload batch"]:::built
+  B --> C{"3. Type and magic bytes valid?"}:::built
+  C -- No --> R["Refused with reason"]:::built
+  C -- Yes --> D{"4. Active content or malware?"}:::partial
+  D -- Yes --> R
+  D -- No --> E["Save to private bucket, queue job"]:::built
+  E --> F{"Duplicate by SHA-256?"}:::built
+  F -- Yes --> G["Link to existing document"]:::built
+  F -- No --> H{"5. Page has text layer?"}:::built
+  H -- No --> I["OCR page, mark unsure words"]:::built
+  H -- Yes --> J["6. Extract text with page numbers"]:::built
+  I --> J
+  J --> K["7. Classify document family"]:::partial
+  K --> L["8. Metadata extraction"]:::partial
+  L --> M["9. Language detection"]:::built
+  M --> N["10. Clean and normalise"]:::built
+  N --> O["11. Structure-aware chunks"]:::built
+  O --> P["12. Local embeddings"]:::built
+  P --> Q["13. Store chunks and tsvector"]:::built
+  Q --> S["14. Update vector index, status ready"]:::built
+  S --> T["Planned: entity and event extraction job"]:::planned
+</pre></figure>
+<div class="scroll"><table>
+<tr><th>Form of the data</th><th>What it is</th><th>Example</th><th>Where</th><th>Why kept separately</th></tr>
+<tr><td>Raw document</td><td>Exact uploaded file</td><td><code>FIR_123.pdf</code></td><td>Private bucket</td><td>The evidential original; never altered; hash proves integrity</td></tr>
+<tr><td>Extracted text</td><td>Text per page, including OCR</td><td>Page 2 text</td><td><code>documents</code> and derivatives</td><td>Can be regenerated with a better OCR</td></tr>
+<tr><td>Structured metadata</td><td>Facts about the document</td><td>Type, language, page count, hash</td><td>Postgres columns and JSON</td><td>Filtering, access rules, display</td></tr>
+<tr><td>Chunks</td><td>Meaningful passages</td><td>"Section 302", "paras 12–15"</td><td><code>chunks</code></td><td>The unit retrieved and cited</td></tr>
+<tr><td>Embeddings</td><td>Numbers describing meaning</td><td>384 float values</td><td><code>chunks.emb</code>, memory index</td><td>Finds meaning without matching words; useless to read, cheap to rebuild</td></tr>
+</table></div>
+<p><strong>Chunking by family.</strong> Statutes split per section, judgments by numbered paragraph, contracts by clause, templates by heading, everything else by sentence with overlap. A citation therefore points at a real legal unit.</p>
+<p><strong>Formats.</strong> PDF, Word, Excel, CSV, PowerPoint, OpenDocument, RTF, text and images. Up to 60 pages of OCR per document by default. Long scanned bundles need this limit raised with a dedicated worker.</p>
+<p><strong>Multilingual documents.</strong> OCR reads a page in English first, then applies a Devanagari model to unsure lines. Hindi and Marathi text is stored, displayed and translated with consent. Search quality for these languages is weaker because the embedding model is English-only.</p>
+</section>
+
+<section id="s8"><h2>8. Legal knowledge base and graph construction</h2>
+<h3>Curated knowledge base</h3>
+<div class="scroll"><table>
+<tr><th>Content</th><th>Status</th><th>Current handling</th></tr>
+<tr><td>Central acts and sections</td><td><span class="tag b">BUILT</span></td><td>101 acts from India Code, one chunk per section, with commencement and repeal data for key acts</td></tr>
+<tr><td>Constitution</td><td><span class="tag b">BUILT</span></td><td>Included in the library</td></tr>
+<tr><td>IPC to BNS, CrPC to BNSS links</td><td><span class="tag p">PARTIAL</span></td><td>Matched by similarity at answer time, not a verified table</td></tr>
+<tr><td>Supreme Court judgments</td><td><span class="tag b">BUILT</span></td><td>38,152 catalogue entries from an open CC-BY-4.0 dataset; full text on demand</td></tr>
+<tr><td>High Court and tribunal judgments</td><td><span class="tag n">PLANNED</span></td><td>Needs a lawful source</td></tr>
+<tr><td>State acts, rules, regulations</td><td><span class="tag n">PLANNED</span></td><td>India Code coverage must be checked per state</td></tr>
+<tr><td>Amendments, notifications</td><td><span class="tag p">PARTIAL</span></td><td>India Code polling detects changes; older versions are superseded, but section-level history is not stored</td></tr>
+<tr><td>Admin review before publication</td><td><span class="tag p">PARTIAL</span></td><td>Import is possible; a review-and-publish workflow is not</td></tr>
+</table></div>
+<figure><figcaption>Diagram 7: Legal knowledge base administration and update pipeline</figcaption>
+<pre class="mermaid">
+flowchart LR
+  classDef built fill:#d9f1e6,stroke:#176b49,color:#0c3324
+  classDef partial fill:#fcefcc,stroke:#8a5f00,color:#3f2c00
+  classDef planned fill:#dfe9fb,stroke:#2553a3,color:#0f2748
+  A["1. Source collection"]:::built --> B["2. Validation: origin, hash"]:::partial
+  B --> C["3. Cleaning"]:::built
+  C --> D["4. Classification"]:::partial
+  D --> E["5. Metadata extraction"]:::partial
+  E --> F["6. Entity extraction"]:::planned
+  F --> G["7. Relationship extraction"]:::planned
+  G --> H["8. Knowledge graph creation"]:::planned
+  H --> I["9. Embeddings"]:::built
+  I --> J["10. Indexing"]:::built
+  J --> K["11. Versioning"]:::partial
+  K --> L{"12. Curator approves?"}:::planned
+  L -- Yes --> M["13. Publication"]:::partial
+  L -- No --> N["Returned with reason"]:::planned
+  M --> O["Notify cases citing changed law"]:::planned
+</pre></figure>
+<h3>Authority hierarchy</h3>
+<p>Sources are ranked, never treated as equal. Web results already use tiers: official, legal publisher, news and reference, and unknown sites are dropped. The law ranking below is <span class="tag n">PLANNED</span> as an explicit signal in reranking.</p>
+<div class="scroll"><table>
+<tr><th>Rank</th><th>Source</th><th>Rule</th></tr>
+<tr><td>1</td><td>Constitution of India</td><td>Overrides all other sources</td></tr>
+<tr><td>2</td><td>Central and state statutes in force</td><td>Effective on the date of the facts</td></tr>
+<tr><td>3</td><td>Rules, regulations, notifications</td><td>Valid only under their parent act</td></tr>
+<tr><td>4</td><td>Supreme Court judgments</td><td>Binding under Article 141; larger benches prevail; overruled cases flagged</td></tr>
+<tr><td>5</td><td>High Court judgments</td><td>Binding within the state's subordinate courts, persuasive elsewhere</td></tr>
+<tr><td>6</td><td>Tribunals and lower courts</td><td>Limited weight</td></tr>
+<tr><td>7</td><td>Commentary, news, web</td><td>Background only; never presented as law</td></tr>
+</table></div>
+<h3>Freshness, amendments and history</h3>
+<ul>
+<li>Each planned section version carries <code>valid_from</code>, <code>valid_to</code>, <code>amended_by</code>, source and retrieval date.</li>
+<li>A question asks two things: what the law is today, and what applied on the incident date. Today <code>provisions.py</code> already flags conduct before 1 July 2024 before applying BNS, BNSS or BSA.</li>
+<li>Old versions stay searchable and labelled, because old cases need old law.</li>
+</ul>
+<figure><figcaption>Diagram 4: Document intelligence and knowledge graph construction (planned)</figcaption>
+<pre class="mermaid">
+flowchart TD
+  classDef built fill:#d9f1e6,stroke:#176b49,color:#0c3324
+  classDef planned fill:#dfe9fb,stroke:#2553a3,color:#0f2748
+  A["Chunks with page numbers"]:::built --> B["Deterministic extractors: dates, sections, FIR, CNR"]:::planned
+  A --> C["LLM extraction to a strict JSON schema"]:::planned
+  B --> D["Validate: quoted text exists on the page"]:::planned
+  C --> D
+  D -- Fails --> E["Discard or mark unverified"]:::planned
+  D -- Passes --> F["Entity resolution"]:::planned
+  F --> G{"Confident match?"}:::planned
+  G -- Yes --> H["Merge node"]:::planned
+  G -- No --> I["Lawyer review queue"]:::planned
+  I --> H
+  H --> J["Add typed edges with evidence spans"]:::planned
+  J --> K["Link sections to library nodes"]:::planned
+  K --> L["Claim comparison finds candidates"]:::planned
+  L --> M["Case graph ready, timeline and views update"]:::planned
+</pre></figure>
+<h3>Graph model</h3>
+<div class="scroll"><table>
+<tr><th>Relationship</th><th>Layer</th><th>How it is created</th><th>Why it matters</th></tr>
+<tr><td>Act → CONTAINS → Section</td><td>Law</td><td>Deterministic from structure</td><td>Navigation, context</td></tr>
+<tr><td>Section → AMENDED_BY → Amendment</td><td>Law</td><td>Amending act parsing, curator check</td><td>Correct version</td></tr>
+<tr><td>Judgment → INTERPRETS → Section</td><td>Law</td><td>Citation parser, LLM for treatment</td><td>Finds cases by provision</td></tr>
+<tr><td>Judgment → REFERS_TO → Judgment</td><td>Law</td><td>Citation parser; followed, distinguished, overruled by LLM with review</td><td>Precedent validity</td></tr>
+<tr><td>Case → CONTAINS → Evidence</td><td>Case</td><td>From document records</td><td>Scope</td></tr>
+<tr><td>Person → PARTICIPATES_IN → Event</td><td>Case</td><td>Extraction with resolution</td><td>Who did what</td></tr>
+<tr><td>Event → OCCURS_AT → Location</td><td>Case</td><td>Extraction</td><td>Alibi and geography checks</td></tr>
+<tr><td>Evidence → SUPPORTS or CONTRADICTS → Claim</td><td>Case</td><td>Comparison, lawyer confirms</td><td>Core analysis</td></tr>
+<tr><td>Case entity → MAPS_TO → Section</td><td>Bridge</td><td>Provision suggestions accepted by the lawyer</td><td>Joins facts to law</td></tr>
+</table></div>
+<p>Each edge stores document, page, quoted span, confidence, extractor version and review state. An edge with no evidence span cannot exist. Case graphs can read the shared law graph, while the law graph can never read a case graph.</p>
+</section>
+
+<section id="s9"><h2>9. GraphRAG internal working</h2>
+<p class="note"><strong>Status.</strong> Stages 1, 2, 5, 6 and 8 of the pipeline below exist as hybrid RAG. Stages 3, 4 and 7 are the planned graph work.</p>
+<h3>Conventional RAG compared with GraphRAG</h3>
+<div class="scroll"><table>
+<tr><th>Question type</th><th>Conventional RAG</th><th>GraphRAG</th></tr>
+<tr><td>"What does Section 138 say?"</td><td>Excellent</td><td>No gain; the graph is skipped</td></tr>
+<tr><td>"Where was the accused on 12 March, across all statements?"</td><td>Returns the passages that look most similar and can miss one</td><td>Walks person → events → date, collecting all of them</td></tr>
+<tr><td>"Which witness contradicts the FIR?"</td><td>Depends on both passages reaching the top 8</td><td>Compares claims about the same event</td></tr>
+<tr><td>"Is this judgment still good law?"</td><td>Text search for later mentions</td><td>Follows citation edges to overruling cases</td></tr>
+<tr><td>"Summarise the prosecution's whole case"</td><td>Sees only a few chunks</td><td>Uses cluster summaries of the whole case</td></tr>
+</table></div>
+<p>Plain retrieval finds passages that resemble the question. Legal analysis often needs passages connected to each other that look nothing like the question. The graph supplies those connections, and the text evidence stays the only thing the model may cite.</p>
+<figure><figcaption>Diagram 5: Complete GraphRAG retrieval and response pipeline</figcaption>
+<pre class="mermaid">
+flowchart TD
+  classDef built fill:#d9f1e6,stroke:#176b49,color:#0c3324
+  classDef planned fill:#dfe9fb,stroke:#2553a3,color:#0f2748
+  Q["Question, case, scope"]:::built --> S["Screen for injection and abuse"]:::built
+  S --> P["1. Plan: intent, rewritten query, filters"]:::built
+  P --> R{"2. Needs relationships?"}:::planned
+  P --> V["Dense vector search"]:::built
+  P --> L["Keyword search"]:::built
+  P --> X["Exact section lookup"]:::built
+  P --> N["Lay terms and proper names"]:::built
+  R -- Yes --> E["3. Link question to graph entities"]:::planned
+  E --> T["4. Bounded traversal, up to 3 hops"]:::planned
+  T --> CS["Cluster summaries for broad questions"]:::planned
+  R -- No --> F
+  V --> F["5. Reciprocal rank fusion"]:::built
+  L --> F
+  X --> F
+  N --> F
+  T --> F
+  CS --> F
+  F --> RR["6. Cross-encoder rerank, 24 candidates"]:::built
+  RR --> AU["7. Authority and date weighting"]:::planned
+  AU --> CX["8. Context: 8 passages, whole sections, counterparts"]:::built
+  CX --> G["LLM writes from sources only"]:::built
+  G --> VC["Citation and claim audit"]:::built
+  VC --> OK{"Unsupported major claim?"}:::built
+  OK -- Yes --> W["Warn or abstain"]:::built
+  OK -- No --> FA["Final answer with source cards"]:::built
+</pre></figure>
+<ol class="conn">
+<li><strong>Vector-based retrieval:</strong> exact cosine search over query embedding, filtered by permitted cases.</li>
+<li><strong>Entity-based retrieval:</strong> names, sections and dates in the question are matched to graph nodes.</li>
+<li><strong>Graph traversal:</strong> from those nodes, follow allowed edge types with a hop limit, so the search cannot wander.</li>
+<li><strong>Relationship-aware retrieval:</strong> each edge reached returns its evidence spans, which become candidate passages.</li>
+<li><strong>Cluster summaries:</strong> groups of tightly connected events are summarised in advance. They help understand broad questions but are never cited; the model cites the underlying passages.</li>
+<li><strong>Hybrid fusion:</strong> RRF combines ranked lists by position, so differing score scales do not matter.</li>
+<li><strong>Context assembly:</strong> de-duplicate, respect 16,000 characters, group by document, keep labels.</li>
+<li><strong>Evidence ranking:</strong> cross-encoder relevance, then authority, date validity and OCR confidence.</li>
+</ol>
+<h3>Contradiction detection, specifically</h3>
+<ol>
+<li>Extract atomic claims: who, what, when, where, with a page span.</li>
+<li>Group claims by resolved event and person, using the graph.</li>
+<li>Compare with deterministic rules first: different dates, times, places, or numbers.</li>
+<li>Send only the remaining pairs to the LLM, labelled contradiction, compatible or unclear.</li>
+<li>Show both quotes side by side. The system says "these statements differ", and the lawyer decides whether it matters.</li>
+</ol>
+</section>
+
+<section id="s10"><h2>10. Agentic AI and multi-agent workflow</h2>
+<p>Most of NyayaSutra AI should not be agents. An agent is justified only where the next step depends on what was just found. Fixed sequences stay as pipelines, because they are cheaper, testable and repeatable.</p>
+<div class="scroll"><table>
+<tr><th>Use deterministic code</th><th>Use one LLM call</th><th>Use a bounded agent</th></tr>
+<tr><td>Permissions, date and limitation arithmetic, section lookup, file checks, citation parsing, retention, hashing, routing by known rules</td><td>Summary of one document, translation, drafting from verified facts, extraction to a schema</td><td>Case-wide questions, contradiction analysis, research that needs a second search after reading the first results</td></tr>
+</table></div>
+<figure><figcaption>Diagram 6: Agentic orchestration architecture (planned, built parts in green)</figcaption>
+<pre class="mermaid">
+flowchart TD
+  classDef built fill:#d9f1e6,stroke:#176b49,color:#0c3324
+  classDef partial fill:#fcefcc,stroke:#8a5f00,color:#3f2c00
+  classDef planned fill:#dfe9fb,stroke:#2553a3,color:#0f2748
+  A["Request with permitted case IDs"]:::built --> B["Query Understanding: planner"]:::built
+  B --> C{"Route"}:::built
+  C -- Time, limitation --> D["Deterministic tools"]:::built
+  C -- Law question --> E["Legal Research"]:::built
+  C -- One document --> F["Document Analysis"]:::built
+  C -- Case-wide --> G["Evidence Analysis"]:::planned
+  C -- Timeline --> H["Timeline builder"]:::planned
+  C -- Provisions --> I["Provision Mapping"]:::partial
+  G --> E
+  I --> E
+  E --> J["Response Generation"]:::built
+  F --> J
+  G --> J
+  H --> J
+  J --> K["Verification"]:::built
+  K --> L{"Passes?"}:::built
+  L -- Yes --> M["Answer"]:::built
+  L -- "No, one retry" --> E
+  L -- "Still no" --> N["Abstain or human review"]:::partial
+</pre></figure>
+<div class="scroll"><table>
+<tr><th>Agent or role</th><th>Status</th><th>Responsibility</th><th>Input → output</th><th>Invoked when</th><th>Type</th></tr>
+<tr><td>Query Understanding</td><td><span class="tag b">BUILT</span></td><td>Intent, rewritten query, filters</td><td>Question, recent turns → validated plan</td><td>Every request</td><td>One LLM call with schema</td></tr>
+<tr><td>Legal Research</td><td><span class="tag b">BUILT</span></td><td>Find law; web fallback</td><td>Plan → ranked sources</td><td>Legal questions</td><td>Pipeline now; may search again later</td></tr>
+<tr><td>Document Analysis</td><td><span class="tag b">BUILT</span></td><td>Summary, timeline table, issues for one document</td><td>Document → analysis</td><td>Named document</td><td>LLM call</td></tr>
+<tr><td>Entity and Relationship</td><td><span class="tag n">PLANNED</span></td><td>Build the graph</td><td>Chunks → nodes, edges</td><td>After ingestion</td><td>Background pipeline, not an agent</td></tr>
+<tr><td>Evidence Analysis</td><td><span class="tag n">PLANNED</span></td><td>Contradictions, support, gaps</td><td>Claims, graph → findings</td><td>Case-wide questions</td><td>Real agent</td></tr>
+<tr><td>Timeline Generation</td><td><span class="tag n">PLANNED</span></td><td>Ordered events with conflicts</td><td>Events → timeline</td><td>Graph update</td><td>Deterministic query</td></tr>
+<tr><td>Legal Provision Mapping</td><td><span class="tag p">PARTIAL</span></td><td>Link facts to law with temporal checks</td><td>Facts → suggestions</td><td>On request</td><td>Bounded retrieval + LLM</td></tr>
+<tr><td>Verification</td><td><span class="tag b">BUILT</span></td><td>Audit citations and claims</td><td>Answer, sources → issues</td><td>Every grounded answer</td><td>Code first, then LLM</td></tr>
+<tr><td>Response Generation</td><td><span class="tag b">BUILT</span></td><td>Write the answer</td><td>Sources → text</td><td>Every grounded answer</td><td>LLM streaming</td></tr>
+</table></div>
+<p><strong>Communication.</strong> Agents never message each other freely. A central orchestrator holds one typed state object (question, plan, evidence, findings, issues), and each step reads and adds to it. Limits: 6 model calls, 2 retries and a time budget per request, with every step recorded in the answer trace.</p>
+<p><strong>Orchestration.</strong> Keep the current Python orchestrator while the flow stays simple. Adopt LangGraph when Evidence Analysis needs branching, checkpoints or a pause for human review, because those features would otherwise be rebuilt by hand. Long agent runs should execute through the existing job queue.</p>
+</section>
+
+<section id="s11"><h2>11. Database and storage architecture</h2>
+<figure><figcaption>Diagram 8: Database and storage architecture</figcaption>
+<pre class="mermaid">
+flowchart LR
+  classDef built fill:#d9f1e6,stroke:#176b49,color:#0c3324
+  classDef planned fill:#dfe9fb,stroke:#2553a3,color:#0f2748
+  classDef future fill:#ece4f8,stroke:#60399c,color:#2a1747
+  APP["FastAPI as nyaya_app, with user claims"]:::built
+  JOB["Job workers"]:::built
+  subgraph PG["Supabase Postgres, Mumbai, RLS on"]
+    R["Accounts, cases, documents, chats, jobs, audit"]:::built
+    C["chunks: text, tsvector GIN, embedding bytes"]:::built
+    G["kg_nodes, kg_edges, kg_evidence"]:::planned
+    PV["pgvector HNSW"]:::planned
+    OB["Outbox for sync events"]:::planned
+  end
+  S3["Private object storage: originals"]:::built
+  MEM["In-memory NumPy index"]:::built
+  LOC["Local SQLite: web cache and budget"]:::built
+  RD["Redis: rate limits, cache"]:::planned
+  OS["OpenSearch"]:::future
+  N4["Neo4j or dedicated graph store"]:::future
+  APP --> R
+  APP --> C
+  APP --> S3
+  APP --> MEM
+  APP --> LOC
+  APP --> RD
+  JOB --> R
+  JOB --> C
+  JOB --> S3
+  JOB --> G
+  C --> MEM
+  C --> PV
+  OB --> OS
+  OB --> N4
+</pre></figure>
+<div class="scroll"><table>
+<tr><th>Store</th><th>Status</th><th>Holds</th><th>Why required</th><th>Move to the next option when</th></tr>
+<tr><td>PostgreSQL</td><td><span class="tag b">BUILT</span></td><td>All records, permissions, audit, chunks</td><td>Transactions, RLS, the single source of truth</td><td>Stays permanently</td></tr>
+<tr><td>Postgres full text</td><td><span class="tag b">BUILT</span></td><td>Keyword index</td><td>Exact legal terms, included in Postgres</td><td>OpenSearch when Indian-language analysers, facets or very large volume are needed</td></tr>
+<tr><td>In-memory vector index</td><td><span class="tag b">BUILT</span></td><td>All embeddings in RAM</td><td>Perfect recall, simple</td><td>RAM or start-up time become a problem, or several app instances run</td></tr>
+<tr><td>pgvector</td><td><span class="tag n">PLANNED</span></td><td>Vectors with RLS</td><td>Keeps access rules with the data</td><td>Qdrant only above roughly tens of millions of vectors</td></tr>
+<tr><td>Graph tables in Postgres</td><td><span class="tag n">PLANNED</span></td><td>Nodes, edges, evidence</td><td>Same RLS, same backup, up to 3 hops by recursive query</td><td>Neo4j when graph algorithms or deep traversal dominate</td></tr>
+<tr><td>Object storage</td><td><span class="tag b">BUILT</span></td><td>Original files</td><td>Large binaries do not belong in a database</td><td>S3-compatible store in a private cloud</td></tr>
+<tr><td>Redis</td><td><span class="tag n">PLANNED</span></td><td>Rate counters, short cache</td><td>In-process limits fail with several instances</td><td>Needed from the second app instance</td></tr>
+<tr><td>Audit store</td><td><span class="tag b">BUILT</span></td><td><code>audit_log</code> table</td><td>Accountability</td><td>Write-once archive for enterprise customers</td></tr>
+</table></div>
+<h3>Keeping stores in step</h3>
+<ul>
+<li>Postgres is the source of truth. Everything else can be rebuilt from it plus object storage.</li>
+<li>Today the app reloads the index from <code>chunks</code>.</li>
+<li>With external stores, use a transactional outbox: the change and its "update the index" event commit together, and a worker applies it and can safely repeat.</li>
+<li>Deletion must reach every store, and a nightly reconciliation check confirms that it did.</li>
+</ul>
+<h3>Isolation</h3>
+<div class="scroll"><table>
+<tr><th>Boundary</th><th>Control</th><th>Status</th></tr>
+<tr><td>Organisation</td><td><code>org_id</code> check plus RLS</td><td><span class="tag b">BUILT</span></td></tr>
+<tr><td>Case</td><td><code>case_members</code>, API check plus RLS with the user's identity</td><td><span class="tag b">BUILT</span></td></tr>
+<tr><td>Personal data</td><td>Calendar and search history private even from admins</td><td><span class="tag b">BUILT</span></td></tr>
+<tr><td>Fast search</td><td>Security-definer function <code>private.fts_chunk_ids</code> repeats the access check; tested that non-members get nothing</td><td><span class="tag b">BUILT</span></td></tr>
+<tr><td>Vector search</td><td>Filter by permitted cases in the application; the planned pgvector move adds database enforcement</td><td><span class="tag p">PARTIAL</span></td></tr>
+<tr><td>Shared caches</td><td>Web cache holds only hashes and public pages. Answers are never cached across users</td><td><span class="tag b">BUILT</span></td></tr>
+<tr><td>Enterprise tenant</td><td>Separate database or private deployment</td><td><span class="tag f">FUTURE</span></td></tr>
+</table></div>
+</section>
+
+<section id="s12"><h2>12. Security and governance architecture</h2>
+<figure><figcaption>Diagram 9: Security, privacy, monitoring and governance</figcaption>
+<pre class="mermaid">
+flowchart TB
+  classDef built fill:#d9f1e6,stroke:#176b49,color:#0c3324
+  classDef partial fill:#fcefcc,stroke:#8a5f00,color:#3f2c00
+  classDef planned fill:#dfe9fb,stroke:#2553a3,color:#0f2748
+  subgraph EDGE["Edge"]
+    T["TLS, CSP, Host and Origin checks"]:::built
+    RL["Rate limits, lockout"]:::built
+  end
+  subgraph ID["Identity"]
+    AU["Sessions, MFA, CSRF"]:::built
+    AZ["Permission matrix, case access"]:::built
+  end
+  subgraph DATA["Data"]
+    RLS["Row-level security"]:::built
+    ENC["Provider encryption at rest"]:::built
+    VA["Vault for tokens"]:::built
+    BK["Automated backups, restore tests"]:::planned
+  end
+  subgraph AI["AI safety"]
+    INJ["Injection screen, sources as data"]:::built
+    MASK["Identifier masking"]:::built
+    CITE["Citation and claim audit"]:::built
+    HIL["Human review workflow"]:::partial
+  end
+  subgraph OPS["Governance and monitoring"]
+    AL["Audit log, 5 years"]:::built
+    RET["Retention job, Privacy page"]:::built
+    HC["Health endpoint"]:::built
+    MON["Metrics, tracing, alerts"]:::planned
+    DS["Data export and self-service deletion"]:::planned
+  end
+  EDGE --> ID --> DATA
+  ID --> AI
+  DATA --> OPS
+  AI --> OPS
+</pre></figure>
+<div class="scroll"><table>
+<tr><th>Control</th><th>Status</th><th>Detail</th></tr>
+<tr><td>Encryption in transit</td><td><span class="tag p">PARTIAL</span></td><td>HTTPS to all providers; the public edge awaits deployment</td></tr>
+<tr><td>Encryption at rest</td><td><span class="tag b">BUILT</span></td><td>Provided by Supabase; tokens additionally in Vault. Customer-held keys are future</td></tr>
+<tr><td>Secure upload</td><td><span class="tag p">PARTIAL</span></td><td>All checks run; ClamAV must be installed</td></tr>
+<tr><td>RBAC and case isolation</td><td><span class="tag b">BUILT</span></td><td>Enforced twice: application and database</td></tr>
+<tr><td>Audit trail</td><td><span class="tag b">BUILT</span></td><td>Actions, not content</td></tr>
+<tr><td>Secrets</td><td><span class="tag p">PARTIAL</span></td><td><code>.env</code> outside Git, logs scrubbed; a managed secret store is planned</td></tr>
+<tr><td>Backup and recovery</td><td><span class="tag n">PLANNED</span></td><td>Not automated today. This is a launch blocker</td></tr>
+<tr><td>Retention and deletion</td><td><span class="tag b">BUILT</span></td><td>Daily job; self-service deletion and data export not yet</td></tr>
+<tr><td>Access monitoring</td><td><span class="tag p">PARTIAL</span></td><td>Audit data exists; anomaly alerts do not</td></tr>
+<tr><td>Prompt injection</td><td><span class="tag b">BUILT</span></td><td>Delimited sources, tool allow-list, no tool can reach beyond the caller's permissions. Pattern screens can be paraphrased around, so the design assumes some attempts get through</td></tr>
+<tr><td>Malicious documents</td><td><span class="tag b">BUILT</span></td><td>Macros, scripts and embedded objects refused; PDFium parser; zip-bomb guard</td></tr>
+<tr><td>LLM data privacy</td><td><span class="tag p">PARTIAL</span></td><td>Aadhaar, PAN, phone, e-mail, bank, card, passport and UPI masked. <strong>Names, addresses and facts still reach Ollama Cloud.</strong> Provider terms and data location must be confirmed before real client data</td></tr>
+<tr><td>Human in the loop</td><td><span class="tag p">PARTIAL</span></td><td>Provision acceptance and draft review exist; finding review is planned</td></tr>
+<tr><td>Disclaimer</td><td><span class="tag b">BUILT</span></td><td>Assistant for advocates; results need checking</td></tr>
+</table></div>
+<h3>Indian data protection</h3>
+<p>This summary is engineering guidance, not legal advice. The DPDP Rules were notified in November 2025 with staged commencement; most operational duties are reported to start around May 2027. The summary relies on secondary sources, so a qualified lawyer should confirm it against the official gazette text.</p>
+<div class="scroll"><table>
+<tr><th>Topic</th><th>Legal requirement (to confirm)</th><th>Recommended engineering control</th><th>Status</th></tr>
+<tr><td>Roles</td><td>The party deciding purpose is the Data Fiduciary</td><td>Contract: firm is fiduciary for case data, NyayaSutra a processor; NyayaSutra is fiduciary for account data</td><td><span class="tag n">PLANNED</span></td></tr>
+<tr><td>Notice and consent</td><td>Clear notice, lawful basis</td><td>Privacy page, sign-up notice, per-use LLM consent</td><td><span class="tag p">PARTIAL</span></td></tr>
+<tr><td>Security safeguards</td><td>Reasonable safeguards</td><td>Encryption, access control, monitoring</td><td><span class="tag p">PARTIAL</span></td></tr>
+<tr><td>Breach</td><td>Notify affected people and the Board; detailed report reported as within 72 hours</td><td>Incident runbook, contact list, evidence logs</td><td><span class="tag n">PLANNED</span></td></tr>
+<tr><td>Logs</td><td>Minimum one-year retention reported</td><td>5-year audit log already exceeds this</td><td><span class="tag b">BUILT</span></td></tr>
+<tr><td>Rights</td><td>Access, correction, erasure, grievance</td><td>Self-service export and deletion, grievance contact</td><td><span class="tag n">PLANNED</span></td></tr>
+<tr><td>Erasure</td><td>Delete when the purpose ends unless law requires keeping</td><td>Retention job, reconcile all stores</td><td><span class="tag p">PARTIAL</span></td></tr>
+<tr><td>Transfers abroad</td><td>Subject to government restrictions</td><td>Mumbai hosting; confirm or replace the LLM region</td><td><span class="tag p">PARTIAL</span></td></tr>
+<tr><td>Professional confidentiality</td><td>Advocate-client privilege under the Bharatiya Sakshya Adhiniyam and Bar Council rules</td><td>Private deployment option, no training on client data, minimal provider access</td><td><span class="tag p">PARTIAL</span></td></tr>
+</table></div>
+</section>
+
+<section id="s13"><h2>13. Complete technology stack</h2>
+<div class="scroll"><table>
+<tr><th>Layer</th><th>Today</th><th>Recommendation</th><th>Alternative</th><th>Reason</th></tr>
+<tr><td>Frontend</td><td>Vanilla JS</td><td>Keep for the pilot; move to React with TypeScript when graph views begin</td><td>Next.js</td><td>Graph screens are complex. Server rendering adds little behind a login</td></tr>
+<tr><td>Graph UI</td><td>None</td><td>Cytoscape.js, vis-timeline</td><td>D3</td><td>Ready-made interaction, less code</td></tr>
+<tr><td>Backend</td><td>FastAPI monolith</td><td>Keep; split the worker first</td><td>Microservices</td><td>A small team should not run many services</td></tr>
+<tr><td>Orchestration</td><td>Custom Python</td><td>Add LangGraph for case-wide agents</td><td>LangChain chains, Temporal</td><td>Checkpoints and human pause; skip LangChain abstractions</td></tr>
+<tr><td>Main LLM</td><td>gpt-oss:120b via Ollama Cloud</td><td>Keep a provider-neutral client and compare on our benchmark</td><td>Gemini, GPT, Claude, self-hosted</td><td>Choose by grounding score, cost and data terms</td></tr>
+<tr><td>Embeddings</td><td>bge-small-en-v1.5</td><td>Test BGE-M3 on a Hindi and Marathi benchmark</td><td>IndicBERT family, hosted APIs</td><td>Multilingual need; re-embedding has a real cost</td></tr>
+<tr><td>Reranker</td><td>MiniLM cross-encoder</td><td>Keep; test a multilingual reranker</td><td>Hosted rerank API</td><td>Runs locally, private</td></tr>
+<tr><td>Relational</td><td>Supabase Postgres</td><td>Keep, Pro plan at launch</td><td>AWS RDS</td><td>Auth, RLS, storage together</td></tr>
+<tr><td>Vector</td><td>NumPy in memory</td><td>pgvector</td><td>Qdrant</td><td>Single place for access rules</td></tr>
+<tr><td>Graph</td><td>None</td><td>Postgres tables first</td><td>Neo4j, Apache AGE</td><td>Decision 3 in section 16</td></tr>
+<tr><td>Search</td><td>Postgres FTS</td><td>Keep</td><td>OpenSearch</td><td>Avoids running a cluster now</td></tr>
+<tr><td>Cache</td><td>In-process, SQLite</td><td>Redis at the second instance</td><td>Valkey</td><td>Add when actually needed</td></tr>
+<tr><td>Documents</td><td>PDFium, python-docx, openpyxl, python-pptx, RapidOCR</td><td>Keep; evaluate Docling for tables</td><td>PyMuPDF (AGPL licence), cloud OCR</td><td>PDFium is hardened and permissively licensed</td></tr>
+<tr><td>Deployment</td><td>Local; Docker untested</td><td>Docker Compose on one VM, CI in GitHub Actions</td><td>Cloud Run, Kubernetes</td><td>Simple until load proves otherwise</td></tr>
+<tr><td>Monitoring</td><td>Logs, /api/health</td><td>Uptime monitor, Sentry, then Prometheus and Grafana</td><td>Datadog</td><td>Start free and small</td></tr>
+<tr><td>LLM evaluation</td><td>Own eval suite</td><td>Keep; add lawyer-labelled cases</td><td>Ragas, Langfuse</td><td>Domain-specific checks matter most</td></tr>
+</table></div>
+</section>
+
+<section id="s14"><h2>14. Production deployment architecture</h2>
+<figure><figcaption>Diagram 10: Deployment and production infrastructure</figcaption>
+<pre class="mermaid">
+flowchart TB
+  classDef built fill:#d9f1e6,stroke:#176b49,color:#0c3324
+  classDef partial fill:#fcefcc,stroke:#8a5f00,color:#3f2c00
+  classDef planned fill:#dfe9fb,stroke:#2553a3,color:#0f2748
+  classDef future fill:#ece4f8,stroke:#60399c,color:#2a1747
+  DEV["GitHub repository"]:::built --> CI["CI: tests, security scan, build image"]:::planned
+  CI --> REG["Image registry"]:::planned
+  REG --> VM
+  USR["Users"]:::built --> DNS["Domain and TLS"]:::planned
+  DNS --> CAD
+  subgraph VM["Stage A: one server in India"]
+    CAD["Caddy reverse proxy"]:::partial
+    APP["App container"]:::partial
+    WRK["Worker container with ClamAV"]:::planned
+  end
+  CAD --> APP
+  APP --> SB["Supabase, Mumbai"]:::built
+  WRK --> SB
+  APP --> OL["Model provider"]:::built
+  WRK --> OL
+  APP --> MON["Uptime, errors, metrics"]:::planned
+  subgraph SCALE["Stage B: growth"]
+    LB["Load balancer"]:::future
+    MANY["Several app instances"]:::future
+    OCRW["OCR worker pool"]:::future
+    RED["Redis"]:::future
+    GPU["Private GPU model serving"]:::future
+  end
+  CAD -.-> LB
+  LB --> MANY
+  MANY --> RED
+  MANY --> OCRW
+  MANY --> GPU
+</pre></figure>
+<div class="scroll"><table>
+<tr><th>Stage</th><th>Users</th><th>Setup</th><th>Rough cost</th></tr>
+<tr><td>Pilot</td><td>5 to 20</td><td>One VM, Docker Compose, Supabase</td><td>Free to about ₹1,000 per month, plus model use. Supabase backups need a paid plan</td></tr>
+<tr><td>Early production</td><td>Hundreds</td><td>App and worker separated, staging, Sentry, Supabase Pro</td><td>Depends on model use; to be measured in the pilot</td></tr>
+<tr><td>Growth</td><td>Thousands</td><td>Load balancer, Redis, pgvector, worker pools</td><td>Estimate after pilot data</td></tr>
+<tr><td>Enterprise</td><td>Large firms</td><td>Private cloud, dedicated database, private model</td><td>Per contract</td></tr>
+</table></div>
+<p>The app and jobs can run on several instances because the queue uses <code>SKIP LOCKED</code>. Three parts block this today: the in-memory vector index, the in-process rate limiter and the local web cache file.</p>
+<h3>Reliability targets (proposed)</h3>
+<ul><li>Availability 99.5% during the pilot.</li><li>Recovery point objective 24 hours, recovery time objective 4 hours.</li><li>Quarterly restore drill.</li><li>Response under 15 seconds at the 95th percentile for grounded answers.</li></ul>
+</section>
+
+<section id="s15"><h2>15. Current prototype vs planned vs future scope</h2>
+<div class="scroll"><table>
+<tr><th>Capability</th><th>Today</th><th>Planned</th><th>Future</th></tr>
+<tr><td>Retrieval</td><td>Hybrid RAG with reranking</td><td>GraphRAG, authority weighting</td><td>Learned ranking from lawyer feedback</td></tr>
+<tr><td>Knowledge base</td><td>101 acts, SC catalogue, RSS news</td><td>State law, High Courts, section versions</td><td>Licensed databases</td></tr>
+<tr><td>Case analysis</td><td>Per-document summary, chat, provisions, inconsistencies in drafting intake</td><td>Case graph, contradiction matrix</td><td>Advanced evidence analysis with reviewed patterns</td></tr>
+<tr><td>Visuals</td><td>Tables and Markdown</td><td>Timeline, entity graph</td><td>Firm-wide analytics</td></tr>
+<tr><td>AI structure</td><td>Planner and tools</td><td>Bounded Evidence agent, LangGraph</td><td>Human-reviewed workflows at scale</td></tr>
+<tr><td>Identity</td><td>Lawyer and admin, MFA</td><td>Verification, more roles, firm onboarding</td><td>SSO, ABAC</td></tr>
+<tr><td>Languages</td><td>UI, OCR and translation in English, Hindi, Marathi</td><td>Multilingual search</td><td>More Indian languages, dictation</td></tr>
+<tr><td>Deployment</td><td>Local machine</td><td>Single server, CI, backups</td><td>Private cloud</td></tr>
+<tr><td>Court data</td><td>Manual import only</td><td>Better import assistance</td><td>Authorised integrations only</td></tr>
+</table></div>
+</section>
+
+<section id="s16"><h2>16. Architectural decisions and engineering trade-offs</h2>
+<div class="scroll"><table>
+<tr><th>#</th><th>Decision</th><th>Reason</th><th>Alternative</th><th>Trade-off</th></tr>
+<tr><td>1</td><td>Add GraphRAG on top of hybrid RAG, used only when a question needs relationships</td><td>Case analysis depends on connections across documents; simple lookups do not</td><td>RAG alone</td><td>Extraction cost and complexity; errors can enter the graph</td></tr>
+<tr><td>2</td><td>Use vectors and a graph together</td><td>Vectors find what a text means; graphs record how facts connect</td><td>Only one</td><td>Two structures to keep in step</td></tr>
+<tr><td>3</td><td>Start the graph in Postgres, not Neo4j</td><td>Shares RLS, backup and transactions; Neo4j would need its own per-case access layer. Our traversals are short</td><td>Neo4j now</td><td>Fewer graph algorithms; recursive queries slow down on deep walks; migration later is possible through the outbox</td></tr>
+<tr><td>4</td><td>Keep a relational database as the source of truth</td><td>Permissions, case records, jobs and audit need strict transactions</td><td>Document or graph database only</td><td>Schema migrations to manage</td></tr>
+<tr><td>5</td><td>Keep originals in object storage</td><td>Large files, evidence integrity, cheap</td><td>Files in the database</td><td>Deletion spans two systems</td></tr>
+<tr><td>6</td><td>Several AI stages</td><td>Each can be tested and use a cheaper model</td><td>One big prompt</td><td>More latency; mitigated by streaming and fast models</td></tr>
+<tr><td>7</td><td>Agents only for case-wide work</td><td>Avoids cost and unpredictable paths</td><td>Agents everywhere</td><td>Some flexibility lost</td></tr>
+<tr><td>8</td><td>Deterministic code for dates, permissions, citations</td><td>Must be exact and repeatable</td><td>LLM tools</td><td>More rules to maintain</td></tr>
+<tr><td>9</td><td>Local embeddings</td><td>Case text need not leave the server for indexing; no per-call cost</td><td>Hosted embeddings</td><td>Uses CPU; current model is English-only</td></tr>
+<tr><td>10</td><td>Catalogue plus on-demand full text</td><td>Covers 38,152 judgments within the free database limit</td><td>Store all full text</td><td>First use of a judgment is slower</td></tr>
+<tr><td>11</td><td>Own backend in front of Supabase</td><td>Browser never gets a database key; central audit</td><td>Direct client access</td><td>More backend code</td></tr>
+<tr><td>12</td><td>Modular monolith</td><td>Small team, one deployment</td><td>Microservices</td><td>Scaling must be done as a whole until workers split</td></tr>
+<tr><td>13</td><td>No automated access to CAPTCHA portals</td><td>Lawful and ethical limit</td><td>Scraping</td><td>Lawyers import manually</td></tr>
+</table></div>
+<h3>Questions your mentor is likely to ask</h3>
+<div class="scroll"><table>
+<tr><th>Question</th><th>Answer</th></tr>
+<tr><td>Why use a relational database if we have a graph?</td><td>Accounts, permissions, jobs and audit need strict transactions. The graph describes content; Postgres governs the system.</td></tr>
+<tr><td>How do we prevent hallucinations?</td><td>We reduce them, and cannot promise zero. Layers: answer only from delimited sources, deterministic citation checks, case register lookup, a model audit, and abstaining when evidence is weak. The benchmark shows 74%, so work remains.</td></tr>
+<tr><td>How do we handle outdated laws?</td><td>Commencement and repeal data flags BNS vs IPC by date today. Planned section versions answer both current law and law on the incident date.</td></tr>
+<tr><td>How do we manage conflicting documents?</td><td>We keep both, cite both and label the conflict. The system never silently chooses one. The lawyer decides.</td></tr>
+<tr><td>Can one lawyer reach another's case?</td><td>The API checks membership, the database repeats it with row-level security, workers recheck before running, and tests attempt the access. Vector filtering is still application-level until pgvector.</td></tr>
+<tr><td>How do we handle thousands of documents?</td><td>Durable queue, background workers and batches now; OCR worker pool, pgvector and read replicas later. A single case of thousands of pages needs testing we have not yet done.</td></tr>
+<tr><td>What are the bottlenecks?</td><td>OCR on CPU, LLM latency, retrieval on large filters, RAM for the index, graph extraction cost.</td></tr>
+<tr><td>What drives cost?</td><td>Model tokens, especially graph extraction; OCR compute; storage; web search; human review time.</td></tr>
+<tr><td>How do we reduce latency and cost?</td><td>Skip retrieval for simple intents, use the fast model for planning and audit, cache results, extract once per document, and compare pairs only after grouping them by event.</td></tr>
+</table></div>
+</section>
+
+<section id="s17"><h2>17. Phased development roadmap</h2>
+<div class="scroll"><table>
+<tr><th>Phase</th><th>Goal</th><th>Main work</th><th>Exit test</th></tr>
+<tr><td>1. Working prototype <span class="tag b">BUILT</span></td><td>Prove grounded research works</td><td>Library, cases, hybrid RAG, verification, security foundation</td><td>Done; 74% grounding, 242 tests</td></tr>
+<tr><td>2. Multi-document GraphRAG <span class="tag n">PLANNED</span></td><td>Case-wide analysis</td><td>Extraction, resolution, graph tables, graph retrieval, contradiction matrix, timeline view, multilingual embedding test</td><td>Lawyer-labelled cases: measured contradiction recall and precision agreed before the build</td></tr>
+<tr><td>3. Production-ready <span class="tag n">PLANNED</span></td><td>Safe for real client data</td><td>Hosting, CI, backups, ClamAV, monitoring, data terms, verification, export and deletion, pgvector, DPDP readiness, security test</td><td>External penetration test passed, restore drill passed, pilot feedback</td></tr>
+<tr><td>4. Agentic legal intelligence <span class="tag f">FUTURE</span></td><td>Deeper analysis under review</td><td>Evidence agent, LangGraph, finding-review workflow, citation treatment graph</td><td>Measured gain over Phase 2 at acceptable cost</td></tr>
+<tr><td>5. Enterprise integrations <span class="tag f">FUTURE</span></td><td>Firms and institutions</td><td>SSO, firm dashboards, private cloud, licensed data, authorised court links</td><td>Signed customer requirement</td></tr>
+</table></div>
+<p class="note">Phases 2 and 3 can run in parallel. If real client data will be used in Phase 2, the Phase 3 security items must come first. Pilot on synthetic or properly consented data until then.</p>
+<h3>Future features</h3>
+<div class="scroll"><table>
+<tr><th>Feature</th><th>Why useful</th><th>Components</th><th>Dependencies</th><th>Complexity</th><th>Horizon</th></tr>
+<tr><td>Multilingual search</td><td>Many records are in Indian languages</td><td>New embeddings, re-index, language analysers</td><td>Benchmark</td><td>Medium</td><td>Short</td></tr>
+<tr><td>Verified official sources</td><td>Trust</td><td>Curator workflow, source hashes</td><td>Curator role</td><td>Medium</td><td>Short</td></tr>
+<tr><td>Citation verification upgrades</td><td>Fewer wrong citations</td><td>Larger register, High Court data</td><td>Lawful data</td><td>Medium</td><td>Short</td></tr>
+<tr><td>Advanced OCR</td><td>Old handwritten records</td><td>GPU models, handwriting support</td><td>Budget, sample records</td><td>High</td><td>Medium</td></tr>
+<tr><td>Advanced contradiction analysis</td><td>Core value</td><td>Claim model, review data</td><td>Phase 2</td><td>High</td><td>Medium</td></tr>
+<tr><td>Collaborative workspaces</td><td>Teams work on cases</td><td>Comments, tasks, live updates</td><td>Firm roles</td><td>Medium</td><td>Medium</td></tr>
+<tr><td>Legal research API integrations</td><td>Wider coverage</td><td>Adapters</td><td><strong>Commercial licence required</strong></td><td>Medium</td><td>Medium</td></tr>
+<tr><td>Firm dashboards and analytics</td><td>Workload, deadlines</td><td>Aggregates, role views</td><td>Firm tenancy</td><td>Medium</td><td>Medium</td></tr>
+<tr><td>Speech-to-text dictation</td><td>Faster drafting</td><td>Speech model; Indian accents and languages</td><td>Consent, privacy review</td><td>Medium</td><td>Medium</td></tr>
+<tr><td>Mobile app</td><td>Court-side access</td><td>Responsive client or native app, secure storage</td><td>Stable API</td><td>Medium</td><td>Medium</td></tr>
+<tr><td>Secure external document links</td><td>Import from drives and e-mail</td><td>OAuth connectors, scanning</td><td>Provider approval</td><td>Medium</td><td>Medium</td></tr>
+<tr><td>Fine-tuned domain models</td><td>Accuracy, cost</td><td>Labelled data, GPU training</td><td>Consent; never client data without agreement</td><td>High</td><td>Long</td></tr>
+<tr><td>Private cloud deployment</td><td>Confidentiality demands</td><td>Packaging, self-hosted model</td><td>Customer infrastructure</td><td>High</td><td>Long</td></tr>
+<tr><td>Court and case-status integrations</td><td>Automatic updates</td><td>Official adapter</td><td><strong>Requires official permission. We know of no open API today; do not assume one</strong></td><td>High</td><td>Long</td></tr>
+<tr><td>Human-reviewed intelligence workflows</td><td>Quality at scale</td><td>Review queues, reviewer metrics</td><td>Legal reviewers</td><td>Medium</td><td>Long</td></tr>
+</table></div>
+</section>
+
+<section id="s18"><h2>18. End-to-end technical journey summary</h2>
+<ol>
+<li><strong>Enter.</strong> The lawyer registers, verifies e-mail, enrols MFA and receives a server-side session. <span class="tag b">BUILT</span></li>
+<li><strong>Organise.</strong> Creating a case makes a permission boundary that the API and database both enforce. <span class="tag b">BUILT</span></li>
+<li><strong>Ingest.</strong> Files are checked, stored privately, queued, read, OCR'd where needed, chunked and embedded. <span class="tag b">BUILT</span></li>
+<li><strong>Understand.</strong> Today, documents are summarised one at a time. Next, entities, events and claims are extracted with page evidence. <span class="tag p">PARTIAL</span></li>
+<li><strong>Connect.</strong> The case graph joins people, events and evidence, and links them to the law graph. <span class="tag n">PLANNED</span></li>
+<li><strong>Ask.</strong> The planner reads the question and selects tools under a strict allow-list. <span class="tag b">BUILT</span></li>
+<li><strong>Retrieve.</strong> Five rankers fuse and rerank today; graph traversal adds connected evidence. <span class="tag p">PARTIAL</span></li>
+<li><strong>Reason and verify.</strong> The model writes only from delimited sources, then code and an audit model check each citation. <span class="tag b">BUILT</span></li>
+<li><strong>See.</strong> Timelines, graphs and the contradiction matrix render verified records. <span class="tag n">PLANNED</span></li>
+<li><strong>Deliver.</strong> Drafts export today; case reports follow, with sources attached. <span class="tag p">PARTIAL</span></li>
+<li><strong>Close.</strong> Retention rules delete on schedule, and audit records remain. <span class="tag p">PARTIAL</span></li>
+</ol>
+<p><strong>In one sentence:</strong> NyayaSutra AI turns case papers and Indian law into connected, permission-protected evidence, and a lawyer can check every statement it makes against a source before relying on it.</p>
+<p class="note">NyayaSutra AI assists qualified legal professionals. It does not give legal advice or make legal decisions. All output needs review by a responsible advocate.</p>
+<h3>Regulatory sources</h3>
+<ul>
+<li><a href="https://www.khaitanco.com/sites/default/files/2025-11/ERGO%20-%20Digital%20Personal%20%20Data%20Protection%20Rules%20-%2015%20November%202025.pdf">Khaitan &amp; Co: DPDP Rules note</a></li>
+<li><a href="https://www.bdo.in/getmedia/87552494-85d2-4edb-95da-0f118fdb3052/The-DPDP-Rules_BDO-India_2025.pdf">BDO India: The DPDP Rules</a></li>
+<li><a href="https://www.mondaq.com/india/data-protection/1706890/a-closer-look-at-the-dpdp-rules-2025">Mondaq: A closer look at the DPDP Rules 2025</a></li>
+</ul>
+</section>
+</div>

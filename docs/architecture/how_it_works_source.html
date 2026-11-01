@@ -1,0 +1,62 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>How NyayaSutra AI works</title>
+<style>
+:root{--ink:#14202e;--muted:#4c5b6d;--line:#c9d3de;--navy:#0f3a5c;--g:#176b49;--gb:#d9f1e6;--soft:#eef6f2}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{width:3000px;height:2240px;background:#f3f6f9;color:var(--ink);font:34px/1.3 "Segoe UI",Arial,sans-serif;padding:40px;display:flex;flex-direction:column;gap:22px;overflow:hidden}
+h1{margin:0;font-size:58px;line-height:1.1;color:var(--navy)}
+.sub{font-size:32px;color:var(--muted);margin-top:8px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:30px}
+.badge{background:var(--gb);border:2px solid var(--g);color:#0c3324;border-radius:6px;padding:12px 18px;font-weight:600;font-size:27px;width:680px;text-align:center}
+.case{background:var(--navy);color:#fff;border-radius:8px;padding:18px 24px;display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:26px}
+.case b{display:block;color:#a9e3cb;font-size:25px;letter-spacing:.04em;text-transform:uppercase;margin-bottom:2px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(3,1fr);gap:36px 40px;flex:1;position:relative}
+.s{background:#fff;border:2px solid var(--line);border-top:6px solid var(--g);border-radius:8px;padding:14px 18px 12px;display:flex;flex-direction:column;gap:7px;position:relative;min-height:0}
+.s h3{margin:0;font-size:39px;line-height:1.15;color:var(--navy)}
+.n{display:inline-block;width:56px;height:56px;line-height:56px;border-radius:50%;background:var(--g);color:#fff;text-align:center;font-size:30px;font-weight:700;margin-right:10px}
+.you{font-weight:600}
+.like{background:var(--soft);padding:6px 12px;border-radius:5px;font-size:31px}
+.tech{margin-top:auto;font-size:25px;color:var(--muted)}
+.s:not(.last)::after{content:"";position:absolute;right:-34px;top:50%;width:0;height:0;border-left:24px solid var(--g);border-top:15px solid transparent;border-bottom:15px solid transparent}
+.s.l::after{right:auto;left:-34px;border-left:0;border-right:24px solid var(--g)}
+.s.down::after{right:50%;top:auto;bottom:-32px;border-left:15px solid transparent;border-right:15px solid transparent;border-top:24px solid var(--g);border-bottom:0}
+.foot{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+.foot div{background:#fff;border:2px solid var(--line);border-radius:8px;padding:14px 20px}
+.foot h4{margin:0 0 4px;font-size:34px;color:var(--navy)}
+.foot p{margin:0;font-size:30px}
+</style></head><body>
+<div class="top"><div><h1>How NyayaSutra AI Works: One Case, Start to Finish</h1>
+<div class="sub">A plain-English walk-through of what the app does today, using a cheque bounce case.</div></div>
+<div class="badge">Only features working today are shown.<br>Sample case: names and dates are made up.</div></div>
+
+<div class="case">
+<div><b>The case</b>Ramesh Traders received a cheque for ₹2,50,000 from Sunil Kumar. The bank returned it unpaid.</div>
+<div><b>The problem</b>Ramesh wants the money and goes to a lawyer.</div>
+<div><b>Key date</b>Bank told Ramesh on 3 March 2026.</div>
+<div><b>Today</b>10 March 2026, the lawyer opens NyayaSutra AI.</div>
+</div>
+
+<div class="grid">
+<div class="s"><h3><span class="n">1</span>Sign in safely</h3><div class="you">The lawyer enters a password and a 6-digit phone code.</div><div>The app confirms the lawyer's identity and opens a secure session.</div><div class="like">Like showing an ID card at the court gate.</div><div class="tech">Supabase Auth, TOTP MFA, sessions</div></div>
+<div class="s"><h3><span class="n">2</span>Open a private case file</h3><div class="you">The lawyer creates "Ramesh Traders v. Sunil Kumar".</div><div>Only people added to this case can open it, and the database checks this too.</div><div class="like">Like a locked cabinet with a list of allowed names.</div><div class="tech">FastAPI, Postgres row-level security</div></div>
+<div class="s"><h3><span class="n">3</span>Upload the papers</h3><div class="you">Cheque copy, bank return memo and a Hindi invoice scan.</div><div>Each file is checked for hidden harmful content, then stored privately.</div><div class="like">Like a security guard checking every bag.</div><div class="tech">File checks, private Supabase Storage, job queue</div></div>
+<div class="s down"><h3><span class="n">4</span>Read every page</h3><div class="you">The lawyer waits a short while; status shows progress.</div><div>Text is pulled out and scans are read by OCR. Unsure words are marked, not guessed.</div><div class="like">Like a clerk typing out old papers carefully.</div><div class="tech">PDFium, RapidOCR, language detection</div></div>
+
+<div class="s l" style="grid-column:4;grid-row:2"><h3><span class="n">5</span>Make index cards</h3><div class="you">This happens automatically.</div><div>Papers are split into small labelled pieces. Each keeps its document and page number.</div><div class="like">Like a filing clerk's index cards.</div><div class="tech">Chunking, local fastembed embeddings</div></div>
+<div class="s l" style="grid-column:3;grid-row:2"><h3><span class="n">6</span>Summarise on request</h3><div class="you">The lawyer asks for a summary and gives consent.</div><div>Parties, amount and dates appear with page links. Details not found on that page are marked unverified.</div><div class="like">Like a junior's brief, with page numbers.</div><div class="tech">Document intelligence, gpt-oss:120b</div></div>
+<div class="s l" style="grid-column:2;grid-row:2"><h3><span class="n">7</span>Ask a question</h3><div class="you">"What must we prove under Section 138?"</div><div>A fast AI decides the kind of question and rewrites it for searching.</div><div class="like">Like a librarian deciding which shelf to visit.</div><div class="tech">Planner, gpt-oss:20b, allowed tools only</div></div>
+<div class="s down" style="grid-column:1;grid-row:2"><h3><span class="n">8</span>Search the law five ways</h3><div class="you">Status shows "Searching…".</div><div>By meaning, keywords, exact section, everyday words and names. The best 8 passages are chosen.</div><div class="like">Like five researchers comparing notes.</div><div class="tech">101 acts, 38,152 SC judgments, reranker</div></div>
+
+<div class="s" style="grid-column:1;grid-row:3"><h3><span class="n">9</span>Write from sources only</h3><div class="you">The answer appears word by word.</div><div>Phone, PAN and Aadhaar numbers are hidden first. AI is told to use only the found passages.</div><div class="like">Like an open-book exam.</div><div class="tech">Masking, gpt-oss:120b on Ollama Cloud</div></div>
+<div class="s" style="grid-column:2;grid-row:3"><h3><span class="n">10</span>Fact-check the answer</h3><div class="you">The lawyer sees sources to click and read.</div><div>Code checks each cited section and case name. A second AI reviews claims. Weak answers get a warning.</div><div class="like">Like a senior checking a junior's citations.</div><div class="tech">Citation check, Supreme Court case register</div></div>
+<div class="s" style="grid-column:3;grid-row:3"><h3><span class="n">11</span>Work out the deadline</h3><div class="you">"When must the demand notice go?"</div><div>Ordinary maths, not AI: <b>2 April 2026</b>, 23 days left, under Section 138(b). The lawyer adds a reminder.</div><div class="like">Like a calculator and a diary.</div><div class="tech">Limitation tool, calendar reminders</div></div>
+<div class="s last" style="grid-column:4;grid-row:3"><h3><span class="n">12</span>Draft, review, finish</h3><div class="you">The lawyer drafts the notice, edits it, exports it.</div><div>Missing facts are flagged, not invented. Old chats are deleted on schedule.</div><div class="like">Like a first draft on the lawyer's desk.</div><div class="tech">Drafting, Word and PDF export, retention job</div></div>
+</div>
+
+<div class="foot">
+<div><h4>Why the lawyer can trust it</h4><p>Every answer shows where it came from, down to the passage and page. If nothing supports an answer, the app says so.</p></div>
+<div><h4>How client data stays private</h4><p>Cases are isolated, every action is logged, and identity numbers are hidden. Names and facts do still go to the AI provider.</p></div>
+<div><h4>Who stays in charge</h4><p>The lawyer. The app can make mistakes, and it gives no legal advice. Check every result before relying on it.</p></div>
+</div>
+</body></html>
