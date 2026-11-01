@@ -1,88 +1,85 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NyaySutra AI — Legal Research Assistant</title>
-  <meta name="description" content="Agentic legal research assistant for Indian advocates: case files, bare acts, drafts and cited answers.">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>NyayaSutra AI</title>
+  <meta name="description" content="AI legal research for Indian advocates: cited answers, case files, bare acts and drafting.">
   <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
+  <link rel="preload" href="/static/fonts/manrope.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/app.css">
   <script type="module" src="/static/app.js"></script>
 </head>
 <body>
   <a class="skip" href="#main" data-i18n="a11y.skip">Skip to main content</a>
+  <svg width="0" height="0" class="sprite" aria-hidden="true"><defs>
+    <symbol id="i-scale" viewBox="0 0 24 24"><path d="M12 3v17M7 20h10M5 6h14M5 6l-3 7a3 3 0 0 0 6 0L5 6zM19 6l-3 7a3 3 0 0 0 6 0l-3-7z"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19V5M9 8h6"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7 2.5 7h-17S6 15 6 9zM10 20a2 2 0 0 0 4 0"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"/></symbol>
+    <symbol id="i-clip" viewBox="0 0 24 24"><path d="M20 11l-8.5 8.5a5 5 0 0 1-7-7L13 4a3.3 3.3 0 0 1 4.7 4.7L9.2 17.2a1.7 1.7 0 0 1-2.4-2.4L15 6.6"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+    <symbol id="i-hist" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6zM14 3v5h5M9 13h7M9 17h5"/></symbol>
+    <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20l1-4L16 5l3 3L8 19zM14 7l3 3"/></symbol>
+    <symbol id="i-cal" viewBox="0 0 24 24"><path d="M4 6h16v14H4zM4 10h16M8 3v4M16 3v4"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><path d="M9 9h11v11H9zM5 15H4V4h11v1"/></symbol>
+    <symbol id="i-news" viewBox="0 0 24 24"><path d="M4 5h13v14H6a2 2 0 0 1-2-2zM17 9h3v8a2 2 0 0 1-2 2M8 9h5M8 13h5"/></symbol>
+    <symbol id="i-tool" viewBox="0 0 24 24"><path d="M4 4h16v16H4zM8 8h8M8 12h2M12 12h4M8 16h2M12 16h4"/></symbol>
+  </defs></svg>
 
-  <div class="tricolour" aria-hidden="true"><span></span><span></span><span></span></div>
-
-  <div class="utility">
-    <div class="wrap utility-row">
-      <span class="utility-left">न्याय अनुसंधान सहायक &nbsp;|&nbsp; <span data-i18n="brand.tagline">Legal Research Assistant for Advocates</span></span>
-      <div class="utility-right" role="group" aria-label="Accessibility" data-i18n-attr="aria-label:a11y.group">
-        <a href="#main" class="u-link" data-i18n="a11y.skip">Skip to main content</a>
-        <span class="sep" aria-hidden="true"></span>
-        <button type="button" class="u-btn" data-font="-1" aria-label="Decrease text size" data-i18n-attr="aria-label:a11y.smaller">A<sup>−</sup></button>
-        <button type="button" class="u-btn" data-font="0" aria-label="Reset text size" data-i18n-attr="aria-label:a11y.reset">A</button>
-        <button type="button" class="u-btn" data-font="1" aria-label="Increase text size" data-i18n-attr="aria-label:a11y.larger">A<sup>+</sup></button>
-        <span class="sep" aria-hidden="true"></span>
-        <button type="button" class="u-btn" id="contrastBtn" aria-pressed="false" aria-label="Toggle high contrast" data-i18n-attr="aria-label:a11y.contrast">◐ <span data-i18n="a11y.contrast_short">Contrast</span></button>
-        <a href="#/login" class="u-link hidden" id="signinLink" data-i18n="login.title">Sign in</a>
-        <a href="#/account" class="u-link hidden" id="accountLink" data-i18n="auth.account">Account</a>
-        <button type="button" class="u-btn hidden" id="logoutBtn" data-i18n="login.signout">Sign out</button>
-      </div>
+  <div class="shell">
+    <aside class="rail" aria-label="Main" data-i18n-attr="aria-label:nav.main">
+      <a class="rail-logo" href="#/ask" aria-label="NyayaSutra AI home"><svg class="ic"><use href="#i-scale"/></svg></a>
+      <nav class="rail-nav">
+        <a href="#/ask" data-nav="ask"><svg class="ic"><use href="#i-spark"/></svg><span data-i18n="nav.ask">Ask</span></a>
+        <a href="#/cases" data-nav="cases" data-perm="cases.list"><svg class="ic"><use href="#i-folder"/></svg><span data-i18n="nav.cases_short">Cases</span></a>
+        <a href="#/library" data-nav="library"><svg class="ic"><use href="#i-book"/></svg><span data-i18n="nav.library">Library</span></a>
+      </nav>
+      <span class="rail-gap"></span>
+      <button type="button" class="rail-btn" id="bellLink" data-perm="notifications.read" aria-label="Notifications" data-i18n-attr="aria-label:nav.updates"><svg class="ic"><use href="#i-bell"/></svg><span class="bell-count" id="bellCount" hidden></span></button>
+      <button type="button" class="rail-btn" data-theme-toggle aria-label="Switch between dark and light mode" data-i18n-attr="aria-label:theme.toggle"><svg class="ic"><use class="theme-ico" href="#i-sun"/></svg></button>
+      <details class="menu profile" id="profileMenu">
+        <summary class="rail-ava" aria-label="Profile and settings" data-i18n-attr="aria-label:profile.menu"><span id="avatar">?</span></summary>
+        <div class="menu-list profile-list">
+          <div class="small muted" id="profileName"></div>
+          <button type="button" class="hidden" id="accountLink" data-panel-open="account" data-i18n="auth.account">Account</button>
+          <button type="button" data-perm="users.manage|audit.read" data-panel-open="admin" data-i18n="admin.title">Administration</button>
+          <button type="button" data-panel-open="privacy" data-i18n="nav.privacy">Privacy</button>
+          <button type="button" data-panel-open="about" data-i18n="nav.about">About</button>
+          <div class="menu-sep"></div>
+          <div class="menu-row"><span data-i18n="profile.language">Language</span><span class="lang-toggle" id="langToggle" role="group" aria-label="Language / भाषा"></span></div>
+          <div class="menu-row" role="group" aria-label="Accessibility" data-i18n-attr="aria-label:a11y.group"><span data-i18n="profile.text_size">Text size</span>
+            <span><button type="button" class="u-btn" data-font="-1" aria-label="Decrease text size" data-i18n-attr="aria-label:a11y.smaller">A−</button>
+            <button type="button" class="u-btn" data-font="0" aria-label="Reset text size" data-i18n-attr="aria-label:a11y.reset">A</button>
+            <button type="button" class="u-btn" data-font="1" aria-label="Increase text size" data-i18n-attr="aria-label:a11y.larger">A+</button></span></div>
+          <button type="button" id="contrastBtn" aria-pressed="false" data-i18n="a11y.contrast_short">High contrast</button>
+          <div id="mastStatus" aria-live="polite"></div>
+          <div class="menu-sep"></div>
+          <a href="#/login" class="hidden" id="signinLink" data-i18n="login.title">Sign in</a>
+          <button type="button" class="hidden" id="logoutBtn" data-i18n="login.signout">Sign out</button>
+        </div>
+      </details>
+    </aside>
+    <div class="stage" id="stage">
+      <div id="secnav"></div>
+      <div class="crumbs" id="crumbs" aria-label="Breadcrumb"></div>
+      <main id="main" tabindex="-1"><div class="loading-page" data-i18n="common.loading">Loading…</div></main>
+      <footer class="foot-note">
+        <span data-i18n="footer.disclaimer">AI-generated research aid, not legal advice. Verify every citation against the primary source before relying on it.</span>
+        <button type="button" class="link-btn" data-panel-open="about" data-i18n="footer.sources">Data sources</button>
+        <button type="button" class="link-btn" data-panel-open="privacy" data-i18n="footer.privacy">Privacy and data retention</button>
+      </footer>
     </div>
   </div>
 
-  <header class="masthead">
-    <div class="wrap mast-row">
-      <a class="brand" href="#/dashboard" aria-label="NyaySutra AI home">
-        <img src="/static/logo.svg" alt="" width="64" height="64">
-        <span class="brand-text">
-          <span class="brand-hi" lang="hi">न्यायसूत्र एआई</span>
-          <span class="brand-en">NYAYSUTRA AI</span>
-          <span class="brand-sub" data-i18n="brand.sub">Agentic RAG legal assistant · Case files · Bare Acts · Drafts</span>
-        </span>
-      </a>
-      <form class="mast-search" id="globalSearch" role="search">
-        <input type="search" id="gq" placeholder="Search cases, documents, acts, judgments…" aria-label="Search everything" data-i18n-attr="placeholder:search.global_ph;aria-label:search.global_ph">
-        <button class="btn btn-sm" type="submit" data-i18n="common.search">Search</button>
-      </form>
-      <div class="mast-right">
-        <a href="#/updates" class="bell" id="bellLink" data-perm="notifications.read" aria-label="Notifications">🔔<span class="bell-count" id="bellCount" hidden></span></a>
-        <div class="mast-status" id="mastStatus" aria-live="polite">
-          <span class="chip chip-wait" data-i18n="status.connecting">Connecting…</span>
-        </div>
-      </div>
-    </div>
-  </header>
-
-  <nav class="mainnav" aria-label="Main" data-i18n-attr="aria-label:nav.main">
-    <div class="wrap nav-row">
-      <button type="button" class="nav-toggle" id="navToggle" aria-expanded="false" aria-controls="navList">☰ <span data-i18n="nav.menu">Menu</span></button>
-      <ul id="navList">
-        <li data-perm="cases.list"><a href="#/dashboard" data-nav="dashboard" data-i18n="nav.dashboard">Dashboard</a></li>
-        <li data-perm="cases.list"><a href="#/cases" data-nav="cases" data-i18n="nav.cases">Case Files</a></li>
-        <li data-perm="casesearch.use"><a href="#/lookup" data-nav="lookup" data-i18n="nav.lookup">Case Search</a></li>
-        <li data-perm="research.use"><a href="#/research" data-nav="research" data-i18n="nav.research">Legal Research</a></li>
-        <li data-perm="drafting.use"><a href="#/drafting" data-nav="drafting" data-i18n="nav.drafting">Drafting</a></li>
-        <li data-perm="calendar.use"><a href="#/calendar" data-nav="calendar" data-i18n="nav.calendar">Calendar</a></li>
-        <li data-perm="library.read"><a href="#/acts" data-nav="acts" data-i18n="nav.acts">Bare Acts</a></li>
-        <li data-perm="library.read"><a href="#/awareness" data-nav="awareness" data-i18n="nav.awareness">Awareness</a></li>
-        <li data-perm="notifications.read"><a href="#/updates" data-nav="updates" data-i18n="nav.updates">Updates</a></li>
-        <li data-perm="library.read"><a href="#/tools" data-nav="tools" data-i18n="nav.tools">Tools</a></li>
-        <li data-perm="users.manage|audit.read"><a href="#/admin" data-nav="admin" data-i18n="admin.title">Administration</a></li>
-      </ul>
-      <div class="lang-toggle" id="langToggle" role="group" aria-label="Language / भाषा"></div>
-    </div>
-  </nav>
-
-  <div class="crumbs wrap" id="crumbs" aria-label="Breadcrumb"></div>
-
-  <main id="main" class="wrap" tabindex="-1">
-    <div class="loading-page" data-i18n="common.loading">Loading…</div>
-  </main>
-
   <div class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle" hidden>
-    <div class="drawer-panel">
+    <div class="drawer-panel" id="drawerPanel">
       <div class="drawer-head">
         <h2 id="drawerTitle">Source</h2>
         <button type="button" class="btn btn-ghost" id="drawerClose" aria-label="Close" data-i18n-attr="aria-label:common.close">✕</button>
@@ -91,35 +88,12 @@
     </div>
   </div>
 
-  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <dialog class="palette" id="palette" aria-labelledby="paletteInput">
+    <form method="dialog" id="paletteForm"><svg class="ic"><use href="#i-search"/></svg>
+      <input type="search" id="paletteInput" autocomplete="off" aria-label="Jump to" data-i18n-attr="aria-label:palette.label;placeholder:palette.ph"></form>
+    <div class="palette-list" id="paletteList" role="listbox"></div>
+  </dialog>
 
-  <footer class="footer">
-    <div class="wrap footer-grid">
-      <div>
-        <h3>NyaySutra AI</h3>
-        <p data-i18n="footer.about">An agentic retrieval-augmented research assistant for advocates. Answers are grounded in your case
-          files and official bare acts, with numbered citations and an automatic citation audit.</p>
-      </div>
-      <div>
-        <h3 data-i18n="footer.sources">Data sources</h3>
-        <ul>
-          <li data-i18n="footer.src_acts">Bare Acts: India Code — Legislative Department, Ministry of Law &amp; Justice (indiacode.gov.in)</li>
-          <li data-i18n="footer.src_ipc">IPC text: eCourts district court portal (Govt. of India)</li>
-          <li data-i18n="footer.src_judgments">Supreme Court judgments: Indian Supreme Court Judgments open dataset (Dattam Labs, CC-BY-4.0), from Supreme Court of India records; a few judgments from Indian Kanoon</li>
-          <li data-i18n="footer.src_news">Legal news headlines: LiveLaw RSS feed (links open on livelaw.in)</li>
-          <li data-i18n="footer.src_cases">Case files: uploaded by you, visible only to the people on the case</li>
-        </ul>
-      </div>
-      <div>
-        <h3 data-i18n="footer.disclaimer_title">Disclaimer</h3>
-        <p data-i18n="footer.disclaimer">AI-generated research aid, not legal advice. Verify every citation against the primary source before
-          relying on it.</p>
-        <p><a href="#/privacy" data-i18n="footer.privacy">Privacy and data retention</a></p>
-      </div>
-    </div>
-    <div class="footer-bottom">
-      <div class="wrap" data-i18n="footer.bottom">Prototype for demonstration · Not an official Government of India website · Data is kept in your workspace's private database and file storage; text goes to the configured LLM only for AI tasks</div>
-    </div>
-  </footer>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 </body>
 </html>

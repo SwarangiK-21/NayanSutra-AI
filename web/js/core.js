@@ -138,7 +138,7 @@ export function markdown(src) {
 
 // ── Page chrome ──
 export function crumbs(items) {
-  mount($("#crumbs"), html`<a href="#/dashboard">${t("nav.home")}</a>${items.map(([x, href]) => html` › ${href ? html`<a href="${href}">${x}</a>` : x}`)}`);
+  mount($("#crumbs"), html`<a href="#/ask">${t("nav.home")}</a>${items.map(([x, href]) => html` › ${href ? html`<a href="${href}">${x}</a>` : x}`)}`);
 }
 /** In-page tabs. `items` is [[key, label], …]; panels are elements with data-panel="key" inside the same root. */
 export const tabBar = (prefix, items, label = "") => html`<div class="tabs" role="tablist" aria-label="${label}">${items.map(([k, text]) =>
@@ -163,7 +163,7 @@ export function bindTabs(root, prefix, storeKey, initial) {
 export const tabPanel = (prefix, key, body) => html`<div role="tabpanel" id="${prefix}-panel-${key}" aria-labelledby="${prefix}-tab-${key}" tabindex="0" hidden>${body}</div>`;
 export function bindRowLinks(el) { $$("tr[data-href]", el).forEach((tr) => { tr.onclick = () => { location.hash = tr.dataset.href; }; }); }
 export function showDrawer(title) { if (title) $("#drawerTitle").textContent = title; const d = $("#drawer"); d.hidden = false; $("#drawerClose").focus(); }
-export function hideDrawer() { $("#drawer").hidden = true; }
+export function hideDrawer() { const d = $("#drawer"); d.hidden = true; d.classList.remove("wide"); }
 export const formData = (form) => Object.fromEntries([...new FormData(form).entries()].filter(([, v]) => typeof v === "string").map(([k, v]) => [k, v.trim()]));
 /** Show a server validation error next to its field (falls back to a toast). */
 export function fieldError(form, err) {

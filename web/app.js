@@ -1,6 +1,6 @@
 /* NyaySutra AI — frontend entry: router, chrome, and the core views (dashboard, cases, research, library).
    Feature views live in /static/js/*.js. No external libraries (CSP: script-src 'self'). */
-import { $, $$, ACCEPT_UPLOADS, api, bindRowLinks, bindTabs, COLL_LABEL, crumbs, daysTo, fieldError, fmtDate, formData, hideDrawer, html,
+import { $, $$, ACCEPT_UPLOADS, api, bindRowLinks, bindTabs, COLL_LABEL, crumbs, fieldError, fmtDate, formData, hideDrawer, html,
   initSession, markdown, mount, num, raw, reference, setUnauthenticatedHandler, showDrawer, spinner, state, store,
   tabBar, tabPanel, toast, TYPE_BADGE } from "./js/core.js";
 import { applyStatic, initialLang, lang, LANGS, setLang, t } from "./js/i18n.js";
@@ -12,7 +12,7 @@ import { refreshBell, viewUpdates } from "./js/updates.js";
 import { viewAwareness } from "./js/awareness.js";
 import { viewSearch } from "./js/search.js";
 import { viewJobs } from "./js/jobs.js";
-import { upcomingCard, viewCalendar } from "./js/calendar.js";
+import { viewCalendar } from "./js/calendar.js";
 import { catalogueView } from "./js/statelaw.js";
 import { voiceControls, speakButton, bindSpeak } from "./js/voice.js";
 import { applyNavPermissions, can, membersCard, renderEnroll, renderForgot, renderLogin, renderMfa, renderReset,
@@ -30,24 +30,57 @@ async function refreshStatus() {
     // One chip with the state that matters most; the full status opens on demand.
     const head = s.llm_reachable === false ? llm : s.processing ? proc : !s.models_ready ? models
       : html`<span class="chip chip-ok"><span class="dot" aria-hidden="true"></span> ${t("status.ready")}</span>`;
-    const open = $("#mastStatus .status-pop")?.open;
-    mount($("#mastStatus"), html`<details class="status-pop" ${open ? raw("open") : ""}><summary aria-label="${t("status.system")}">${head}</summary>
-      <div class="menu-list"><div class="small muted">${t("status.system")}</div>${llm}${idx}${models}${proc}</div></details>`);
+    mount($("#mastStatus"), html`<div class="small muted">${t("status.system")}</div><div class="row">${head}${idx}${s.llm_reachable === false ? "" : llm}</div>`);
     if (!s.models_ready) setTimeout(refreshStatus, 3000);  // clear the chip promptly once warm-up ends
   } catch { mount($("#mastStatus"), html`<span class="chip chip-err">${t("status.unreachable")}</span>`); }
 }
 
 // ── Router ──
-const routes = { dashboard: viewDashboard, cases: viewCases, research: viewResearch, acts: viewActs,
+const routes = { ask: viewResearch, research: viewResearch, dashboard: viewResearch, library: viewActs, cases: viewCases, acts: viewActs,
   drafts: viewDrafts, limitation: viewLimitation, about: viewAbout, privacy: viewPrivacy, lookup: viewCaseSearch, doc: viewDocument,
   upload: viewUpload, drafting: viewDrafting, notice: viewNotice, updates: viewUpdates, awareness: viewAwareness,
   search: viewSearch, tools: viewTools, account: viewAccount, admin: viewAdmin, jobs: viewJobs, calendar: viewCalendar,
   login: (m, r) => renderLogin(route, r.q), signup: (m, r) => renderSignup(route, r.q), forgot: () => renderForgot(),
   "reset-password": () => renderReset() };
 // Pages a signed-out visitor may open (public legal information); everything else asks them to sign in.
-const PUBLIC = new Set(["acts", "awareness", "limitation", "login", "signup", "forgot", "reset-password", "about", "privacy"]);
+const PUBLIC = new Set(["ask", "research", "dashboard", "library", "acts", "awareness", "limitation", "login", "signup", "forgot", "reset-password", "about", "privacy"]);
+const ASK_ROUTES = new Set(["ask", "research", "dashboard"]);
+const CASE_ROUTES = new Set(["cases", "calendar", "lookup", "upload", "doc"]);
+// Library sections and the pages inside each one.
+const LIB_ROUTES = { library: "law", acts: "law", search: "law", drafting: "drafting", notice: "drafting", drafts: "drafting",
+  tools: "tools", limitation: "tools", jobs: "tools", updates: "updates", awareness: "updates" };
+const icon = (id, cls = "") => raw(`<svg class="ic ${cls}"><use href="#i-${id}"/></svg>`);
+
+/** The section header: Cases (All Cases, Calendar, actions) or Library (four cards, one search, sub-pages). */
+function renderSecnav(r) {
+  const el = $("#secnav");
+  if (CASE_ROUTES.has(r.name) && r.name !== "doc" && !(r.name === "cases" && r.arg)) {
+    mount(el, html`<div class="sec-head"><h1>${t("nav.cases_short")}</h1>
+      <div class="seg">${[["cases", t("cases.tab_all")], ...(can("calendar.use") ? [["calendar", t("cal.title")]] : [])].map(([k, x]) => html`<a href="#/${k}" class="${r.name === k ? "active" : ""}">${x}</a>`)}</div>
+      <span class="spacer"></span>
+      ${can("casesearch.use") ? html`<a class="btn btn-ghost" href="#/lookup">${t("cases.find")}</a>` : ""}
+      <a class="btn btn-ghost" href="#/upload">${t("qa.upload_summarise")}</a>
+      ${can("case.create") ? html`<a class="btn btn-saffron" href="#/cases?new=1">${icon("plus", "ic-s")} ${t("qa.new_case")}</a>` : ""}</div>`);
+    return;
+  }
+  const sec = LIB_ROUTES[r.name];
+  if (!sec) return;
+  const cards = [["law", "book", t("lib.law"), t("lib.law_hint"), "#/acts"],
+    ...(can("drafting.use") ? [["drafting", "pen", t("nav.drafting"), t("lib.drafting_hint"), "#/drafting"]] : []),
+    ["tools", "tool", t("nav.tools"), t("lib.tools_hint"), "#/tools"],
+    ["updates", "news", t("nav.updates"), t("lib.updates_hint"), can("notifications.read") ? "#/updates" : "#/awareness"]];
+  const pills = { law: [], drafting: [["drafting", t("nav.drafting")], ["notice", t("lib.notice")], ["drafts", t("nav.templates")]],
+    tools: [["tools", t("nav.tools")], ["limitation", t("nav.limitation")], ...(can("account.self") ? [["jobs", t("jobs.title")]] : [])],
+    updates: [...(can("notifications.read") ? [["updates", t("nav.updates")]] : []), ["awareness", t("nav.awareness")]] }[sec];
+  mount(el, html`<div class="sec-head"><h1>${t("nav.library")}</h1>
+      <form class="sec-search" id="libSearch" role="search">${icon("search", "ic-s")}<input type="search" id="gq" placeholder="${t("search.global_ph")}" aria-label="${t("search.global_ph")}"></form></div>
+    <div class="lib-cards">${cards.map(([k, ic, title, hint, href]) => html`<a class="lib-card lib-${k} ${k === sec ? "active" : ""}" href="${href}">${icon(ic)}<span><strong>${title}</strong><span>${hint}</span></span></a>`)}</div>
+    ${pills.length ? html`<div class="pills">${pills.map(([k, x]) => html`<a href="#/${k}" class="${r.name === k ? "active" : ""}">${x}</a>`)}</div>` : ""}`);
+  $("#libSearch").onsubmit = (e) => { e.preventDefault(); const q = $("#gq").value.trim(); if (q) location.hash = `#/search?q=${encodeURIComponent(q)}`; };
+}
+
 function parseHash() {
-  const h = location.hash.replace(/^#\/?/, "") || "dashboard";
+  const h = location.hash.replace(/^#\/?/, "") || "ask";
   const [path, qs] = h.split("?");
   const parts = path.split("/").map(decodeURIComponent);
   return { name: parts[0], arg: parts[1], q: new URLSearchParams(qs || "") };
@@ -57,9 +90,13 @@ async function route() {
   const seq = ++routeSeq;
   clearInterval(state.pollTimer);
   window.onbeforeunload = null;  // the draft editor sets an unsaved-changes guard while it is open
+  hideDrawer();
   const r = parseHash();
-  const fn = r.name === "cases" && r.arg ? viewCase : routes[r.name] || viewDashboard;
+  const fn = r.name === "cases" && r.arg ? viewCase : routes[r.name] || viewResearch;
   const s = state.session || {};
+  document.body.classList.remove("authpage");
+  document.body.classList.toggle("full", ASK_ROUTES.has(r.name) || !routes[r.name]);
+  mount($("#secnav"), raw(""));
   if (s.state === "mfa_pending") return renderMfa(route);
   if (s.state === "mfa_enroll") return renderEnroll(true, route);
   if (!s.authenticated && !PUBLIC.has(r.name)) return renderLogin(route, r.q);
@@ -70,16 +107,16 @@ async function route() {
       <div class="card-b stack"><p>${t("auth.no_access_body", { email: s.user?.email || "" })}</p>
       <div class="small muted">${t("auth.public")} <a href="#/acts">${t("nav.acts")}</a> · <a href="#/awareness">${t("nav.awareness")}</a> · <a href="#/limitation">${t("nav.limitation")}</a></div></div></div>`);
   }
-  const navName = { doc: "cases", upload: "cases", notice: "drafting", drafts: "tools", limitation: "tools", about: "tools", privacy: "tools", jobs: "tools" }[r.name] || r.name;
+  const navName = ASK_ROUTES.has(r.name) ? "ask" : CASE_ROUTES.has(r.name) ? "cases" : LIB_ROUTES[r.name] ? "library" : "";
+  renderSecnav(r);
   $$("[data-nav]").forEach((a) => { const on = a.dataset.nav === navName; a.classList.toggle("active", on); if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
-  $("#navList").classList.remove("open");
   const main = $("#main");
   // A page that fails after the user has already moved on must not overwrite the page now on screen.
   try { await fn(main, r); } catch (e) { if (!e.handled && seq === routeSeq) mount(main, html`<div class="notice notice-red">${e.message}</div>`); }
   // A new page starts at the top; staying on the same page (e.g. switching chats) keeps the scroll.
   const page = `${r.name}/${r.arg || ""}`;
-  if (page !== state.lastPage) { state.lastPage = page; window.scrollTo(0, 0); }
-  if (r.name !== "research") main.focus({ preventScroll: true });
+  if (page !== state.lastPage) { state.lastPage = page; $("#stage").scrollTop = 0; }
+  if (!ASK_ROUTES.has(r.name)) main.focus({ preventScroll: true });
 }
 
 // ── Signed out / half-finished sign-in (session expired, second factor pending) ──
@@ -90,77 +127,46 @@ setUnauthenticatedHandler((s) => {
   return renderLogin(route);
 });
 
-// ── Dashboard ──
-async function viewDashboard(main) {
-  crumbs([[t("nav.dashboard")]]);
-  const [d, notes] = await Promise.all([api("/api/dashboard"), api("/api/notifications?limit=5")]);
-  const lib = d.library || {};
-  const actions = [
-    ["📅", t("cal.title"), "#/calendar"], ["🔎", t("qa.search_case"), "#/lookup"], ["📄", t("qa.upload_summarise"), "#/upload"],
-    ["✍", t("qa.draft"), "#/drafting"], ["✉", t("qa.notice"), "#/notice"],
-    ["📘", t("qa.search_acts"), "#/acts"], ["🛣", t("qa.awareness"), "#/awareness"], ["🔔", t("qa.updates"), "#/updates"],
-  ];
-  mount(main, html`
-    <h1 class="page-title">${t("nav.dashboard")}</h1>
-    <p class="page-lead">${t("dash.lead")}</p>
-    <div class="banner">
-      <div><h2>${t("dash.banner_title")}</h2><p>${t("dash.banner_text")}</p></div>
-      <div class="row"><a class="btn btn-saffron" href="#/research">${t("dash.start_research")}</a><a class="btn btn-ghost" href="#/cases?new=1">＋ ${t("qa.new_case")}</a></div>
-    </div>
-    <nav class="quick-links" aria-label="${t("dash.quick_actions")}" style="margin-top:14px">${actions.map(([ico, label, href]) => html`<a href="${href}"><span aria-hidden="true">${ico}</span>${label}</a>`)}</nav>
-    <div class="grid g-4 tiles" style="margin-top:20px">
-      ${tile("⚖", d.total_cases, t("dash.case_files"), "#/cases")}
-      ${tile("📄", lib.case || 0, t("dash.case_documents"), "#/cases")}
-      ${tile("📘", lib.bare_act || 0, t("dash.acts_indexed"), "#/acts")}
-      ${tile("✍", lib.draft || 0, t("dash.templates"), "#/drafts")}
-    </div>
-    <div class="grid g-side" style="margin-top:20px">
-      <div class="card"><div class="card-h"><h2>${t("dash.upcoming_all")}</h2><a class="small" href="#/calendar">${t("cal.open")} →</a></div>
-        <div id="dashUpcoming">${spinner()}</div></div>
-      <div class="card"><div class="card-h"><h2>${t("dash.recent_updates")}${notes.items.some((n) => !n.read_at) ? html` <span class="tab-n">${notes.items.filter((n) => !n.read_at).length}</span>` : ""}</h2>
-          <a class="small" href="#/updates">${t("common.view_all")} →</a></div><div class="card-b">
-          ${notes.items.length ? html`<ul class="list-plain">${notes.items.map((n) => html`<li>${n.link ? html`<a href="${n.link}">${n.title}</a>` : n.title}<br><span class="small muted">${fmtDate(n.created_at)}${n.read_at ? "" : html` · <span class="chip chip-wait">${t("updates.new")}</span>`}</span></li>`)}</ul>`
-            : html`<div class="empty">${t("dash.no_updates")}</div>`}</div></div>
-    </div>`);
-  upcomingCard($("#dashUpcoming"));
-  bindRowLinks(main);
-}
-const tile = (ico, n, lbl, href) => html`<a class="card tile" href="${href}" style="text-decoration:none"><span class="tile-ico" aria-hidden="true">${ico}</span>
-  <span><span class="tile-num">${num(n)}</span><br><span class="tile-lbl">${lbl}</span></span></a>`;
-
 // ── Cases list ──
 async function viewCases(main, r) {
   crumbs([[t("nav.cases")]]);
   const [{ cases, types, statuses }, ref] = await Promise.all([api("/api/cases"), reference()]);
+  const adding = r.q.get("new") && can("case.create");
+  const group = (c) => /Disposed/.test(c.status) ? "closed" : c.is_draft || /Draft/.test(c.status) ? "prefiling" : "active";
+  const count = (k) => cases.filter((c) => group(c) === k).length;
+  let status = "";
   mount(main, html`
-    <div class="row"><h1 class="page-title">${t("nav.cases")}</h1><span class="spacer"></span>${can("case.create") ? html`<button class="btn btn-saffron" id="newCaseBtn">＋ ${t("qa.new_case")}</button>` : ""}</div>
-    <p class="page-lead">${t("cases.lead")}</p>
-    <div class="card ${r.q.get("new") && can("case.create") ? "" : "hidden"}" id="newCaseCard" style="margin-bottom:16px">
+    <div class="card ${adding ? "" : "hidden"}" id="newCaseCard" style="margin:10px 0 16px">
       <div class="card-h"><h2>${t("cases.register")}</h2><span class="small muted">${t("form.required_hint")}</span></div>
       <form class="card-b" id="caseForm" novalidate>${caseFormFields({}, statuses, ref, true)}
-        <div class="row" style="margin-top:12px"><button class="btn" type="submit" data-final="1">${t("cases.create")}</button>
+        <div class="row" style="margin-top:12px"><button class="btn btn-saffron" type="submit" data-final="1">${t("cases.create")}</button>
           <button class="btn btn-ghost" type="submit" data-final="0">${t("cases.save_draft")}</button>
           <button class="btn btn-ghost" type="button" id="cancelNew">${t("common.cancel")}</button></div></form>
     </div>
-    <div class="card"><div class="card-h"><h2>${t("cases.all", { n: cases.length })}</h2>
-      <div class="row"><select id="fType" aria-label="${t("cases.filter_type")}"><option value="">${t("cases.all_types")}</option>${types.map((x) => html`<option value="${x}">${t(`cat.${x}`, {}, x)}</option>`)}</select>
-      <input type="search" id="fSearch" placeholder="${t("cases.search_ph")}" aria-label="${t("cases.search_ph")}" style="min-width:240px"></div></div>
-      <div class="table-wrap"><table class="gov"><thead><tr><th>${t("col.matter")}</th><th>${t("col.type")}</th><th>${t("col.case_no")}</th><th>${t("col.court")}</th><th>${t("col.client")}</th><th>${t("col.next_hearing")}</th><th>${t("col.docs")}</th><th>${t("col.status")}</th></tr></thead>
+    <div class="row" style="margin:6px 0 14px">
+      <div class="st-filter" id="stFilter">${[["", t("cases.st_all", { n: cases.length })], ["active", t("cases.st_active", { n: count("active") })], ["prefiling", t("cases.st_prefiling", { n: count("prefiling") })], ["closed", t("cases.st_closed", { n: count("closed") })]].map(([k, x]) =>
+        html`<button type="button" data-st="${k}" class="${k ? "" : "active"}">${x}</button>`)}</div>
+      <span class="spacer"></span>
+      <select id="fType" aria-label="${t("cases.filter_type")}" style="width:auto"><option value="">${t("cases.all_types")}</option>${types.map((x) => html`<option value="${x}">${t(`cat.${x}`, {}, x)}</option>`)}</select>
+      <input type="search" id="fSearch" placeholder="${t("cases.search_ph")}" aria-label="${t("cases.search_ph")}" style="width:280px;max-width:100%"></div>
+    <div class="card"><div class="table-wrap"><table class="gov"><thead><tr><th>${t("col.matter")}</th><th>${t("col.type")}</th><th>${t("col.court")}</th><th>${t("col.next_hearing")}</th><th>${t("col.docs")}</th><th>${t("col.status")}</th></tr></thead>
       <tbody id="caseRows"></tbody></table></div></div>`);
+  const stClass = (s) => /Disposed/.test(s) ? "" : /Evidence/.test(s) ? "st-evidence" : /Draft/.test(s) ? "st-draft" : /Final|Reserved/.test(s) ? "st-late" : "st-active";
   const rows = () => {
     const ty = $("#fType").value, q = $("#fSearch").value.toLowerCase();
-    const list = cases.filter((c) => (!ty || c.case_type === ty) && (!q || [c.title, c.case_number, c.cnr_number, c.fir_number, c.client_name, c.court, c.opposite_party].join(" ").toLowerCase().includes(q)));
+    const list = cases.filter((c) => (!status || group(c) === status) && (!ty || c.case_type === ty) && (!q || [c.title, c.case_number, c.cnr_number, c.fir_number, c.client_name, c.court, c.opposite_party].join(" ").toLowerCase().includes(q)));
     mount($("#caseRows"), list.length ? html`${list.map((c) => html`<tr class="clickable" data-href="#/cases/${encodeURIComponent(c.id)}">
-      <td><strong>${c.title}</strong> ${c.is_draft ? html`<span class="chip chip-warn">${t("cases.draft_badge")}</span>` : ""}<br><span class="small muted">v. ${c.opposite_party || "—"}</span></td>
-      <td><span class="badge ${TYPE_BADGE[c.case_type] || ""}">${t(`cat.${c.case_type}`, {}, c.case_type)}</span></td><td class="small">${c.case_number || c.cnr_number || "—"}</td>
-      <td class="small">${c.court || "—"}</td><td class="small">${c.client_name || "—"}</td><td class="small">${fmtDate(c.next_hearing_date)}</td>
-      <td>${c.n_docs ?? "—"}</td><td class="small">${c.status}${c.access ? "" : html` <span class="chip">${t("members.not_on_case")}</span>`}</td></tr>`)}` : html`<tr><td colspan="8"><div class="empty">${t("cases.none")}</div></td></tr>`);
+      <td><strong>${c.title}</strong> ${c.is_draft ? html`<span class="chip chip-warn">${t("cases.draft_badge")}</span>` : ""}<br><span class="small muted">${[c.client_name, c.opposite_party ? `v. ${c.opposite_party}` : "", c.case_number || c.cnr_number].filter(Boolean).join(" · ")}</span></td>
+      <td><span class="badge ${TYPE_BADGE[c.case_type] || ""}">${t(`cat.${c.case_type}`, {}, c.case_type)}</span></td>
+      <td class="small">${c.court || "—"}</td><td class="small">${fmtDate(c.next_hearing_date)}</td>
+      <td>${c.n_docs ?? "—"}</td><td><span class="st-tag ${stClass(c.status)}">${c.status}</span>${c.access ? "" : html` <span class="chip">${t("members.not_on_case")}</span>`}</td></tr>`)}` : html`<tr><td colspan="6"><div class="empty">${t("cases.none")}</div></td></tr>`);
     bindRowLinks($("#caseRows"));
   };
   rows();
   $("#fType").onchange = rows; $("#fSearch").oninput = rows;
-  if ($("#newCaseBtn")) $("#newCaseBtn").onclick = () => { $("#newCaseCard").classList.remove("hidden"); $("#f_client_name").focus(); };
-  $("#cancelNew").onclick = () => $("#newCaseCard").classList.add("hidden");
+  $$("[data-st]", $("#stFilter")).forEach((b) => { b.onclick = () => { status = b.dataset.st; $$("[data-st]", $("#stFilter")).forEach((x) => x.classList.toggle("active", x === b)); rows(); }; });
+  if (adding) $("#f_client_name").focus();
+  $("#cancelNew").onclick = () => { location.hash = "#/cases"; };
   const form = $("#caseForm");
   bindCaseForm(form, ref, {});
   form.onsubmit = async (e) => {
@@ -278,15 +284,18 @@ async function viewCase(main, r) {
   const tabs = [["overview", t("case.tab_overview")], ["docs", html`${t("case.tab_documents")}<span class="tab-n" id="docN">${docsRes.documents.length}</span>`],
     ...(may.provisions ? [["provisions", t("case.tab_provisions")]] : []),
     ...(may.notes ? [["notes", html`${t("case.notes")}${nNotes ? html`<span class="tab-n">${nNotes}</span>` : ""}`]] : []),
+    ["research", t("case.tab_research")], ...(may.drafts ? [["drafts", t("case.tab_drafts")]] : []), ["records", t("case.tab_records")],
     ["team", t("case.tab_team")]];
   mount(main, html`
     <div class="page-head"><h1 class="page-title">${c.title}</h1><span class="badge ${TYPE_BADGE[c.case_type] || ""}">${t(`cat.${c.case_type}`, {}, c.case_type)}</span>
       ${c.is_draft ? html`<span class="chip chip-warn">${t("cases.draft_badge")}</span>` : ""}
-      <span class="spacer"></span>${may.drafts ? html`<a class="btn btn-ghost" href="#/drafting?case=${encodeURIComponent(id)}">✍ ${t("qa.draft")}</a>` : ""}
-      <a class="btn btn-saffron" href="#/research?case=${encodeURIComponent(id)}">💬 ${t("case.research_this")}</a></div>
+      <span class="spacer"></span>${may.drafts ? html`<a class="btn btn-ghost" href="#/drafting?case=${encodeURIComponent(id)}">${icon("pen", "ic-s")} ${t("qa.draft")}</a>` : ""}
+      </div>
     <p class="case-meta">${[c.case_subtype, c.case_number || c.cnr_number || t("case.no_number"), c.court || t("case.no_court"), [c.district, c.state].filter(Boolean).join(", "), c.status].filter(Boolean).map((x) => html`<span>${x}</span>`)}
       ${c.next_hearing_date ? html`<span>${t("form.next_hearing")}: <strong>${fmtDate(c.next_hearing_date)}</strong></span>` : ""}</p>
     ${c.is_draft ? html`<div class="notice" style="margin-bottom:16px">${t("case.draft_notice")}</div>` : ""}
+    <form class="case-ask" id="caseAsk">${icon("spark")}<input id="caseAskQ" placeholder="${t("case.ask_ph")}" aria-label="${t("case.ask_ph")}" autocomplete="off">
+      <button class="send-btn" type="submit" aria-label="${t("research.send")}">${icon("send")}</button></form>
     <div id="caseTabs">
     ${tabBar("case", tabs, t("case.sections"))}
     ${tabPanel("case", "overview", html`<div class="grid g-side">
@@ -324,8 +333,14 @@ async function viewCase(main, r) {
             <div><button class="btn btn-sm" type="submit">${t("case.add_note")}</button></div></form>
           <div style="margin-top:16px">${nNotes ? c.notes.map((n) => html`<div class="note"><div class="small muted">${n.author} · ${fmtDate(n.created_at)}</div>${n.content}</div>`) : html`<div class="empty">${t("case.no_notes")}</div>`}</div>
         </div></div>`) : ""}
+    ${tabPanel("case", "research", html`<div class="card" id="caseResearch">${spinner()}</div>`)}
+    ${may.drafts ? tabPanel("case", "drafts", html`<div class="card" id="caseDrafts">${spinner()}</div>`) : ""}
+    ${tabPanel("case", "records", html`<div class="card" id="caseRecords">${spinner()}</div>`)}
     ${tabPanel("case", "team", html`<div id="membersPanel" style="max-width:860px"></div>`)}
     </div>`);
+  $("#caseAsk").onsubmit = (e) => { e.preventDefault(); const q = $("#caseAskQ").value.trim();
+    location.hash = `#/ask?case=${encodeURIComponent(id)}${q ? `&send=${encodeURIComponent(q)}` : ""}`; };
+  caseLists(id, may);
   bindTabs($("#caseTabs"), "case", "caseTab", c.is_draft && r.q.get("edit") ? "overview" : r.q.get("tab"));
   if (may.provisions) provisionsPanel($("#provPanel"), c, () => route());
   membersCard($("#membersPanel"), id);
@@ -398,8 +413,49 @@ async function viewCase(main, r) {
   };
 }
 
-// ── Research (chat) ──
+/** The Research, Drafts and Records tabs of a case: what already exists for it, one click from the case. */
+async function caseLists(id, may) {
+  const list = (el, items, empty, row) => mount(el, items.length ? html`<ul class="rows">${items.map(row)}</ul>` : html`<div class="card-b empty">${empty}</div>`);
+  try { const { chats } = await api(`/api/chats?case_id=${encodeURIComponent(id)}`);
+    list($("#caseResearch"), chats, t("research.no_chats"), (c) => html`<li><div class="r-main"><a class="r-title" href="#/ask?case=${encodeURIComponent(id)}&chat=${encodeURIComponent(c.id)}">${c.title}</a><div class="r-meta">${fmtDate(c.updated_at)}</div></div></li>`);
+  } catch { mount($("#caseResearch"), html`<div class="card-b empty">${t("research.no_chats")}</div>`); }
+  if (may.drafts) try { const { drafts } = await api(`/api/drafts?case_id=${encodeURIComponent(id)}`);
+    list($("#caseDrafts"), drafts, t("case.no_drafts"), (d) => html`<li><div class="r-main"><a class="r-title" href="#/drafting?draft=${encodeURIComponent(d.id)}">${d.title}</a><div class="r-meta">${fmtDate(d.updated_at)}</div></div></li>`);
+  } catch { mount($("#caseDrafts"), html`<div class="card-b empty">${t("case.no_drafts")}</div>`); }
+  try { const { records } = await api(`/api/cases/${encodeURIComponent(id)}/records`);
+    list($("#caseRecords"), records, t("case.no_records"), (x) => html`<li><div class="r-main"><div class="r-title">${x.title || x.data?.title || x.source}</div><div class="r-meta">${[x.source, fmtDate(x.retrieved_at)].filter(Boolean).join(" · ")}</div></div></li>`);
+  } catch { mount($("#caseRecords"), html`<div class="card-b empty">${t("case.no_records")}</div>`); }
+}
+
+// ── Ask (AI legal search) ──
+function askHero(name) {
+  const h = new Date().getHours();
+  const hi = t(h < 12 ? "ask.morning" : h < 17 ? "ask.afternoon" : "ask.evening");
+  return html`<div class="ask-hero">${icon("scale")}<h1>${name ? `${hi}, ${name}` : hi}</h1><p>${t("ask.lead")}</p></div>`;
+}
+/** Signed out (or no role yet): the same first screen; the question waits while the person signs in. */
+function viewAskGuest(main) {
+  crumbs([[t("nav.ask")]]);
+  const signedIn = state.session?.authenticated;
+  mount(main, html`<div class="ask ask-empty" id="askRoot"><div class="ask-top"><span class="spacer"></span>${signedIn ? "" : html`<a class="btn btn-ghost btn-sm" href="#/login">${t("login.title")}</a>`}</div>
+    <div class="ask-main"><div class="ask-col">${askHero()}
+      <form class="composer" id="composer"><div class="composer-box"><textarea id="q" rows="1" placeholder="${t("ask.placeholder")}" aria-label="${t("research.your_question")}"></textarea>
+        <div class="composer-bar"><button class="send-btn" type="submit" aria-label="${t("research.send")}">${icon("send")}</button></div></div></form>
+      <div class="ask-after"><div class="ask-chips">
+        <a class="ask-chip" href="#/acts">${icon("book")}${t("nav.acts")}</a><a class="ask-chip" href="#/limitation">${icon("cal")}${t("nav.limitation")}</a><a class="ask-chip" href="#/awareness">${icon("news")}${t("nav.awareness")}</a></div>
+        <div class="small muted">${t("ask.note")}</div></div></div></div></div>`);
+  const qEl = $("#q");
+  qEl.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("#composer").requestSubmit(); } });
+  $("#composer").onsubmit = (e) => {
+    e.preventDefault(); const x = qEl.value.trim(); if (!x) return;
+    if (signedIn) { toast(t("auth.no_access_title"), true); return; }
+    store.set("pendingQ", x); location.hash = "#/login";
+  };
+  qEl.focus();
+}
+
 async function viewResearch(main, r) {
+  if (!can("research.use")) return viewAskGuest(main);
   const qCase = r.q.get("case");
   if (qCase !== null) { state.caseId = qCase || null; store.set("caseId", state.caseId); }
   state.chatId = r.q.get("chat") || null;
@@ -412,154 +468,142 @@ async function viewResearch(main, r) {
   const jurLabel = () => state.jur === "all" ? t("research.jur_all_short") : state.jur ? t("research.jur_state_short", { state: state.jur })
     : cur?.state ? t("research.jur_state_short", { state: cur.state }) : t("research.jur_all_short");
   if (!cur && state.scope === "case") state.scope = "all";
-  crumbs([[t("nav.research")], ...(cur ? [[cur.title, `#/cases/${encodeURIComponent(cur.id)}`]] : [])]);
+  crumbs([[t("nav.ask")], ...(cur ? [[cur.title, `#/cases/${encodeURIComponent(cur.id)}`]] : [])]);
   const scopeLabel = () => t({ all: "research.scope_all", case: "research.scope_case", library: "research.scope_library" }[state.scope] || "research.scope_all");
   const ctx = () => html`${cur ? html`<strong>${cur.title}</strong>` : t("research.general")} · ${scopeLabel()} · ${jurLabel()}`;
+  const name = (state.session?.user?.display_name || "").trim().split(/\s+/)[0];
+  const suggestions = cur ? [t("research.s_case1"), t("research.s_case2"), t("research.s_case3"), cur.case_type === "Criminal" ? t("research.s_case4_crim") : t("research.s_case4")] : [];
   mount(main, html`
-    <div class="rs-bar">
-      <h1 class="page-title">${t("nav.research")}</h1>
-      <button type="button" class="btn btn-ghost btn-sm rs-toggle" id="tgLeft" aria-controls="rsLeft" aria-pressed="false">☰ ${t("research.matters")}</button>
-      <button type="button" class="btn btn-ghost btn-sm rs-toggle" id="tgHist" aria-controls="rsHist" aria-pressed="false">🕘 ${t("research.history")}</button>
-      <span class="rs-ctx" id="rsCtx" title="${cur ? cur.title : t("research.general")}">${ctx()}</span>
-      <span class="spacer"></span>
-      <button type="button" class="btn btn-ghost btn-sm" id="newChat">＋ ${t("research.new_chat")}</button>
-      <button type="button" class="btn btn-ghost btn-sm rs-toggle" id="tgRight" aria-controls="rsRight" aria-pressed="false">${t("research.sources")} <span class="tab-n" id="srcN">0</span></button>
-    </div>
-    <div class="research" id="rsGrid">
-      <aside class="card rs-panel rs-left" id="rsLeft" aria-label="${t("research.matters")}">
-        <div class="card-h"><h2>${t("research.matters")}</h2><button type="button" class="rs-close" data-close="left" aria-label="${t("research.close_panel")}" title="${t("research.close_panel")}">✕</button></div>
-        <div class="rs-panel-b">
-          <h3 class="mini"><label for="caseSel">${t("research.matter")}</label></h3>
-          <select id="caseSel"><option value="">${t("research.general_option")}</option>${cases.map((c) => html`<option value="${c.id}" ${c.id === state.caseId ? raw("selected") : ""}>[${t(`cat.${c.case_type}`, {}, c.case_type)}] ${c.title}</option>`)}</select>
-          <h3 class="mini" id="scopeH">${t("research.scope")}</h3>
-          <div class="scope" role="radiogroup" aria-labelledby="scopeH">
-            <label><input type="radio" name="scope" value="all" ${state.scope === "all" ? raw("checked") : ""}> <span><strong>${t("research.scope_all")}</strong><br><span class="small muted">${t("research.scope_all_hint")}</span></span></label>
-            <label><input type="radio" name="scope" value="case" ${state.scope === "case" ? raw("checked") : ""} ${cur ? "" : raw("disabled")}> <span><strong>${t("research.scope_case")}</strong><br><span class="small muted">${t("research.scope_case_hint")}</span></span></label>
-            <label><input type="radio" name="scope" value="library" ${state.scope === "library" ? raw("checked") : ""}> <span><strong>${t("research.scope_library")}</strong><br><span class="small muted">${t("research.scope_library_hint")}</span></span></label>
-          </div>
-          <h3 class="mini"><label for="jurSel">${t("research.jurisdiction")}</label></h3>
-          <select id="jurSel"><option value="">${cur?.state ? t("research.jur_auto_case", { state: cur.state }) : t("research.jur_auto_none")}</option>
-            <option value="all" ${state.jur === "all" ? raw("selected") : ""}>${t("research.jur_all")}</option>
-            <optgroup label="${t("research.jur_states")}">${ref.states.map((s) => html`<option value="${s}" ${s === state.jur ? raw("selected") : ""}>${t("research.jur_state_opt", { state: s })}</option>`)}</optgroup></select>
-          <div class="hint">${t("research.jur_hint")} <a href="#/acts?tab=catalogue">${t("research.jur_add")}</a></div>
-          <div id="caseDocs" class="small" style="margin-top:12px"></div>
-        </div>
-      </aside>
-      <aside class="card rs-panel rs-hist" id="rsHist" aria-label="${t("research.history")}">
-        <div class="card-h"><h2>🕘 ${t("research.history")}</h2><button type="button" class="rs-close" data-close="hist" aria-label="${t("research.close_panel")}" title="${t("research.close_panel")}">✕</button></div>
+    <div class="ask ask-empty" id="askRoot">
+      <div class="ask-top">
+        <button type="button" class="btn btn-ghost btn-sm" id="tgHist" aria-controls="rsHist" aria-pressed="false">${icon("hist", "ic-s")} ${t("research.history")}</button>
+        <span class="rs-ctx" id="rsCtx" title="${cur ? cur.title : t("research.general")}">${ctx()}</span>
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-ghost btn-sm" id="newChat">${icon("plus", "ic-s")} ${t("research.new_chat")}</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="tgRight" aria-controls="rsRight" aria-pressed="false">${t("research.sources")} <span class="tab-n" id="srcN">0</span></button>
+      </div>
+      <aside class="rs-hist-panel" id="rsHist" aria-label="${t("research.history")}">
+        <div class="rs-panel-h"><h2>${t("research.history")}</h2><button type="button" class="btn btn-ghost btn-sm" data-close="hist" aria-label="${t("research.close_panel")}">✕</button></div>
         <div class="rs-panel-b" id="histBody">
           ${tabBar("hist", [["chats", t("research.conversations")], ["searches", t("research.searches")]], t("research.history"))}
           ${tabPanel("hist", "chats", html`<ul class="chat-list hist-list" id="histChats"></ul>`)}
           ${tabPanel("hist", "searches", html`<ul class="chat-list hist-list" id="histSearches"></ul><div id="histClear" style="margin-top:10px"></div>`)}
         </div>
       </aside>
-      <section class="card chatbox" aria-label="${t("research.conversation")}">
-        <div class="thread" id="thread" aria-live="polite"></div>
-        <form class="composer" id="composer"><div class="composer-in">
-          <div class="row" style="align-items:flex-end;flex-wrap:nowrap">
-            <textarea id="q" placeholder="${t("research.placeholder")}" aria-label="${t("research.your_question")}" rows="2"></textarea>
-            <span id="voiceSlot"></span>
-            <button class="btn btn-saffron" type="submit" id="sendBtn" style="height:54px">${t("research.send")} ➤</button></div>
-          <div class="composer-foot small muted">
-            ${cur ? html`<span><label for="focusDoc">${t("research.focus_doc")}</label> <select id="focusDoc"><option value="">${t("research.all_docs")}</option></select></span>` : ""}
-            <span>${t("research.enter_hint")}</span>
-            <span>${t("research.answer_lang", { lang: LANGS.find((l) => l.code === lang())?.label || "English" })}</span></div>
-          <div id="voiceStatus" class="small" aria-live="polite"></div>
-        </div></form>
-      </section>
-      <aside class="card rs-panel rs-right" id="rsRight" aria-label="${t("research.sources")}">
-        <div class="card-h"><h2>${t("research.sources")}</h2><span class="row"><span class="small muted" id="srcCount"></span>
-          <button type="button" class="rs-close" data-close="right" aria-label="${t("research.close_panel")}" title="${t("research.close_panel")}">✕</button></span></div>
-        <div class="rs-panel-b" id="sourcesPanel"><div class="empty">${t("research.sources_empty")}</div></div></aside>
-      <div class="rs-scrim" id="rsScrim"></div>
+      <div class="ask-main">
+        <section class="ask-col" aria-label="${t("research.conversation")}">
+          ${askHero(name)}
+          <div class="thread" id="thread" aria-live="polite"></div>
+          <form class="composer" id="composer"><div class="composer-box">
+            <textarea id="q" rows="1" placeholder="${t("ask.placeholder")}" aria-label="${t("research.your_question")}"></textarea>
+            <div class="composer-bar">
+              <a class="icon-btn" href="#/upload${cur ? `?case=${encodeURIComponent(cur.id)}` : ""}" aria-label="${t("qa.upload_summarise")}" title="${t("qa.upload_summarise")}">${icon("clip", "ic-s")}</a>
+              <select class="pick" id="caseSel" aria-label="${t("research.matter")}"><option value="">${t("ask.no_case")}</option>${cases.map((c) => html`<option value="${c.id}" ${c.id === state.caseId ? raw("selected") : ""}>${c.title}</option>`)}</select>
+              <select class="pick" id="scopeSel" aria-label="${t("research.scope")}">${[["all", "research.scope_all"], ["case", "research.scope_case"], ["library", "research.scope_library"]].map(([v, k]) =>
+                html`<option value="${v}" ${state.scope === v ? raw("selected") : ""} ${v === "case" && !cur ? raw("disabled") : ""}>${t(k)}</option>`)}</select>
+              <select class="pick" id="jurSel" aria-label="${t("research.jurisdiction")}" title="${t("research.jur_hint")}"><option value="">${cur?.state ? t("research.jur_auto_case", { state: cur.state }) : t("research.jur_auto_none")}</option>
+                <option value="all" ${state.jur === "all" ? raw("selected") : ""}>${t("research.jur_all")}</option>
+                <optgroup label="${t("research.jur_states")}">${ref.states.map((s) => html`<option value="${s}" ${s === state.jur ? raw("selected") : ""}>${t("research.jur_state_opt", { state: s })}</option>`)}</optgroup></select>
+              ${cur ? html`<select class="pick" id="focusDoc" aria-label="${t("research.focus_doc")}"><option value="">${t("research.all_docs")}</option></select>` : ""}
+              <select class="pick" id="askLang" aria-label="${t("profile.language")}">${LANGS.filter((l) => l.toggle).map((l) => html`<option value="${l.code}" ${l.code === lang() ? raw("selected") : ""}>${l.label}</option>`)}</select>
+              <span id="voiceSlot"></span>
+              <button class="send-btn" type="submit" id="sendBtn" aria-label="${t("research.send")}" title="${t("research.enter_hint")}">${icon("send")}</button>
+            </div>
+            <div id="voiceStatus" class="small" aria-live="polite"></div>
+          </div></form>
+          <div class="ask-after">
+            <div class="ask-chips">${cur ? suggestions.map((x) => html`<button type="button" class="ask-chip" data-s="${x}">${x}</button>`) : html`
+              <button type="button" class="ask-chip" data-focus="1">${icon("scale")}${t("ask.chip_law")}</button>
+              <a class="ask-chip" href="#/limitation">${icon("cal")}${t("ask.chip_deadline")}</a>
+              <a class="ask-chip" href="#/upload">${icon("doc")}${t("ask.chip_analyse")}</a>
+              ${can("drafting.use") ? html`<a class="ask-chip" href="#/notice">${icon("pen")}${t("ask.chip_notice")}</a>` : ""}`}</div>
+            <div class="ask-next" id="askNext"></div>
+            <div class="small muted">${t("ask.note")}</div>
+          </div>
+        </section>
+        <aside id="rsRight" aria-label="${t("research.sources")}">
+          <div class="rs-panel-h"><h2>${t("research.sources")}</h2><span class="row"><span class="small muted" id="srcCount"></span>
+            <button type="button" class="btn btn-ghost btn-sm" data-close="right" aria-label="${t("research.close_panel")}">✕</button></span></div>
+          <div class="rs-panel-b" id="sourcesPanel"><div class="empty">${t("research.sources_empty")}</div></div></aside>
+      </div>
     </div>`);
 
-  // Panels: remembered on wide screens; on phones they open one at a time over the chat and start closed.
-  const narrow = () => matchMedia("(max-width: 900px)").matches;
-  const grid = $("#rsGrid");
-  let showLeft = !narrow() && store.get("rs.left", false), showRight = !narrow() && store.get("rs.right", false);
-  let showHist = false;   // Recent History always starts hidden and slides over the workspace
+  const grid = $("#askRoot");
+  let showRight = !matchMedia("(max-width: 1100px)").matches && store.get("rs.right", false), showHist = false;   // History always starts hidden
   const apply = () => {
-    grid.classList.toggle("show-left", showLeft); grid.classList.toggle("show-right", showRight); grid.classList.toggle("wide", !showLeft && !showRight);
-    grid.classList.toggle("show-hist", showHist);
-    $("#tgLeft").setAttribute("aria-pressed", String(showLeft)); $("#tgRight").setAttribute("aria-pressed", String(showRight));
-    $("#tgHist").setAttribute("aria-pressed", String(showHist));
+    grid.classList.toggle("show-right", showRight); grid.classList.toggle("show-hist", showHist);
+    $("#tgRight").setAttribute("aria-pressed", String(showRight)); $("#tgHist").setAttribute("aria-pressed", String(showHist));
   };
   const toggle = (side, on) => {
-    if (side === "hist") {
-      showHist = on ?? !showHist;
-      if (showHist && narrow()) showLeft = showRight = false;
-      apply();
-      if (showHist) { loadHistory(); $("#rsHist .rs-close").focus(); }
-      return;
-    }
-    const left = side === "left";
-    if (left) showLeft = on ?? !showLeft; else showRight = on ?? !showRight;
-    if (narrow()) { if (left && showLeft) showRight = false; if (!left && showRight) showLeft = false; showHist = false; }
-    else { store.set("rs.left", showLeft); store.set("rs.right", showRight); }
-    apply();
-    if (narrow() && (left ? showLeft : showRight)) $(`${left ? "#rsLeft" : "#rsRight"} .rs-close`).focus();
+    if (side === "hist") { showHist = on ?? !showHist; apply(); if (showHist) loadHistory(); return; }
+    showRight = on ?? !showRight; store.set("rs.right", showRight); apply();
   };
-  const toggler = { left: "#tgLeft", right: "#tgRight", hist: "#tgHist" };
-  $("#tgLeft").onclick = () => toggle("left");
   $("#tgRight").onclick = () => toggle("right");
   $("#tgHist").onclick = () => toggle("hist");
-  $$("[data-close]", grid).forEach((b) => { b.onclick = () => { toggle(b.dataset.close, false); $(toggler[b.dataset.close]).focus(); }; });
-  $("#rsScrim").onclick = () => { showHist = false; if (narrow()) showLeft = showRight = false; apply(); };
-  grid.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape") return;
-    if (showHist) { showHist = false; apply(); $("#tgHist").focus(); }
-    else if (narrow() && (showLeft || showRight)) { showLeft = showRight = false; apply(); $("#q").focus(); }
-  });
+  $$("[data-close]", grid).forEach((b) => { b.onclick = () => { toggle(b.dataset.close, false); $(b.dataset.close === "hist" ? "#tgHist" : "#tgRight").focus(); }; });
+  grid.addEventListener("keydown", (e) => { if (e.key === "Escape" && showHist) { showHist = false; apply(); $("#tgHist").focus(); } });
   bindTabs($("#histBody"), "hist", "histTab");
   apply();
 
-  $("#caseSel").onchange = (e) => { location.hash = `#/research?case=${encodeURIComponent(e.target.value)}`; };
-  $$("input[name=scope]").forEach((el) => { el.onchange = () => { state.scope = el.value; store.set("scope", el.value); mount($("#rsCtx"), ctx()); }; });
+  $("#caseSel").onchange = (e) => { location.hash = `#/ask?case=${encodeURIComponent(e.target.value)}`; };
+  $("#scopeSel").onchange = (e) => { state.scope = e.target.value; store.set("scope", state.scope); mount($("#rsCtx"), ctx()); };
+  $("#askLang").onchange = (e) => switchLang(e.target.value);
   $("#jurSel").onchange = (e) => { state.jur = e.target.value; store.set("rs.jur", state.jur); mount($("#rsCtx"), ctx()); };
   $("#newChat").onclick = () => {
-    const h = `#/research?case=${encodeURIComponent(state.caseId || "")}`;
+    const h = `#/ask?case=${encodeURIComponent(state.caseId || "")}`;
     if (location.hash === h) route(); else location.hash = h;
   };
   const qEl = $("#q");
+  const grow = () => { qEl.style.height = "auto"; qEl.style.height = `${qEl.scrollHeight}px`; };
+  qEl.addEventListener("input", grow);
   qEl.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("#composer").requestSubmit(); } });
   $("#composer").onsubmit = (e) => {
     e.preventDefault(); const x = qEl.value.trim(); if (!x || state.streaming) return;
-    const mode = qEl.dataset.inputMode || "text"; qEl.value = ""; qEl.dataset.inputMode = "";
+    const mode = qEl.dataset.inputMode || "text"; qEl.value = ""; qEl.dataset.inputMode = ""; grow();
     const focus = $("#focusDoc")?.value;
     send(x, { input_mode: mode, ...(focus ? { doc_id: focus, task: "custom" } : {}) });
   };
   voiceControls($("#voiceSlot"), qEl, $("#voiceStatus"));
   $("#thread").addEventListener("click", onCiteClick);
+  $("#thread").addEventListener("click", onAnswerAction);
   bindSpeak($("#thread"));
   $("#sourcesPanel").addEventListener("click", (e) => { const card = e.target.closest("[data-src]"); if (card) openSource(JSON.parse(card.dataset.src)); });
 
-  const suggestions = cur ? [t("research.s_case1"), t("research.s_case2"), t("research.s_case3"), cur.case_type === "Criminal" ? t("research.s_case4_crim") : t("research.s_case4")]
-    : [t("research.s1"), t("research.s2"), t("research.s3"), t("research.s4")];
-
   if (cur) loadCaseDocs(cur.id);
   if (state.chatId) await loadChat(state.chatId);
-  else {  // a new conversation starts with a short welcome and example questions; both go once the first question is sent
-    mount($("#thread"), html`<div class="empty rs-welcome" id="welcome"><strong>${t("research.namaste")}</strong> ${cur ? t("research.welcome_case", { title: cur.title }) : t("research.welcome")}<br>${t("research.examples")}
-      <div class="suggest">${suggestions.map((x) => html`<button type="button" data-s="${x}">${x}</button>`)}</div></div>`);
-    $$("[data-s]", $("#thread")).forEach((b) => { b.onclick = () => { if (!state.streaming) send(b.dataset.s); }; });
+  else {
+    $$("[data-s]", grid).forEach((b) => { b.onclick = () => { if (!state.streaming) send(b.dataset.s); }; });
+    $("[data-focus]", grid)?.addEventListener("click", () => qEl.focus());
+    nextHearing();
   }
 
-  const doc = r.q.get("doc"), task = r.q.get("task"), pre = r.q.get("q");
-  history.replaceState(null, "", `#/research?case=${encodeURIComponent(state.caseId || "")}${state.chatId ? `&chat=${encodeURIComponent(state.chatId)}` : ""}`);
+  const doc = r.q.get("doc"), task = r.q.get("task"), pending = store.get("pendingQ", null), pre = r.q.get("q") || pending, go = r.q.get("send");
+  if (pending) store.set("pendingQ", null);
+  history.replaceState(null, "", `#/ask?case=${encodeURIComponent(state.caseId || "")}${state.chatId ? `&chat=${encodeURIComponent(state.chatId)}` : ""}`);
   if (doc && task) {
     let title = t("research.this_document"); try { title = `“${(await api(`/api/documents/${encodeURIComponent(doc)}`)).title}”`; } catch { /* keep generic */ }
     send(t(`research.task_${task}`, { title }, `${t("research.task_custom", { title })}`), { doc_id: doc, task });
-  } else if (pre) { qEl.value = pre; qEl.focus(); }
+  } else if (go) send(go);
+  else if (pre) { qEl.value = pre; grow(); qEl.focus(); }
   else qEl.focus();
+}
+
+/** One quiet line under the chatbox; nothing is shown when no hearing is coming up. */
+async function nextHearing() {
+  if (!can("calendar.use")) return;
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const { items } = await api(`/api/calendar/upcoming?tz=${encodeURIComponent(tz)}&days=45&limit=1`);
+    const e = items[0]; const el = $("#askNext");
+    if (e && el) mount(el, html`${icon("cal")}<span>${t("ask.next")} <a href="${e.source === "case" ? `#/cases/${encodeURIComponent(e.case_id)}` : `#/calendar?event=${encodeURIComponent(e.id)}`}">${e.case_title || e.title}</a>, ${fmtDate(e.event_date)}</span>`);
+  } catch { /* the line is optional */ }
 }
 
 async function loadCaseDocs(caseId) {
   try {
     const { documents } = await api(`/api/documents?case_id=${encodeURIComponent(caseId)}`);
-    mount($("#caseDocs"), documents.length ? html`<div class="muted" style="margin-bottom:4px">${t("research.docs_in_case")}</div>${documents.slice(0, 8).map((d) => html`<div>• ${d.title} ${d.status !== "ready" ? html`<span class="chip ${d.status === "failed" ? "chip-err" : "chip-wait"}">${d.status}</span>` : ""}</div>`)}`
-      : html`<div class="notice">${t("research.no_docs")} <a href="#/cases/${encodeURIComponent(caseId)}">${t("research.upload_link")}</a>.</div>`);
     const sel = $("#focusDoc");
+    if (!documents.length) { const n = $("#askNext"); if (n) mount(n, html`<span>${t("research.no_docs")} <a href="#/upload?case=${encodeURIComponent(caseId)}">${t("research.upload_link")}</a>.</span>`); }
     if (sel) documents.filter((d) => d.status === "ready").forEach((d) => { const o = document.createElement("option"); o.value = d.id; o.textContent = d.title; sel.appendChild(o); });
   } catch { /* ignore */ }
 }
@@ -571,7 +615,7 @@ async function loadHistory() {
   try { data = await api("/api/history?limit=40"); }
   catch (e) { mount($("#histChats"), html`<li class="notice notice-red">${e.message}</li>`); return; }
   const { chats, searches } = data;
-  mount($("#histChats"), chats.length ? html`${chats.map((c) => html`<li><a href="#/research?case=${encodeURIComponent(c.case_id || "")}&chat=${encodeURIComponent(c.id)}" class="${c.id === state.chatId ? "active" : ""}" title="${c.title}">
+  mount($("#histChats"), chats.length ? html`${chats.map((c) => html`<li><a href="#/ask?case=${encodeURIComponent(c.case_id || "")}&chat=${encodeURIComponent(c.id)}" class="${c.id === state.chatId ? "active" : ""}" title="${c.title}">
       <span class="hist-t">${c.title}</span><span class="hist-sub">${c.case_title || t("research.general")} · ${fmtDate(c.updated_at)}</span></a>
     <button type="button" data-delchat="${c.id}" aria-label="${t("research.delete_chat")}" title="${t("common.delete")}">✕</button></li>`)}` : html`<li class="empty small">${t("research.no_chats")}</li>`);
   const searchHref = (s) => { const p = new URLSearchParams({ q: s.query, ...(s.filters || {}) }); return `#/search?${p}`; };
@@ -582,7 +626,7 @@ async function loadHistory() {
   $$("[data-delchat]", $("#histChats")).forEach((b) => { b.onclick = async () => {
     if (!confirm(t("research.confirm_delete_chat"))) return;
     try { await api(`/api/chats/${encodeURIComponent(b.dataset.delchat)}`, { method: "DELETE" }); } catch (e) { toast(e.message, true); return; }
-    if (b.dataset.delchat === state.chatId) location.hash = `#/research?case=${encodeURIComponent(state.caseId || "")}`; else loadHistory();
+    if (b.dataset.delchat === state.chatId) location.hash = `#/ask?case=${encodeURIComponent(state.caseId || "")}`; else loadHistory();
   }; });
   $$("[data-delsearch]", $("#histSearches")).forEach((b) => { b.onclick = async () => {
     try { await api(`/api/history/searches/${encodeURIComponent(b.dataset.delsearch)}`, { method: "DELETE" }); loadHistory(); } catch (e) { toast(e.message, true); }
@@ -606,7 +650,7 @@ async function loadChat(chatId) {
 }
 
 function addUserMsg(text) {
-  $("#welcome")?.remove();
+  $("#askRoot")?.classList.remove("ask-empty");
   const el = document.createElement("div"); el.className = "msg msg-user"; el.textContent = text;
   $("#thread").appendChild(el); return el;
 }
@@ -633,9 +677,9 @@ function renderAi(el, content, sources, meta, live = null) {
   const origin = ORIGIN(sources);
   const metaRow = html`<div class="msg-meta">
     ${meta.intent ? html`<span class="chip">${INTENT()[meta.intent] || meta.intent}</span>` : ""}
-    ${meta.jurisdiction && meta.jurisdiction !== "all" && meta.intent && ![...NON_RESEARCH, "news"].includes(meta.intent) ? html`<span class="chip" title="${t("research.jur_hint")}">⚖ ${t("research.jur_state_short", { state: meta.jurisdiction })}</span>` : ""}
-    ${origin ? html`<span class="chip" title="${t((sources || []).some((s) => LIVE.includes(s.collection)) ? "origin.hint_web" : "origin.hint")}">📂 ${t("origin.answered_from", { where: origin })}</span>` : ""}
-    ${meta.clock ? html`<span class="chip ${meta.clock.verified ? "chip-ok" : "chip-warn"}" title="${meta.clock.source}">🕒 ${t(meta.clock.verified ? "clock.verified" : "clock.unverified")}</span>` : ""}
+    ${meta.jurisdiction && meta.jurisdiction !== "all" && meta.intent && ![...NON_RESEARCH, "news"].includes(meta.intent) ? html`<span class="chip" title="${t("research.jur_hint")}">${t("research.jur_state_short", { state: meta.jurisdiction })}</span>` : ""}
+    ${origin ? html`<span class="chip" title="${t((sources || []).some((s) => LIVE.includes(s.collection)) ? "origin.hint_web" : "origin.hint")}">${t("origin.answered_from", { where: origin })}</span>` : ""}
+    ${meta.clock ? html`<span class="chip ${meta.clock.verified ? "chip-ok" : "chip-warn"}" title="${meta.clock.source}">${t(meta.clock.verified ? "clock.verified" : "clock.unverified")}</span>` : ""}
     ${sources && sources.length ? html`<span class="chip">${t("research.n_sources", { n: sources.length })}</span>` : ""}
     ${meta.fallback_used ? html`<span class="chip chip-warn" title="${t("trace.fallback_hint")}">${t("trace.fallback")}</span>` : ""}
     ${meta.partial ? html`<span class="chip chip-err">${t("trace.partial")}</span>` : ""}
@@ -650,7 +694,32 @@ function renderAi(el, content, sources, meta, live = null) {
     : html`<div class="verify verify-warn">⚠ ${t("research.audit_warn")}${v.unsupported && v.unsupported.length ? html`<ul>${v.unsupported.map((u) => html`<li>${u}</li>`)}</ul>` : ""}</div>`) : "";
   const err = meta.error && meta.error !== "internal" && !content.includes(meta.error) ? html`<div class="notice notice-red">${meta.error}</div>` : "";
   const disclaimer = !live && meta.intent && !NON_RESEARCH.includes(meta.intent) ? html`<div class="small muted">${t("research.disclaimer")}</div>` : "";
-  mount(el, html`${metaRow}<div class="md">${markdown(content)}</div>${status}<div class="msg-foot">${err}${verify}${disclaimer}${trace}</div>`);
+  const research = !live && content && meta.intent && !NON_RESEARCH.includes(meta.intent);
+  const actions = research ? html`<div class="msg-actions">
+      <button type="button" class="btn btn-ghost btn-sm" data-act="save">${icon("folder", "ic-s")} ${t("ask.save_case")}</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-act="draft">${icon("pen", "ic-s")} ${t("ask.draft_from")}</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-act="copy">${icon("copy", "ic-s")} ${t("ask.copy")}</button></div>
+    <div class="msg-follow">${["ask.f1", "ask.f2", "ask.f3"].map((k) => html`<button type="button" data-follow="${t(k)}">${t(k)}</button>`)}</div>` : "";
+  el.dataset.text = content;
+  mount(el, html`${metaRow}<div class="md">${markdown(content)}</div>${status}<div class="msg-foot">${err}${verify}${disclaimer}${trace}</div>${actions}`);
+}
+
+/** Save to case, Draft from this, Copy, and the follow-up suggestions under an answer. */
+async function onAnswerAction(e) {
+  const follow = e.target.closest("[data-follow]");
+  if (follow) { if (!state.streaming) send(follow.dataset.follow); return; }
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  const text = b.closest(".msg-ai").dataset.text || "";
+  if (b.dataset.act === "copy") {
+    try { await navigator.clipboard.writeText(text); toast(t("ask.copied")); } catch { toast(t("ask.copy_failed"), true); }
+  } else if (b.dataset.act === "draft") {
+    store.set("draftSeed", text.slice(0, 4000));
+    location.hash = `#/drafting?case=${encodeURIComponent(state.caseId || "")}`;
+  } else if (!state.caseId) { toast(t("ask.pick_case"), true); $("#caseSel").focus(); }
+  else {
+    try { await api(`/api/cases/${encodeURIComponent(state.caseId)}/notes`, { method: "POST", body: { content: text.slice(0, 8000) } }); toast(t("ask.saved_case")); }
+    catch (err) { toast(err.message, true); }
+  }
 }
 
 function renderSourcesPanel(sources) {
@@ -746,7 +815,7 @@ async function send(text, extra = {}) {
         if (!line.startsWith("data: ")) continue;
         let evt; try { evt = JSON.parse(line.slice(6)); } catch { continue; }
         switch (evt.type) {
-          case "chat": if (state.chatId !== evt.chat_id) { state.chatId = evt.chat_id; history.replaceState(null, "", `#/research?case=${encodeURIComponent(state.caseId || "")}&chat=${encodeURIComponent(evt.chat_id)}`); } break;
+          case "chat": if (state.chatId !== evt.chat_id) { state.chatId = evt.chat_id; history.replaceState(null, "", `#/ask?case=${encodeURIComponent(state.caseId || "")}&chat=${encodeURIComponent(evt.chat_id)}`); } break;
           case "status": live = t(`step.${evt.step}`, {}, evt.text); break;
           case "meta": meta.intent = evt.intent; break;
           case "sources": sources = evt.items; renderSourcesPanel(sources); break;
@@ -764,7 +833,7 @@ async function send(text, extra = {}) {
   } finally {
     live = null; paint();
     state.streaming = false; $("#sendBtn").disabled = false; $("#q")?.focus();
-    if ($("#rsGrid")?.classList.contains("show-hist")) loadHistory();
+    if ($("#askRoot")?.classList.contains("show-hist")) loadHistory();
     refreshStatus();
   }
 }
@@ -772,6 +841,7 @@ async function send(text, extra = {}) {
 // ── Bare acts + precedents ──
 async function viewActs(main, r) {
   crumbs([[t("nav.acts")]]);
+  if (r.q.get("read")) return viewActReader(main, r.q.get("read"), r.q.get("section"));
   const lib = await api("/api/library");
   const acts = lib.bare_act;
   const tab = ["judgments", "catalogue"].includes(r.q.get("tab")) ? r.q.get("tab") : "acts";
@@ -806,7 +876,8 @@ async function viewActs(main, r) {
         ${a.meta.repealed ? html` <span class="chip chip-warn" title="${a.meta.note || ""}">${t("acts.repealed")}</span>` : ""}
         ${(a.meta.version || 1) > 1 ? html` <button type="button" class="chip chip-ok" data-versions="${a.id}" title="${t("acts.version_hint")}">${t("acts.version", { v: a.meta.version, date: fmtDate(a.meta.version_date) })}</button>` : ""}
         ${a.status !== "ready" ? html` <span class="chip chip-wait">${a.status}</span>` : ""}</div></div>
-      <div class="r-act"><a class="btn btn-ghost btn-sm" href="#/research?case=&q=${encodeURIComponent(`Under the ${a.title}, `)}">${t("acts.ask")}</a>
+      <div class="r-act"><a class="btn btn-ghost btn-sm" href="#/acts?read=${encodeURIComponent(a.id)}">${t("acts.read")}</a>
+        ${can("research.use") ? html`<a class="btn btn-ghost btn-sm" href="#/ask?case=&q=${encodeURIComponent(`Under the ${a.title}, `)}">${t("acts.ask")}</a>` : ""}
         <details class="menu"><summary class="btn btn-ghost btn-sm">${t("common.open")}</summary><div class="menu-list">
           <a href="/api/documents/${encodeURIComponent(a.id)}/file" target="_blank" rel="noopener">${t("acts.open_pdf")} ↗</a>
           ${a.meta.item_url ? html`<a href="${a.meta.item_url}" target="_blank" rel="noopener noreferrer">India Code ↗</a>` : ""}</div></details></div></li>`)}</ul>`
@@ -861,6 +932,31 @@ async function viewActs(main, r) {
       <strong>v${v.version}</strong> · ${fmtDate(v.created_at)} · <span class="chip ${v.status === "ready" ? "chip-ok" : ""}">${t(`acts.ver_${v.status}`, {}, v.status)}</span>
       <a href="/api/documents/${encodeURIComponent(v.id)}/text" target="_blank" rel="noopener">${t("acts.ver_text")} ↗</a></li>`)}</ul>`);
   }; });
+}
+
+/** An act as a reader: contents on the left, one provision at a time on the right. */
+async function viewActReader(main, docId, section) {
+  const act = await api(`/api/library/act/${encodeURIComponent(docId)}`);
+  crumbs([[t("nav.acts"), "#/acts"], [act.title]]);
+  const chapters = [...new Set(act.sections.map((x) => x.chapter || ""))];
+  mount(main, html`<div class="row" style="margin:8px 0"><a class="btn btn-ghost btn-sm" href="#/acts">${t("common.back")}</a><h2 style="margin:0;font-size:1.35rem">${act.title}</h2></div>
+    <div class="reader"><nav class="card reader-toc" aria-label="${t("acts.contents")}">${chapters.map((c) => html`${c ? html`<h3>${c}</h3>` : ""}
+      ${act.sections.filter((x) => (x.chapter || "") === c).map((x) => html`<button type="button" data-label="${x.label}">${x.label}${x.title ? `. ${x.title}` : ""}</button>`)}`)}</nav>
+    <article class="card reader-body" id="readerBody">${spinner()}</article></div>`);
+  const show = async (label) => {
+    $$("[data-label]", main).forEach((b) => { const on = b.dataset.label === label; b.classList.toggle("active", on); if (on) b.setAttribute("aria-current", "true"); else b.removeAttribute("aria-current"); });
+    mount($("#readerBody"), spinner());
+    try {
+      const x = await api(`/api/library/act/${encodeURIComponent(docId)}?label=${encodeURIComponent(label)}`);
+      mount($("#readerBody"), html`<div class="row"><span class="small muted">${x.label}${x.page ? ` · p. ${x.page}` : ""}</span><span class="spacer"></span>
+          <a class="btn btn-ghost btn-sm" href="/api/documents/${encodeURIComponent(docId)}/file#page=${x.page || 1}" target="_blank" rel="noopener">${t("acts.open_pdf")} ↗</a>
+          ${can("research.use") ? html`<a class="btn btn-saffron btn-sm" href="#/ask?case=&q=${encodeURIComponent(`${x.label} of the ${act.title}: `)}">${t("acts.ask_section")}</a>` : ""}</div>
+        <h2>${x.title || x.label}</h2><div class="reader-text">${x.text}</div>`);
+    } catch (e) { mount($("#readerBody"), html`<div class="notice notice-red">${e.message}</div>`); }
+  };
+  $$("[data-label]", main).forEach((b) => { b.onclick = () => show(b.dataset.label); });
+  if (act.sections.length) { const first = act.sections.find((x) => x.label === section) || act.sections[0]; show(first.label); }
+  else mount($("#readerBody"), html`<div class="empty">${t("acts.no_sections")}</div>`);
 }
 
 // ── Draft templates ──
@@ -973,6 +1069,7 @@ async function viewAbout(main) {
         <tr><td>${t("about.ocr")}</td><td>${s.ocr ? `${s.ocr.engine} (${(s.ocr.langs || []).join(", ")})` : t("about.ocr_missing")}</td></tr>
         <tr><td>${t("about.passages")}</td><td>${num(s.indexed_chunks)}</td></tr>
         <tr><td>${t("about.storage")}</td><td>${s.database || "—"} · ${s.file_storage || "—"}</td></tr></tbody></table></div></details>
+      <details class="panel"><summary>${t("footer.sources")}</summary><div class="panel-b"><ul>${["footer.src_acts", "footer.src_ipc", "footer.src_judgments", "footer.src_news", "footer.src_cases"].map((k) => html`<li>${t(k)}</li>`)}</ul><p class="small muted">${t("footer.bottom")}</p></div></details>
       <details class="panel"><summary>${t("about.chunking")}</summary><div class="panel-b md">${markdown(t("about.chunking_md"))}</div></details>
       <details class="panel"><summary>${t("about.security")}</summary><div class="panel-b md">${markdown(t("about.security_md"))}</div></details>
     </div>`);
@@ -1005,6 +1102,43 @@ function applyFont(step) {
 function applyContrast(on) {
   document.documentElement.dataset.contrast = on ? "on" : "off"; $("#contrastBtn").setAttribute("aria-pressed", String(on)); store.set("contrast", on);
 }
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme; store.set("theme", theme);
+  $$(".theme-ico").forEach((u) => u.setAttribute("href", theme === "dark" ? "#i-sun" : "#i-moon"));
+}
+const PANELS = { account: [viewAccount, "auth.account"], admin: [viewAdmin, "admin.title"], privacy: [viewPrivacy, "nav.privacy"], about: [viewAbout, "nav.about"], updates: [viewUpdates, "nav.updates"] };
+/** Account, Administration, Privacy, About and Notifications open beside the current page instead of replacing it. */
+async function openPanel(name) {
+  const [view, title] = PANELS[name]; const body = $("#drawerBody");
+  $("#profileMenu").open = false;
+  $("#drawer").classList.add("wide"); mount(body, spinner()); showDrawer(t(title));
+  try { await view(body, { name, q: new URLSearchParams() }); } catch (e) { if (!e.handled) mount(body, html`<div class="notice notice-red">${e.message}</div>`); }
+}
+
+// ── Quick jump (Ctrl+K) ──
+const JUMPS = () => [["#/ask", t("nav.ask")], ["#/cases", t("nav.cases_short"), "cases.list"], ["#/cases?new=1", t("qa.new_case"), "case.create"], ["#/calendar", t("cal.title"), "calendar.use"],
+  ["#/lookup", t("nav.lookup"), "casesearch.use"], ["#/upload", t("qa.upload_summarise"), "cases.list"], ["#/acts", t("nav.acts")], ["#/drafting", t("nav.drafting"), "drafting.use"], ["#/notice", t("lib.notice"), "drafting.use"],
+  ["#/drafts", t("nav.templates")], ["#/limitation", t("nav.limitation")], ["#/tools", t("nav.tools")], ["#/updates", t("nav.updates"), "notifications.read"], ["#/awareness", t("nav.awareness")]].filter(([, , p]) => !p || can(p));
+async function openPalette() {
+  const dlg = $("#palette"), input = $("#paletteInput"), list = $("#paletteList");
+  let cases = [];
+  try { if (can("cases.list")) cases = (await api("/api/cases")).cases; } catch { /* links still work */ }
+  const items = [...JUMPS(), ...cases.map((c) => [`#/cases/${encodeURIComponent(c.id)}`, c.title])];
+  let sel = 0, shown = [];
+  const draw = () => {
+    const q = input.value.trim().toLowerCase();
+    shown = items.filter(([, x]) => !q || x.toLowerCase().includes(q)).slice(0, 9);
+    if (q) shown.push([`#/search?q=${encodeURIComponent(q)}`, t("palette.search", { q: input.value.trim() })]);
+    sel = Math.min(sel, Math.max(shown.length - 1, 0));
+    mount(list, html`${shown.map(([href, x], i) => html`<a href="${href}" role="option" aria-selected="${String(i === sel)}" class="${i === sel ? "sel" : ""}">${x}</a>`)}`);
+  };
+  input.value = ""; draw(); dlg.showModal(); input.focus();
+  input.oninput = () => { sel = 0; draw(); };
+  input.onkeydown = (e) => { const d = { ArrowDown: 1, ArrowUp: -1 }[e.key]; if (d && shown.length) { e.preventDefault(); sel = (sel + d + shown.length) % shown.length; draw(); } };
+  $("#paletteForm").onsubmit = (e) => { e.preventDefault(); if (shown[sel]) location.hash = shown[sel][0]; dlg.close(); };
+  list.onclick = (e) => { if (e.target.closest("a")) dlg.close(); };
+}
+
 function renderLangToggle() {
   mount($("#langToggle"), html`${LANGS.filter((l) => l.toggle).map((l, i) => html`${i ? html`<span aria-hidden="true">|</span>` : ""}<button type="button" data-lang="${l.code}" lang="${l.code}" aria-pressed="${String(lang() === l.code)}" class="${lang() === l.code ? "on" : ""}">${l.label}</button>`)}`);
   $$("[data-lang]", $("#langToggle")).forEach((b) => { b.onclick = () => switchLang(b.dataset.lang); });
@@ -1017,12 +1151,18 @@ async function switchLang(code) {
 }
 document.addEventListener("DOMContentLoaded", async () => {
   await setLang(initialLang());
+  applyTheme(store.get("theme", "dark"));
   renderLangToggle();
   $$("[data-font]").forEach((b) => { b.onclick = () => applyFont(Number(b.dataset.font)); });
   document.documentElement.style.setProperty("--fs", [13, 14, 15, 16, 17, 18][store.get("font", 2)] + "px");
   applyContrast(store.get("contrast", false));
   $("#contrastBtn").onclick = () => applyContrast(document.documentElement.dataset.contrast !== "on");
-  $("#navToggle").onclick = () => { const ul = $("#navList"); ul.classList.toggle("open"); $("#navToggle").setAttribute("aria-expanded", String(ul.classList.contains("open"))); };
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("[data-theme-toggle]")) applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+    const p = e.target.closest("[data-panel-open]"); if (p) openPanel(p.dataset.panelOpen);
+  });
+  $("#bellLink").onclick = () => openPanel("updates");
+  document.addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); if (!$("#palette").open) openPalette(); } });
   $("#drawerClose").onclick = hideDrawer;
   $("#drawer").addEventListener("click", (e) => { if (e.target.id === "drawer") hideDrawer(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#drawer").hidden) hideDrawer(); });
@@ -1036,7 +1176,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenus(); });
   $("#logoutBtn").onclick = async () => { try { await api("/api/auth/logout", { method: "POST", retry: false }); } catch { /* already gone */ }
     state.caseId = null; store.set("caseId", null); location.hash = "#/login"; location.reload(); };
-  $("#globalSearch").onsubmit = (e) => { e.preventDefault(); const q = $("#gq").value.trim(); if (q) location.hash = `#/search?q=${encodeURIComponent(q)}`; };
   window.addEventListener("hashchange", route);
   let s;
   try {

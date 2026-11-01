@@ -1,6 +1,6 @@
 /* Modules 6, 9, 11 — document-aware drafting studio, legal notices, court/forum customisation, editor and export. */
 import { $, $$, aiConsent, api, bindTabs, confirmDialog, crumbs, download, fmtDateTime, formData, html, markdown, mount, pollJob,
-  progressBar, raw, spinner, state, tabBar, tabPanel, toast } from "./core.js";
+  progressBar, raw, spinner, state, store, tabBar, tabPanel, toast } from "./core.js";
 import { lang, t } from "./i18n.js";
 
 const ORIGIN_CLS = { file: "o-file", user: "o-user", case: "o-case" };
@@ -58,6 +58,8 @@ const recentList = (list) => list.length ? html`<ul class="list-plain">${list.sl
 
 function bindStudio({ kind }) {
   const form = $("#dForm");
+  const seed = store.get("draftSeed", null);   // "Draft from this" under an answer
+  if (seed) { $("#d_instr").value = seed; store.set("draftSeed", null); }
   const loadCaseDocs = async () => {
     const cid = $("#d_case").value;
     if (!cid) { mount($("#d_docs"), html`${t("drafting.choose_case_docs")}`); mount($("#d_base"), html`<option value="">—</option>`); return; }

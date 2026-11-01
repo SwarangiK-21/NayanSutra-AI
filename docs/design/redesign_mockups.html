@@ -1,0 +1,294 @@
+<!doctype html>
+<html data-theme="dark"><head><meta charset="utf-8"><title>NyayaSutra AI redesign</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Manrope:wght@400;500;600;700&display=swap">
+<style>
+:root{--serif:"Newsreader",Georgia,serif;--sans:"Manrope","Segoe UI",sans-serif}
+html[data-theme="dark"]{--bg:#0a0f16;--glow:rgba(217,170,79,.13);--dot:rgba(255,255,255,.035);--rail:#0e141d;--card:#141c28;--card2:#1a2432;--line:rgba(255,255,255,.09);--fg:#f0f2f6;--muted:#9aa6b6;--gold:#d9aa4f;--gold2:#f3d68f;--goldsoft:rgba(217,170,79,.14);--ongold:#241a05;--shadow:0 18px 50px rgba(0,0,0,.45);
+--rose:#f4b8c1;--roseb:rgba(244,184,193,.14);--blue:#b4cdf6;--blueb:rgba(180,205,246,.14);--green:#a9e3c6;--greenb:rgba(169,227,198,.14);--violet:#d2c2f5;--violetb:rgba(210,194,245,.14);--amber:#f3d68f;--amberb:rgba(243,214,143,.14)}
+html[data-theme="light"]{--bg:#f8f6f1;--glow:rgba(201,152,58,.14);--dot:rgba(30,40,60,.04);--rail:#fffdf9;--card:#ffffff;--card2:#f7f3ea;--line:rgba(35,45,65,.11);--fg:#1b2533;--muted:#5f6b7b;--gold:#b98a2e;--gold2:#8f6716;--goldsoft:rgba(201,152,58,.15);--ongold:#fffaf0;--shadow:0 14px 40px rgba(60,50,20,.1);
+--rose:#a83a4f;--roseb:#fbe6ea;--blue:#2e5a9e;--blueb:#e3ecfa;--green:#1f7a54;--greenb:#def3e8;--violet:#5f3fa6;--violetb:#ece5f9;--amber:#8a6108;--amberb:#fbf0d3}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:#000;font:16px/1.45 var(--sans);color:var(--fg)}
+.screen{width:1600px;height:1000px;position:relative;overflow:hidden;display:none;background:radial-gradient(900px 480px at 60% -8%,var(--glow),transparent 70%),radial-gradient(var(--dot) 1px,transparent 1.4px) 0 0/22px 22px,var(--bg)}
+.screen.on{display:flex}
+svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.rail{width:96px;background:var(--rail);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:22px 0;gap:8px;flex:none}
+.rail .logo{color:var(--gold);margin-bottom:22px}
+.rail .logo svg{width:38px;height:38px}
+.nav{width:74px;height:70px;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:13px;font-weight:600;color:var(--muted)}
+.nav.on{background:var(--goldsoft);color:var(--gold2);box-shadow:inset 0 0 0 1px var(--gold)}
+.sp{flex:1}
+.rbtn{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;color:var(--muted);position:relative}
+.rbtn .dotn{position:absolute;right:9px;top:9px;width:8px;height:8px;border-radius:50%;background:var(--gold)}
+.ava{width:44px;height:44px;border-radius:50%;background:var(--goldsoft);color:var(--gold2);display:grid;place-items:center;font-weight:700;font-size:15px;box-shadow:inset 0 0 0 1px var(--gold);margin-top:6px}
+.main{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}
+h1,h2,h3{font-family:var(--serif);font-weight:600;margin:0;letter-spacing:-.01em}
+.btn{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 18px;border-radius:12px;font-weight:600;font-size:15px;border:1px solid var(--line);background:var(--card);color:var(--fg);white-space:nowrap}
+.btn.gold{background:linear-gradient(180deg,var(--gold2),var(--gold));border:0;color:var(--ongold)}
+html[data-theme="light"] .btn.gold{background:linear-gradient(180deg,#d4a84e,#b98a2e)}
+.btn.sm{height:36px;padding:0 13px;font-size:14px;border-radius:10px}
+.pick{display:inline-flex;align-items:center;gap:7px;height:38px;padding:0 12px;border-radius:10px;border:1px solid var(--line);background:var(--card2);font-size:14px;font-weight:500;color:var(--fg)}
+.pick svg{width:16px;height:16px;color:var(--muted)}
+.chip{display:inline-flex;align-items:center;gap:8px;height:42px;padding:0 16px;border-radius:21px;border:1px solid var(--line);background:var(--card);font-size:15px;font-weight:500}
+.chip svg{width:18px;height:18px;color:var(--gold)}
+.tag{display:inline-block;padding:3px 10px;border-radius:8px;font-size:13px;font-weight:600}
+.rose{color:var(--rose);background:var(--roseb)}.blue{color:var(--blue);background:var(--blueb)}.green{color:var(--green);background:var(--greenb)}.violet{color:var(--violet);background:var(--violetb)}.amber{color:var(--amber);background:var(--amberb)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow)}
+.composer{background:var(--card);border-radius:22px;border:1px solid var(--gold);box-shadow:0 0 0 5px var(--goldsoft),0 0 46px var(--glow),var(--shadow);padding:18px 18px 14px}
+.composer .ph{font-size:20px;color:var(--muted);padding:6px 6px 22px}
+.composer .bar{display:flex;align-items:center;gap:9px}
+.send{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;background:linear-gradient(180deg,#f3d68f,#d9aa4f);color:#241a05}
+.iconb{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;color:var(--muted);border:1px solid var(--line);background:var(--card2)}
+.note{font-size:13px;color:var(--muted)}
+.tabs{display:flex;gap:4px;padding:4px;border-radius:13px;background:var(--card2);border:1px solid var(--line)}
+.tabs span{padding:8px 18px;border-radius:10px;font-weight:600;font-size:15px;color:var(--muted)}
+.tabs .on{background:var(--card);color:var(--gold2);box-shadow:inset 0 0 0 1px var(--gold)}
+.search{display:flex;align-items:center;gap:10px;height:44px;padding:0 14px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--muted);font-size:15px}
+.head{display:flex;align-items:center;gap:14px;padding:26px 40px 18px}
+table{width:100%;border-collapse:collapse;font-size:15.5px}
+th{text-align:left;color:var(--muted);font-weight:600;font-size:13.5px;padding:13px 20px;border-bottom:1px solid var(--line)}
+td{padding:16px 20px;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:0}
+.ut{display:flex;gap:6px;border-bottom:1px solid var(--line);padding:0 40px}
+.ut span{padding:12px 16px;font-weight:600;color:var(--muted);font-size:15.5px}
+.ut .on{color:var(--gold2);box-shadow:inset 0 -2px 0 var(--gold)}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.lab{font-size:12.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--gold2)}
+.sample{position:absolute;right:18px;bottom:10px;font-size:12px;color:var(--muted)}
+.cite{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 5px;border-radius:6px;background:var(--goldsoft);color:var(--gold2);font-size:12.5px;font-weight:700;vertical-align:1px}
+.field{display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:600}
+.input{height:48px;border-radius:12px;border:1px solid var(--line);background:var(--card2);padding:0 14px;display:flex;align-items:center;font-weight:400;color:var(--fg);font-size:15.5px}
+</style></head><body>
+
+<svg width="0" height="0" style="position:absolute"><defs>
+<symbol id="scale" viewBox="0 0 24 24"><path d="M12 3v17M7 20h10M5 6h14M5 6l-3 7a3 3 0 0 0 6 0L5 6zM19 6l-3 7a3 3 0 0 0 6 0l-3-7z"/></symbol>
+<symbol id="spark" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></symbol>
+<symbol id="folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+<symbol id="book" viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19V5M9 8h6"/></symbol>
+<symbol id="bell" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7 2.5 7h-17S6 15 6 9zM10 20a2 2 0 0 0 4 0"/></symbol>
+<symbol id="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/></symbol>
+<symbol id="moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"/></symbol>
+<symbol id="clip" viewBox="0 0 24 24"><path d="M20 11l-8.5 8.5a5 5 0 0 1-7-7L13 4a3.3 3.3 0 0 1 4.7 4.7L9.2 17.2a1.7 1.7 0 0 1-2.4-2.4L15 6.6"/></symbol>
+<symbol id="send" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+<symbol id="down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+<symbol id="hist" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2"/></symbol>
+<symbol id="doc" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6zM14 3v5h5M9 13h7M9 17h5"/></symbol>
+<symbol id="pen" viewBox="0 0 24 24"><path d="M4 20l1-4L16 5l3 3L8 19zM14 7l3 3"/></symbol>
+<symbol id="cal" viewBox="0 0 24 24"><path d="M4 6h16v14H4zM4 10h16M8 3v4M16 3v4"/></symbol>
+<symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></symbol>
+<symbol id="check" viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6zM9 12l2 2 4-4"/></symbol>
+<symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="copy" viewBox="0 0 24 24"><path d="M9 9h11v11H9zM5 15H4V4h11v1"/></symbol>
+<symbol id="news" viewBox="0 0 24 24"><path d="M4 5h13v14H6a2 2 0 0 1-2-2zM17 9h3v8a2 2 0 0 1-2 2M8 9h5M8 13h5"/></symbol>
+<symbol id="tool" viewBox="0 0 24 24"><path d="M4 4h16v16H4zM8 8h8M8 12h2M12 12h4M8 16h2M12 16h4"/></symbol>
+<symbol id="filter" viewBox="0 0 24 24"><path d="M4 5h16l-6 8v5l-4 2v-7z"/></symbol>
+<symbol id="arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+<symbol id="back" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></symbol>
+<symbol id="ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/></symbol>
+<symbol id="lock" viewBox="0 0 24 24"><path d="M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+</defs></svg>
+
+<template id="rail"><aside class="rail">
+<div class="logo"><svg class="i"><use href="#scale"/></svg></div>
+<div class="nav" data-n="ask"><svg class="i"><use href="#spark"/></svg>Ask</div>
+<div class="nav" data-n="cases"><svg class="i"><use href="#folder"/></svg>Cases</div>
+<div class="nav" data-n="library"><svg class="i"><use href="#book"/></svg>Library</div>
+<div class="sp"></div>
+<div class="rbtn"><svg class="i"><use href="#bell"/></svg><span class="dotn"></span></div>
+<div class="rbtn"><svg class="i"><use href="#sun"/></svg></div>
+<div class="ava">AR</div>
+</aside></template>
+
+<!-- ASK: first screen -->
+<section class="screen" id="ask" data-rail="ask"><div class="main" style="align-items:center;justify-content:center">
+<div class="btn sm" style="position:absolute;right:30px;top:24px"><svg class="i" style="width:18px;height:18px"><use href="#hist"/></svg>History</div>
+<div style="color:var(--gold);margin-bottom:12px"><svg class="i" style="width:46px;height:46px;stroke-width:1.3"><use href="#scale"/></svg></div>
+<h1 style="font-size:56px;text-align:center;line-height:1.1">Good evening, Asha</h1>
+<div style="font-size:21px;color:var(--muted);margin:10px 0 34px">Ask about Indian law, case law or your case papers.</div>
+<div class="composer" style="width:900px">
+<div class="ph">Ask a legal question, search a section, or attach a document…</div>
+<div class="bar"><div class="iconb"><svg class="i" style="width:19px;height:19px"><use href="#clip"/></svg></div>
+<div class="pick">All Law<svg class="i"><use href="#down"/></svg></div>
+<div class="pick">Central + Maharashtra<svg class="i"><use href="#down"/></svg></div>
+<div class="pick">English<svg class="i"><use href="#down"/></svg></div>
+<div class="sp"></div><div class="send"><svg class="i"><use href="#send"/></svg></div></div>
+</div>
+<div style="display:flex;gap:12px;margin-top:26px">
+<div class="chip"><svg class="i"><use href="#scale"/></svg>Ask a law</div>
+<div class="chip"><svg class="i"><use href="#cal"/></svg>Check a deadline</div>
+<div class="chip"><svg class="i"><use href="#doc"/></svg>Analyse a document</div>
+<div class="chip"><svg class="i"><use href="#pen"/></svg>Draft a notice</div>
+</div>
+<div style="margin-top:42px;font-size:15.5px;color:var(--muted);display:flex;align-items:center;gap:9px"><svg class="i" style="width:18px;height:18px;color:var(--gold)"><use href="#cal"/></svg><span>Next hearing: <b style="color:var(--fg);font-weight:600">Ramesh Traders v. Sunil Kumar</b>, 12 Nov, 10:30 AM</span></div>
+<div class="note" style="position:absolute;bottom:22px">AI-assisted research for legal professionals. Check every result before relying on it.</div>
+<div class="sample">Sample data</div>
+</div></section>
+
+<!-- ASK: answer -->
+<section class="screen" id="answer" data-rail="ask"><div class="main" style="flex-direction:row">
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;padding:26px 44px 22px">
+<div style="flex:1;min-height:0;max-width:880px;margin:0 auto;width:100%">
+<div style="display:flex;justify-content:flex-end"><div style="background:var(--goldsoft);box-shadow:inset 0 0 0 1px var(--gold);padding:12px 18px;border-radius:16px 16px 4px 16px;font-size:17px">What must be proved in a cheque bounce complaint under Section 138?</div></div>
+<div style="display:flex;align-items:center;gap:10px;color:var(--muted);font-size:14px;margin:22px 0 14px"><svg class="i" style="width:18px;height:18px;color:var(--gold)"><use href="#spark"/></svg>Searched 5 ways · 8 passages used · citations checked</div>
+<div style="font-size:17.5px;line-height:1.62">
+<p style="margin:0 0 12px">To succeed under Section 138 of the Negotiable Instruments Act, 1881, the complainant generally needs to show these points <span class="cite">1</span>:</p>
+<ol style="margin:0 0 12px;padding-left:24px">
+<li>The cheque was drawn on the accused's account to discharge a legally enforceable debt or liability.</li>
+<li>It was presented within six months or its validity period, whichever is earlier.</li>
+<li>The bank returned it unpaid for insufficient funds or a similar reason.</li>
+<li>A written demand notice was sent within 30 days of learning of the return.</li>
+<li>The drawer failed to pay within 15 days of receiving the notice.</li>
+</ol>
+<p style="margin:0">The complaint must then be filed within one month of the cause of action <span class="cite">2</span>.</p>
+</div>
+<div style="display:flex;align-items:center;gap:10px;margin-top:18px">
+<span class="tag green" style="display:inline-flex;gap:6px;align-items:center;padding:6px 12px"><svg class="i" style="width:16px;height:16px"><use href="#check"/></svg>Sources checked</span>
+<div class="btn sm"><svg class="i" style="width:16px;height:16px"><use href="#folder"/></svg>Save to case</div>
+<div class="btn sm"><svg class="i" style="width:16px;height:16px"><use href="#pen"/></svg>Draft from this</div>
+<div class="btn sm"><svg class="i" style="width:16px;height:16px"><use href="#copy"/></svg>Copy</div>
+</div>
+<div style="display:flex;gap:10px;margin-top:16px">
+<div class="chip" style="height:36px;font-size:14px">What is the punishment?</div>
+<div class="chip" style="height:36px;font-size:14px">Calculate my notice deadline</div>
+<div class="chip" style="height:36px;font-size:14px">Which court has jurisdiction?</div>
+</div>
+</div>
+<div class="composer" style="max-width:880px;margin:0 auto;width:100%;padding:10px 12px;display:flex;align-items:center;gap:9px;border-radius:18px">
+<div class="iconb"><svg class="i" style="width:19px;height:19px"><use href="#clip"/></svg></div>
+<div style="flex:1;color:var(--muted);font-size:16.5px;padding-left:4px">Ask a follow-up…</div>
+<div class="pick">All Law<svg class="i"><use href="#down"/></svg></div>
+<div class="send" style="width:42px;height:42px"><svg class="i"><use href="#send"/></svg></div></div>
+</div>
+<aside style="width:440px;flex:none;background:var(--rail);border-left:1px solid var(--line);padding:26px 26px;display:flex;flex-direction:column;gap:12px">
+<div class="lab">Source 1 of 2</div>
+<h2 style="font-size:27px;line-height:1.2">Negotiable Instruments Act, 1881</h2>
+<div style="color:var(--muted)">Section 138: Dishonour of cheque for insufficiency, etc., of funds in the account</div>
+<div class="card" style="padding:18px;background:var(--goldsoft);box-shadow:inset 0 0 0 1px var(--gold);border:0;font-family:var(--serif);font-size:18.5px;line-height:1.5">Where any cheque drawn by a person on an account maintained by him with a banker… is returned by the bank unpaid… such person shall be deemed to have committed an offence…</div>
+<div class="row"><span style="color:var(--muted)">Source type</span><span class="tag green">Bare Act</span></div>
+<div class="row"><span style="color:var(--muted)">From</span><span style="font-weight:600">India Code</span></div>
+<div class="row"><span style="color:var(--muted)">Related</span><span style="font-weight:600">Section 142</span></div>
+<div class="sp"></div>
+<div style="display:flex;gap:10px"><div class="btn sm" style="flex:1;justify-content:center"><svg class="i" style="width:16px;height:16px"><use href="#ext"/></svg>Open PDF</div><div class="btn sm" style="flex:1;justify-content:center"><svg class="i" style="width:16px;height:16px"><use href="#book"/></svg>Read in Library</div></div>
+</aside></div></section>
+
+<!-- CASES -->
+<section class="screen" id="cases" data-rail="cases"><div class="main">
+<div class="head"><h1 style="font-size:40px;margin-right:12px">Cases</h1>
+<div class="tabs"><span class="on">All Cases</span><span>Calendar</span></div><div class="sp" style="flex:1"></div>
+<div class="search" style="width:300px"><svg class="i" style="width:18px;height:18px"><use href="#search"/></svg>Search cases…</div>
+<div class="btn">Find a case<svg class="i" style="width:16px;height:16px"><use href="#down"/></svg></div>
+<div class="btn gold"><svg class="i" style="width:18px;height:18px"><use href="#plus"/></svg>New Case</div></div>
+<div style="display:flex;gap:10px;padding:0 40px 18px;align-items:center">
+<span class="tag" style="background:var(--goldsoft);color:var(--gold2);padding:7px 14px;box-shadow:inset 0 0 0 1px var(--gold)">All 6</span>
+<span class="tag" style="padding:7px 14px;color:var(--muted)">Active 2</span><span class="tag" style="padding:7px 14px;color:var(--muted)">Evidence 1</span><span class="tag" style="padding:7px 14px;color:var(--muted)">Final Arguments 1</span><span class="tag" style="padding:7px 14px;color:var(--muted)">Pre-filing 1</span><span class="tag" style="padding:7px 14px;color:var(--muted)">Closed 1</span>
+<div class="sp" style="flex:1"></div><div class="btn sm"><svg class="i" style="width:16px;height:16px"><use href="#filter"/></svg>Filter</div></div>
+<div style="padding:0 40px"><div class="card"><table>
+<tr><th>Case</th><th>Type</th><th>Court</th><th>Next hearing</th><th>Status</th></tr>
+<tr><td><b style="font-weight:600">Ramesh Traders v. Sunil Kumar</b></td><td><span class="tag rose">Criminal</span></td><td>JMFC, Pune</td><td>12 Nov 2026</td><td><span class="tag green">Active / In Court</span></td></tr>
+<tr><td><b style="font-weight:600">Meera Joshi v. Anil Joshi</b></td><td><span class="tag blue">Family</span></td><td>Family Court, Mumbai</td><td>18 Nov 2026</td><td><span class="tag violet">Evidence Stage</span></td></tr>
+<tr><td><b style="font-weight:600">Orchid Homes v. Kiran Patil</b></td><td><span class="tag green">Civil</span></td><td>Civil Court, Thane</td><td>24 Nov 2026</td><td><span class="tag green">Active / In Court</span></td></tr>
+<tr><td><b style="font-weight:600">State v. Dinesh More</b></td><td><span class="tag rose">Criminal</span></td><td>Sessions Court, Nashik</td><td>2 Dec 2026</td><td><span class="tag amber">Final Arguments</span></td></tr>
+<tr><td><b style="font-weight:600">Lata Shah v. Sunrise Motors</b></td><td><span class="tag violet">Consumer</span></td><td>District Commission, Pune</td><td>Not set</td><td><span class="tag amber">Draft / Pre-filing</span></td></tr>
+<tr><td><b style="font-weight:600">Vikram Rane v. Pooja Rane</b></td><td><span class="tag blue">Family</span></td><td>Family Court, Pune</td><td>None</td><td><span class="tag" style="color:var(--muted);background:var(--card2)">Disposed / Closed</span></td></tr>
+</table></div></div>
+<div class="card" style="position:absolute;right:40px;bottom:30px;padding:12px 16px;display:flex;gap:12px;align-items:center;width:340px"><svg class="i" style="color:var(--gold)"><use href="#doc"/></svg><div style="flex:1"><div style="font-weight:600;font-size:14.5px">Processing 2 documents</div><div style="height:5px;border-radius:3px;background:var(--card2);margin-top:6px"><div style="width:62%;height:100%;border-radius:3px;background:var(--gold)"></div></div></div></div>
+<div class="sample" style="right:auto;left:40px">Sample data</div>
+</div></section>
+
+<!-- CASE DETAIL -->
+<section class="screen" id="case" data-rail="cases"><div class="main">
+<div style="padding:22px 40px 0"><div style="display:flex;align-items:center;gap:8px;color:var(--muted);font-size:14.5px"><svg class="i" style="width:17px;height:17px"><use href="#back"/></svg>Cases</div>
+<div style="display:flex;align-items:center;gap:14px;margin-top:8px"><h1 style="font-size:38px">Ramesh Traders v. Sunil Kumar</h1><span class="tag rose">Criminal</span><span class="tag green">Active / In Court</span><div style="flex:1"></div><div class="btn sm">Share</div><div class="btn sm">Edit case</div></div>
+<div style="color:var(--muted);margin-top:3px">Complaint, Section 138 NI Act · JMFC, Pune · Next hearing 12 Nov 2026</div></div>
+<div style="padding:18px 40px"><div class="composer" style="padding:10px 12px;display:flex;align-items:center;gap:10px;border-radius:16px"><svg class="i" style="color:var(--gold);margin-left:6px"><use href="#spark"/></svg><div style="flex:1;color:var(--muted);font-size:17px">Ask about this case and its documents…</div><div class="send" style="width:40px;height:40px"><svg class="i"><use href="#send"/></svg></div></div></div>
+<div class="ut"><span class="on">Overview</span><span>Documents 4</span><span>Research 3</span><span>Drafts 2</span><span>Provisions 3</span><span>Records 1</span><span>Team 2</span></div>
+<div style="display:grid;grid-template-columns:1.5fr 1fr;gap:22px;padding:22px 40px;flex:1;min-height:0">
+<div style="display:flex;flex-direction:column;gap:20px">
+<div class="card" style="padding:20px 24px"><div class="lab">Case summary</div><p style="margin:8px 0 0;font-size:16.5px;line-height:1.6;max-width:70ch">Ramesh Traders supplied goods to Sunil Kumar and received a cheque for ₹2,50,000. The bank returned the cheque unpaid. A demand notice was sent, and no payment followed.</p></div>
+<div class="card" style="padding:12px 24px"><div class="lab" style="margin:8px 0 4px">Recent documents</div>
+<div class="row"><span style="display:flex;gap:10px;align-items:center"><svg class="i" style="color:var(--gold)"><use href="#doc"/></svg>Bank return memo.pdf</span><span class="tag green">Ready</span></div>
+<div class="row"><span style="display:flex;gap:10px;align-items:center"><svg class="i" style="color:var(--gold)"><use href="#doc"/></svg>Legal notice.docx</span><span class="tag green">Ready</span></div>
+<div class="row"><span style="display:flex;gap:10px;align-items:center"><svg class="i" style="color:var(--gold)"><use href="#doc"/></svg>Hindi invoice scan.jpg</span><span class="tag amber">Reading, page 2</span></div>
+</div></div>
+<div style="display:flex;flex-direction:column;gap:20px">
+<div class="card" style="padding:12px 24px"><div class="lab" style="margin:8px 0 4px">Next dates</div>
+<div class="row"><span>Hearing</span><b style="font-weight:600">12 Nov 2026, 10:30 AM</b></div>
+<div class="row"><span>Evidence affidavit</span><b style="font-weight:600">5 Nov 2026</b></div></div>
+<div class="card" style="padding:12px 24px"><div class="lab" style="margin:8px 0 4px">Parties</div>
+<div class="row"><span style="color:var(--muted)">Complainant</span><b style="font-weight:600">Ramesh Traders</b></div>
+<div class="row"><span style="color:var(--muted)">Accused</span><b style="font-weight:600">Sunil Kumar</b></div>
+<div class="row"><span style="color:var(--muted)">FIR / CNR</span><b style="font-weight:600">Not added</b></div></div>
+</div></div>
+<div class="sample">Sample data</div>
+</div></section>
+
+<!-- LIBRARY -->
+<section class="screen" id="library" data-rail="library"><div class="main">
+<div style="padding:26px 40px 18px;display:flex;align-items:center;gap:22px"><h1 style="font-size:40px">Library</h1>
+<div class="search" style="flex:1;height:50px;font-size:16.5px"><svg class="i"><use href="#search"/></svg>Search acts, judgments, drafts, news and awareness…</div></div>
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding:0 40px">
+<div class="card" style="padding:18px 20px;box-shadow:0 0 0 1px var(--gold),0 0 34px var(--glow);background:var(--goldsoft)"><svg class="i" style="width:28px;height:28px;color:var(--gold)"><use href="#book"/></svg><h2 style="font-size:25px;margin-top:8px">Law</h2><div style="color:var(--muted);font-size:15px">101 acts, 38,152 Supreme Court judgments</div></div>
+<div class="card" style="padding:18px 20px"><svg class="i" style="width:28px;height:28px;color:var(--rose)"><use href="#pen"/></svg><h2 style="font-size:25px;margin-top:8px">Drafting</h2><div style="color:var(--muted);font-size:15px">Templates, legal notices, saved drafts</div></div>
+<div class="card" style="padding:18px 20px"><svg class="i" style="width:28px;height:28px;color:var(--blue)"><use href="#tool"/></svg><h2 style="font-size:25px;margin-top:8px">Tools</h2><div style="color:var(--muted);font-size:15px">Limitation calculator and legal tools</div></div>
+<div class="card" style="padding:18px 20px"><svg class="i" style="width:28px;height:28px;color:var(--green)"><use href="#news"/></svg><h2 style="font-size:25px;margin-top:8px">Updates</h2><div style="color:var(--muted);font-size:15px">Legal news, awareness, source status</div></div>
+</div>
+<div style="display:grid;grid-template-columns:320px 1fr;gap:18px;padding:18px 40px 26px;flex:1;min-height:0">
+<div class="card" style="padding:16px 18px;overflow:hidden"><div class="lab">Negotiable Instruments Act, 1881</div>
+<div style="color:var(--muted);font-size:14px;margin:10px 0 4px">Chapter XVII</div>
+<div style="padding:9px 12px;border-radius:10px;background:var(--goldsoft);color:var(--gold2);font-weight:600;margin:0 -12px">138. Dishonour of cheque</div>
+<div style="padding:9px 0">139. Presumption in favour of holder</div>
+<div style="padding:9px 0">140. Defence not allowed</div>
+<div style="padding:9px 0">141. Offences by companies</div>
+<div style="padding:9px 0">142. Cognizance of offences</div>
+<div style="padding:9px 0">143. Power to try summarily</div>
+<div style="padding:9px 0">144. Service of summons</div>
+<div style="padding:9px 0">145. Evidence on affidavit</div>
+<div style="padding:9px 0">146. Bank's slip as evidence</div>
+<div style="padding:9px 0">147. Compoundable offences</div></div>
+<div class="card" style="padding:24px 30px;display:flex;flex-direction:column;gap:10px;min-height:0">
+<div style="display:flex;align-items:center;gap:10px"><div class="lab" style="flex:1">Section 138</div><div class="btn sm"><svg class="i" style="width:16px;height:16px"><use href="#ext"/></svg>Open PDF</div><div class="btn sm gold"><svg class="i" style="width:16px;height:16px"><use href="#spark"/></svg>Ask about this section</div></div>
+<h2 style="font-size:30px;line-height:1.2">Dishonour of cheque for insufficiency, etc., of funds in the account</h2>
+<p style="font-family:var(--serif);font-size:20px;line-height:1.55;margin:4px 0 0;max-width:74ch">Where any cheque drawn by a person on an account maintained by him with a banker for payment of any amount of money to another person… is returned by the bank unpaid… such person shall be deemed to have committed an offence and shall… be punished with imprisonment for a term which may be extended to two years, or with fine which may extend to twice the amount of the cheque, or with both.</p>
+<div class="lab" style="margin-top:16px">When the section applies</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:4px">
+<div style="background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:16px"><h3 style="font-size:32px;color:var(--gold2)">6 months</h3><div style="color:var(--muted)">Present the cheque within this time or its validity, whichever is earlier</div></div>
+<div style="background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:16px"><h3 style="font-size:32px;color:var(--gold2)">30 days</h3><div style="color:var(--muted)">Send a written demand after learning the cheque was returned</div></div>
+<div style="background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:16px"><h3 style="font-size:32px;color:var(--gold2)">15 days</h3><div style="color:var(--muted)">The drawer may pay after receiving the notice</div></div>
+</div>
+<div style="display:flex;gap:10px;margin-top:auto"><span class="chip" style="height:38px;font-size:14.5px">Section 139</span><span class="chip" style="height:38px;font-size:14.5px">Section 142</span><span class="chip" style="height:38px;font-size:14.5px"><svg class="i"><use href="#tool"/></svg>Limitation calculator</span></div>
+</div></div>
+</div></section>
+
+<!-- SIGNUP -->
+<section class="screen" id="signup"><div style="width:800px;flex:none;position:relative;padding:56px 64px;display:flex;flex-direction:column;border-right:1px solid var(--line);background:linear-gradient(160deg,var(--goldsoft),transparent 60%)">
+<div style="display:flex;align-items:center;gap:12px;color:var(--gold)"><svg class="i" style="width:40px;height:40px"><use href="#scale"/></svg><span style="font:600 28px var(--serif);color:var(--fg)">NyayaSutra AI</span></div>
+<h1 style="font-size:60px;line-height:1.08;margin-top:64px;max-width:600px">Legal research you can check, line by line.</h1>
+<div style="font-size:20px;color:var(--muted);margin-top:18px;max-width:540px">Ask about Indian law and your case papers, with every answer linked to its source.</div>
+<svg viewBox="0 0 640 300" style="position:absolute;left:80px;bottom:70px;width:640px;color:var(--gold);opacity:.75" fill="none" stroke="currentColor" stroke-width="2"><path d="M320 30v-22M320 8l26 8-26 8M240 120a80 80 0 0 1 160 0M222 120h196M232 120v22h176v-22M150 170h340M130 190h380M150 170l20-28h300l20 28M90 290h460M110 276h420M130 262h380M160 190v72M210 190v72M260 190v72M310 190v72M360 190v72M410 190v72M460 190v72"/><path d="M320 40a80 80 0 0 0-30 80M320 40a80 80 0 0 1 30 80M320 40v80"/></svg>
+</div>
+<div style="flex:1;display:flex;align-items:center;justify-content:center;position:relative">
+<div class="rbtn" style="position:absolute;right:26px;top:22px;border:1px solid var(--line);background:var(--card)"><svg class="i"><use href="#sun"/></svg></div>
+<div class="card" style="width:520px;padding:32px 36px">
+<div class="tabs" style="margin-bottom:22px"><span style="flex:1;text-align:center">Sign in</span><span class="on" style="flex:1;text-align:center">Create account</span></div>
+<h2 style="font-size:32px">Create your account</h2>
+<div style="color:var(--muted);margin:2px 0 20px">For advocates and legal professionals.</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<label class="field">Full name<div class="input">Asha Rao</div></label>
+<label class="field">Work e-mail<div class="input">asha@example.com</div></label>
+<label class="field">Password<div class="input" style="letter-spacing:3px">••••••••••••</div></label>
+</div>
+<div class="btn gold" style="width:100%;justify-content:center;margin-top:20px;height:50px">Continue<svg class="i" style="width:18px;height:18px"><use href="#arrow"/></svg></div>
+<div style="display:flex;gap:8px;align-items:center;margin-top:20px;font-size:13.5px;color:var(--muted)">
+<span class="tag" style="background:var(--goldsoft);color:var(--gold2)">1 Account</span><span>·</span><span>2 Verify e-mail</span><span>·</span><span>3 Authenticator</span></div>
+<div class="note" style="margin-top:14px;display:flex;gap:7px;align-items:center"><svg class="i" style="width:15px;height:15px"><use href="#lock"/></svg>By continuing you accept the Terms and Privacy notice.</div>
+</div></div></section>
+
+<script>
+const q=new URLSearchParams(location.search);document.documentElement.dataset.theme=q.get('theme')||'dark';
+const el=document.getElementById(q.get('s')||'ask');el.classList.add('on');
+if(el.dataset.rail){const r=document.getElementById('rail').content.cloneNode(true);r.querySelector(`[data-n="${el.dataset.rail}"]`).classList.add('on');el.prepend(r)}
+if(document.documentElement.dataset.theme==='light')document.querySelectorAll('.rbtn use[href="#sun"]').forEach(u=>u.setAttribute('href','#moon'));
+</script>
+</body></html>

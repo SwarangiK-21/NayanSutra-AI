@@ -378,3 +378,28 @@ def test_india_code_import_refuses_non_pdf_content(fake, monkeypatch):
     with pytest.raises(indiacode.IndiaCodeError):
         with httpx.Client() as c:
             indiacode._get_json(c, "https://evil.example/server/api/x")
+
+
+def test_bare_act_reader_shows_only_library_acts(fresh_db):
+    from fastapi.testclient import TestClient
+    from nyaya import db
+    from nyaya.server import app
+    with db.system():
+        with db.tx() as c:
+            c.execute("INSERT INTO documents(id, collection, title, filename, path, doc_type, status, created_at, sha256) "
+                      "VALUES('act_r','bare_act','Sample Act','a.pdf','a.pdf','statute','ready','2026-01-01','s1')")
+            c.execute("INSERT INTO documents(id, collection, title, filename, path, doc_type, status, created_at, sha256) "
+                      "VALUES('case_r','case','Private paper','b.pdf','b.pdf','other','ready','2026-01-01','s2')")
+            for i, (doc, label, text) in enumerate([("act_r", "Section 1", "First part."), ("act_r", "Section 1", "Second part."),
+                                                    ("act_r", "Section 2", "Other."), ("case_r", "Section 9", "Secret.")]):
+                c.execute("INSERT INTO chunks(doc_id, ord, header, text, label, title, page_start) VALUES(?,?,?,?,?,?,?)",
+                          (doc, i, "h", text, label, "Title", 1))
+    client = TestClient(app, base_url="http://127.0.0.1:8000")
+    client.get("/api/session")
+    toc = client.get("/api/library/act/act_r").json()
+    assert [s["label"] for s in toc["sections"]] == ["Section 1", "Section 2"]
+    one = client.get("/api/library/act/act_r", params={"label": "Section 1"}).json()
+    assert one["text"] == "First part.\nSecond part." and one["page"] == 1
+    assert client.get("/api/library/act/act_r", params={"label": "Section 7"}).status_code == 404
+    assert client.get("/api/library/act/case_r").status_code == 404      # case documents are never served here
+

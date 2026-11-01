@@ -15,7 +15,9 @@ export function applyNavPermissions() {
   $("#logoutBtn").classList.toggle("hidden", !(s.user && (isSupabase() || s.password_required)));
   $("#accountLink").classList.toggle("hidden", !(s.authenticated && isSupabase()));
   $("#signinLink").classList.toggle("hidden", Boolean(s.user) || !isSupabase());
-  if (s.authenticated && s.user) $("#accountLink").textContent = `👤 ${s.user.display_name || s.user.email || ""}`;
+  const who = s.user?.display_name || s.user?.email || "";
+  $("#avatar").textContent = who ? who.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase() : "?";
+  $("#profileName").textContent = who;
 }
 
 async function afterSignIn(r, go) {
@@ -24,11 +26,22 @@ async function afterSignIn(r, go) {
   applyNavPermissions();
   if (r.state === "mfa_pending") return renderMfa();
   if (r.state === "mfa_enroll") return renderEnroll(true);
-  location.hash = "#/dashboard"; go();
+  location.hash = "#/ask"; go();
 }
 
-const card = (title, body) => html`<div class="card" style="max-width:460px;margin:32px auto">
-  <div class="card-h"><h2>${title}</h2></div><div class="card-b">${body}</div></div>`;
+/** Sign-in pages: brand panel and one focused card. `step` (1–3) shows progress through account setup. */
+const ART = raw(`<svg class="auth-art" viewBox="0 0 640 300" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M320 30v-22M320 8l26 8-26 8M240 120a80 80 0 0 1 160 0M222 120h196M232 120v22h176v-22M150 170h340M130 190h380M150 170l20-28h300l20 28M90 290h460M110 276h420M130 262h380M160 190v72M210 190v72M260 190v72M310 190v72M360 190v72M410 190v72M460 190v72"/><path d="M320 40a80 80 0 0 0-30 80M320 40a80 80 0 0 1 30 80M320 40v80"/></svg>`);
+const card = (title, body, { tabs = "", step = 0 } = {}) => {
+  document.body.classList.add("authpage");
+  return html`<div class="auth"><div class="auth-brand"><div class="auth-logo"><svg class="ic"><use href="#i-scale"/></svg><span>NyayaSutra AI</span></div>
+      <h1>${t("auth.brand_title")}</h1><p>${t("auth.brand_lead")}</p>${ART}</div>
+    <div class="auth-side"><button type="button" class="rail-btn auth-theme" data-theme-toggle aria-label="${t("theme.toggle")}"><svg class="ic"><use class="theme-ico" href="#i-${document.documentElement.dataset.theme === "dark" ? "sun" : "moon"}"/></svg></button>
+      <div class="auth-card">${tabs ? html`<div class="seg auth-tabs">${[["login", t("login.title"), tabs === "login"], ["signup", t("auth.create"), tabs === "signup"]].map(([k, x, on]) => html`<a href="#/${k}" class="${on ? "active" : ""}">${x}</a>`)}</div>` : ""}
+        <h2>${title}</h2>${body}
+        ${step ? html`<div class="auth-steps">${[t("auth.step_account"), t("auth.step_verify"), t("auth.step_mfa")].map((x, i) => html`<span class="${i + 1 === step ? "on" : ""}">${i + 1} ${x}</span>`)}</div>` : ""}</div></div></div>`;
+};
+/** The MFA card can also appear inside Account, where it must not take over the page. */
+const inlineCard = (title, body) => html`<div class="card" style="max-width:460px;margin:12px 0"><div class="card-h"><h2>${title}</h2></div><div class="card-b">${body}</div></div>`;
 const pwRules = () => html`<div class="hint">${t("auth.pw_rules")}</div>`;
 
 // ── Sign in ──
@@ -45,7 +58,7 @@ export function renderLogin(go, q = new URLSearchParams()) {
       <button class="btn" type="submit">${t("login.submit")}</button></form>
     ${local ? "" : html`<div class="row small" style="margin-top:12px;justify-content:space-between">
       <a href="#/forgot">${t("auth.forgot")}</a><a href="#/signup">${t("auth.create")}</a></div>`}
-    <hr><div class="small muted">${t("auth.public")} <a href="#/acts">${t("nav.acts")}</a> · <a href="#/awareness">${t("nav.awareness")}</a> · <a href="#/limitation">${t("nav.limitation")}</a></div>`));
+    <hr><div class="small muted">${t("auth.public")} <a href="#/acts">${t("nav.acts")}</a> · <a href="#/awareness">${t("nav.awareness")}</a> · <a href="#/limitation">${t("nav.limitation")}</a></div>`, { tabs: local ? "" : "login" }));
   $("#loginForm").onsubmit = async (e) => {
     e.preventDefault();
     const body = local ? { password: $("#pw").value } : { email: $("#em").value.trim(), password: $("#pw").value };
@@ -85,7 +98,7 @@ export async function renderEnroll(required, go, el = $("#main")) {
   mount(el, spinner());
   let f;
   try { f = await api("/api/auth/mfa/enroll", { method: "POST" }); } catch (err) { mount(el, html`<div class="notice notice-red">${err.message}</div>`); return; }
-  mount(el, card(t("auth.enroll_title"), html`
+  mount(el, (required ? (a, b) => card(a, b, { step: 3 }) : inlineCard)(t("auth.enroll_title"), html`
     ${required ? html`<div class="notice" style="margin-bottom:10px">${t("auth.enroll_required")}</div>` : ""}
     <ol class="small"><li>${t("auth.enroll_step1")}</li><li>${t("auth.enroll_step2")}</li></ol>
     <div style="text-align:center"><img src="${f.qr_code}" alt="${t("auth.qr_alt")}" width="200" height="200" style="background:#fff;padding:6px"></div>
@@ -128,7 +141,7 @@ export function renderSignup(go, q) {
       <div><label class="f" for="sp">${t("login.password")}</label><input type="password" id="sp" autocomplete="new-password" minlength="12" maxlength="72" required>${pwRules()}</div>
       <div><label class="f" for="sp2">${t("auth.confirm_pw")}</label><input type="password" id="sp2" autocomplete="new-password" maxlength="72" required></div>
       <button class="btn" type="submit">${t("auth.create")}</button></form>
-    <div class="small" style="margin-top:12px"><a href="#/login">${t("auth.have_account")}</a></div>`));
+    <div class="small" style="margin-top:12px"><a href="#/login">${t("auth.have_account")}</a></div>`, { tabs: "signup", step: 1 }));
   $("#suForm").onsubmit = async (e) => {
     e.preventDefault();
     if ($("#sp").value !== $("#sp2").value) { toast(t("auth.pw_mismatch"), true); return; }

@@ -1832,6 +1832,27 @@ def judgment_fetch(body: JudgmentFetchIn, p: Principal = Depends(need("research.
     return {"status": "queued" if queued else (doc or {}).get("status", "queued")}
 
 
+@app.get("/api/library/act/{doc_id}")
+def library_act(doc_id: str, label: str | None = None, p: Principal = Depends(need("library.read"))):
+    """Reader for a bare act in the shared library: its contents, or the text of one provision."""
+    doc = db.conn().execute("SELECT id, title FROM documents WHERE id=? AND collection='bare_act' AND status='ready'",
+                            (doc_id,)).fetchone()
+    if not doc:
+        raise authz.NotFound("Act not found")
+    rows = db.conn().execute("SELECT label, title, chapter, text, page_start FROM chunks WHERE doc_id=? AND label IS NOT NULL "
+                             "ORDER BY ord", (doc_id,)).fetchall()
+    if label is None:
+        seen: dict[str, dict] = {}
+        for r in rows:
+            seen.setdefault(r["label"], {"label": r["label"], "title": r["title"], "chapter": r["chapter"]})
+        return {"title": doc["title"], "sections": list(seen.values())}
+    parts = [r for r in rows if r["label"] == label]
+    if not parts:
+        raise authz.NotFound("Provision not found")
+    return {"label": label, "title": parts[0]["title"], "page": parts[0]["page_start"],
+            "text": "\n".join(r["text"] for r in parts)}
+
+
 @app.get("/api/library/provision")
 def library_provision(act: str, ref: str, p: Principal = Depends(need("library.read"))):
     from . import library
